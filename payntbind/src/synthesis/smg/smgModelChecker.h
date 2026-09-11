@@ -14,7 +14,7 @@ namespace synthesis {
         std::shared_ptr<storm::logic::Formula const> formula,
         bool only_initial_states = false,
         bool set_produce_schedulers = true,
-        storm::Environment const& env = storm::Environment()
+        storm::Environment const& env
     ) {
         auto task = storm::api::createTask<ValueType>(formula, only_initial_states);
         task.setProduceSchedulers(set_produce_schedulers);
@@ -31,6 +31,6 @@ namespace synthesis {
         std::shared_ptr<storm::logic::Formula const> formula,
         bool only_initial_states = false,
         bool set_produce_schedulers = true,
-        storm::Environment const& env = storm::Environment()
+        storm::Environment const& env
     );
 }
