@@ -117,6 +117,21 @@ class MdpSpecificationResult(SpecificationResult):
         self.improving_value: Any = None
         self.can_improve: bool | None = None
 
+    def undecided_results(self) -> list[Any]:
+        """
+        Every still-relevant property result: undecided constraints (ascending index), then optimality if
+        it can still improve. Deliberately constraints-first/optimality-last -- the opposite priority from
+        undecided_result()'s single optimality-first pick, which is a different use case (Hybrid's priority-
+        node heuristic) and is kept as-is. Used by the multi-constraint AR splitting logic (paper Section 3.3)
+        to look at every property that could still inform which parameter to split on, not just one.
+        """
+        cr = self.constraints_result
+        assert cr is not None
+        results = [cr.results[i] for i in cr.undecided_constraints]
+        if self.optimality_result is not None and self.optimality_result.can_improve:
+            results.append(self.optimality_result)
+        return results
+
     def evaluate(self, parameter_space: Any = None, admissible_assignment: Any = None) -> None:
         self.improving_assignment = None
         self.improving_value = None

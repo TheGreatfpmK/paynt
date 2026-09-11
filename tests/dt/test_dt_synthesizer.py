@@ -4,6 +4,7 @@ import stormpy
 import paynt.dt
 import paynt.dt.dtnest.task
 import paynt.underlying_model.model_builder
+import paynt.utils.timer
 
 from helpers.helper import get_sketch_paths
 
@@ -36,6 +37,43 @@ class TestDtSynthesis:
         synthesizer = paynt.dt.DtSynthesizer(factory)
         synthesizer.synthesize_tree(depth=2, timeout=15)
         assert synthesizer.best_tree is not None
+
+    def test_split_undecided_space_survives_a_genuinely_multi_constraint_specification(self):
+        """
+        Regression coverage for the multi-constraint AR splitting gap (paper Section 3.3): unlike
+        test_split_undecided_space_survives_a_multi_property_specification above (one trivially-true
+        constraint alongside optimality, which resolves before ever reaching split_undecided_space's new
+        L(h)/undecided_results() logic in any interesting way), this specification has TWO real constraints
+        and NO optimality objective, forcing split_undecided_space to actually run its new
+        compute_incompatibility_levels/undecided_results() code paths repeatedly.
+
+        dt-orchard's only event is "goal", so two P>=x[F "goal"] constraints at different thresholds don't
+        produce genuine cross-constraint disagreement (both push toward the same underlying policy) -- this
+        model can't exercise the L(h) tier specifically (that needs constraints on genuinely different
+        criteria, like easy.props's two different reward structures in
+        tests/synthesizer/test_synthesizer_ar.py). What it does confirm: neither harmonize_inconsistent_
+        scheduler nor split_undecided_space crashes or hangs when node.analysis_result.constraints_result has
+        2 undecided entries, and the search genuinely explores (unlike a trivially-resolved-at-the-root spec).
+        Bounded rather than run to completion -- this threshold has no admissible tree within a few seconds
+        on this model, confirmed manually, and this test only cares about "does not crash", not convergence.
+        """
+        sketch_path, _ = get_sketch_paths("tests/dt-orchard")
+        prism = stormpy.parse_prism_program(sketch_path, prism_compat=True)
+        properties = stormpy.parse_properties_for_prism_program('P>=0.55 [F "goal"]; P>=0.5 [F "goal"]', prism, None)
+        assert len(properties) == 2
+
+        explicit_model = paynt.underlying_model.model_builder.ModelBuilder.from_prism(prism, None, False)
+        task = paynt.dt.dtnest.task.DtNestTask(properties, error_threshold=0.05, tree_depth=2, timeout=8)
+        assert len(task.specification.constraints) == 2
+        assert task.specification.optimality is None
+
+        factory = paynt.dt.DtColoredMdpFactory(explicit_model, task)
+        synthesizer = paynt.dt.DtSynthesizer(factory)
+        paynt.utils.timer.GlobalTimer.start(8)
+        try:
+            synthesizer.synthesize_tree(depth=2, timeout=8)
+        finally:
+            paynt.utils.timer.GlobalTimer.start()
 
     def test_synthesize_finds_the_known_optimum(self, dt_colored_mdp_factory):
         """

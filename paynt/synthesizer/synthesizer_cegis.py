@@ -53,7 +53,10 @@ class SynthesizerCEGIS(paynt.synthesizer.synthesizer.Synthesizer):
         assert node.constraint_indices is not None
         for index in node.constraint_indices:
             member_result = mc_result.constraints_result.results[index]
-            if member_result.sat:
+            # short_evaluation=True (see analyze_parameter_space_assignment_cegis) stops checking constraints
+            # as soon as one is UNSAT, leaving later indices None -- a spec with 2+ constraints reaches this
+            # routinely, not just as an edge case
+            if member_result is None or member_result.sat:
                 continue
             prop: Any = self.task.specification.constraints[index]
             parameter_space_result = None

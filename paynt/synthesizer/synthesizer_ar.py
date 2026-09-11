@@ -39,15 +39,40 @@ def scheduler_scores(
     return scores
 
 
+def scheduler_scores_combined(colored_mdp: paynt.colored_mdp.ColoredMdp, task: paynt.task.Task, mdp: Any, results: list[Any]) -> dict[int, float]:
+    """
+    Aggregate v(h) across every still-relevant property (MdpSpecificationResult.undecided_results()), taking
+    the max per parameter across properties that consider it inconsistent. A property whose own selection is
+    already fully consistent contributes nothing here (it's an L(h) candidate instead, handled by the
+    caller). Reduces to exactly one scheduler_scores call, byte-identical, whenever len(results) <= 1 -- the
+    single-property case this refactor's baselines already cover.
+    """
+    combined: dict[int, float] = {}
+    for result in results:
+        if all(len(options) <= 1 for options in result.primary_selection):
+            continue
+        scores = scheduler_scores(colored_mdp, task, mdp, result.prop, result.primary.result, result.primary_selection)
+        assert scores is not None
+        for parameter, score in scores.items():
+            if parameter not in combined or score > combined[parameter]:
+                combined[parameter] = score
+    return combined
+
+
 def split_parameter_space(
     colored_mdp: paynt.colored_mdp.ColoredMdp, task: paynt.task.Task, node: paynt.synthesizer.search_node.SearchNode
 ) -> list[paynt.synthesizer.search_node.SearchNode]:
     """
-    AR splitting step: pick the highest-scoring inconsistent parameter and split node's parameter_space
-    options for it into subspaces, wrapped as child search nodes. A free function rather than a ColoredMdp
-    method, so it works uniformly across every colored-MDP variant without any of them carrying
-    search-decision logic themselves, and so it can be passed around as a plain callable on a future
-    multiprocessing path.
+    AR splitting step: pick a parameter to split node's parameter_space on and split its options into
+    subspaces, wrapped as child search nodes. Two-tier choice, per the paper's Section 3.3 ("AR for
+    Feasibility Synthesis with Multiple Constraints"): first, cross-constraint incompatibility L(h) among
+    undecided constraints whose own scheduler is already fully consistent (a genuine candidate delta_i,
+    disagreeing with another constraint's own candidate); failing that (at most one relevant property, or
+    every relevant property's own scheduler is still locally inconsistent), v(h) aggregated across every
+    still-relevant property -- a strict generalization of the old single-result lookup, byte-identical to it
+    whenever there's exactly one relevant property. A free function rather than a ColoredMdp method, so it
+    works uniformly across every colored-MDP variant without any of them carrying search-decision logic
+    themselves, and so it can be passed around as a plain callable on a future multiprocessing path.
     :param colored_mdp anything exposing .parameter_space/.coloring -- any ColoredMdp qualifies
     :param task the Task currently being solved (not read from colored_mdp -- it doesn't carry one)
     :param node the SearchNode currently being split
@@ -56,18 +81,38 @@ def split_parameter_space(
     assert mdp is not None
     assert not mdp.is_deterministic
 
-    # split wrt last undecided result
     assert node.analysis_result is not None
-    result = node.analysis_result.undecided_result()
-    parameter_assignments = result.primary_selection
-    scores = scheduler_scores(colored_mdp, task, mdp, result.prop, result.primary.result, result.primary_selection)
-    if scores is None:
-        scores = {parameter: 0 for parameter in range(mdp.parameter_space.num_parameters) if mdp.parameter_space.parameter_num_options(parameter) > 1}
+    cr = node.analysis_result.constraints_result
+    assert cr is not None
 
-    splitters = paynt.utils.scoring.parameters_with_max_score(scores)
-    splitter = splitters[0]
-    if len(parameter_assignments[splitter]) > 1:
-        core_suboptions, other_suboptions = mdp.parameter_space.suboptions_enumerate(splitter, parameter_assignments[splitter])
+    # (i) L(h): cross-constraint disagreement among undecided constraints whose OWN scheduler is already
+    # fully consistent (a genuine candidate delta_i) -- paper's stated priority
+    candidates = [cr.results[i].primary_selection for i in cr.undecided_constraints if all(len(options) <= 1 for options in cr.results[i].primary_selection)]
+    disagreements = paynt.utils.scoring.compute_incompatibility_levels(candidates)
+
+    used_options: list[int]
+    if disagreements:
+        splitter = paynt.utils.scoring.parameters_with_max_incompatibility(disagreements)[0]
+        used_options = disagreements[splitter]
+    else:
+        # (ii) v(h) aggregated across every still-relevant property
+        results = node.analysis_result.undecided_results()
+        scores = scheduler_scores_combined(colored_mdp, task, mdp, results)
+        assert scores, "undecided node has neither cross-constraint disagreement nor any inconsistent property to split on"
+        splitter = paynt.utils.scoring.parameters_with_max_score(scores)[0]
+        # order-preserving union across contributing properties -- NOT sorted(set(...)): suboptions_enumerate
+        # builds one singleton bucket per entry in the given order, so reordering would silently change DFS
+        # exploration order for multi-constraint specs and, more importantly, must reproduce
+        # result.primary_selection[splitter] verbatim when there's exactly one contributing property (N=1)
+        used_options = []
+        for result in results:
+            if len(result.primary_selection[splitter]) > 1:
+                for option in result.primary_selection[splitter]:
+                    if option not in used_options:
+                        used_options.append(option)
+
+    if len(used_options) > 1:
+        core_suboptions, other_suboptions = mdp.parameter_space.suboptions_enumerate(splitter, used_options)
     else:
         assert mdp.parameter_space.parameter_num_options(splitter) > 1
         core_suboptions = mdp.parameter_space.suboptions_half(splitter)

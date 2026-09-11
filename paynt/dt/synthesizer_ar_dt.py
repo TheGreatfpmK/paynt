@@ -59,8 +59,18 @@ class SynthesizerARDt(paynt.synthesizer.synthesizer_ar.SynthesizerAR):
             self.update_optimum(node)
 
     def harmonize_inconsistent_scheduler(self, node):
+        """
+        Try forcing the harmonizing parameter (the first one still locally inconsistent in some undecided
+        property's own scheduler) to each of its two inconsistent options in turn, hoping one of the two
+        concrete assignments happens to satisfy the whole spec outright. A pure-L(h) node -- every remaining
+        property's own scheduler is already locally consistent, but they disagree with each other -- has
+        nothing here to harmonize against, so this is a no-op in that case: harmonization is a speed-up
+        attempt, not something split_undecided_space depends on succeeding.
+        """
         self.num_harmonizations += 1
-        result = node.analysis_result.undecided_result()
+        result = next((r for r in node.analysis_result.undecided_results() if any(len(options) > 1 for options in r.primary_selection)), None)
+        if result is None:
+            return
         parameter_selection = result.primary_selection
         harmonizing_parameter = [parameter for parameter, options in enumerate(parameter_selection) if len(options) > 1][0]
         selection_1 = parameter_selection.copy()
@@ -145,23 +155,48 @@ class SynthesizerARDt(paynt.synthesizer.synthesizer_ar.SynthesizerAR):
         mdp = node.mdp
         assert not mdp.is_deterministic
 
-        # split wrt last undecided result
-        result = node.analysis_result.undecided_result()
-        parameter_assignments = result.primary_selection
-        scores = self.scheduler_scores(result.primary_selection)
+        cr = node.analysis_result.constraints_result
+        assert cr is not None
 
-        splitters = paynt.utils.scoring.parameters_with_max_score(scores)
-        splitter = splitters[0]
-        if self.colored_mdp.is_action_parameter[splitter] or self.colored_mdp.is_decision_parameter[splitter]:
-            assert len(parameter_assignments[splitter]) > 1
-            core_suboptions, other_suboptions = mdp.parameter_space.suboptions_enumerate(splitter, parameter_assignments[splitter])
+        # (i) L(h): cross-constraint disagreement among undecided constraints whose OWN scheduler is already
+        # fully consistent -- same priority as the generic AR path (paper Section 3.3)
+        candidates = [
+            cr.results[i].primary_selection for i in cr.undecided_constraints if all(len(options) <= 1 for options in cr.results[i].primary_selection)
+        ]
+        disagreements = paynt.utils.scoring.compute_incompatibility_levels(candidates)
+
+        if disagreements:
+            splitter = paynt.utils.scoring.parameters_with_max_incompatibility(disagreements)[0]
+            used_options = disagreements[splitter]
         else:
-            # split by inconsistent options
-            splitter_options = node.parameter_space.parameter_options(splitter)
-            option_2 = parameter_assignments[splitter][1]
-            index_split = splitter_options.index(option_2)
+            # (ii) DT's own kind-based heuristic (scheduler_scores), applied to the first still-relevant
+            # property that actually has a local inconsistency to split on
+            result = next((r for r in node.analysis_result.undecided_results() if any(len(options) > 1 for options in r.primary_selection)), None)
+            assert result is not None, "undecided DT node has neither cross-constraint disagreement nor any inconsistent property to split on"
+            parameter_assignments = result.primary_selection
+            scores = self.scheduler_scores(parameter_assignments)
+            splitter = paynt.utils.scoring.parameters_with_max_score(scores)[0]
+            used_options = parameter_assignments[splitter]
 
-            core_suboptions = [splitter_options[:index_split], splitter_options[index_split:]]
+        if self.colored_mdp.is_action_parameter[splitter] or self.colored_mdp.is_decision_parameter[splitter]:
+            assert len(used_options) > 1
+            core_suboptions, other_suboptions = mdp.parameter_space.suboptions_enumerate(splitter, used_options)
+        else:
+            # Variable-kind parameters encode an ordered threshold comparison (e.g. "yellow <= k") -- unlike
+            # action/decision parameters (arbitrary discrete choices), only a CONTIGUOUS sub-range of their
+            # domain is a valid tree-branch predicate. suboptions_enumerate's singleton-per-value-plus-residual
+            # shape produces a non-contiguous bucket (e.g. "value in {0,2,4}") the underlying coloring cannot
+            # represent -- confirmed via a real crash (AssertionError: option not in the parameter space,
+            # surfaced by dtnest on dt-orchard) when this branch was unified with the action/decision one
+            # above. Generalizes the old exactly-2-options contiguous cut to N-ary L(h) disagreement instead:
+            # sort the disagreeing values by their position in the parameter's full ordered domain and cut
+            # just before each one except the first -- for exactly 2 values this reduces to precisely the old
+            # cut (cutting once, at the second value's position), and the whole domain is always covered, with
+            # no residual bucket.
+            splitter_options = node.parameter_space.parameter_options(splitter)
+            cut_positions = sorted(splitter_options.index(option) for option in used_options)[1:]
+            boundaries = [0] + cut_positions + [len(splitter_options)]
+            core_suboptions = [splitter_options[boundaries[i] : boundaries[i + 1]] for i in range(len(boundaries) - 1)]
             for options in core_suboptions:
                 assert len(options) > 0
             other_suboptions = []

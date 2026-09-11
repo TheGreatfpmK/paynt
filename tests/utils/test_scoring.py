@@ -52,3 +52,48 @@ class TestSchedulerScoring:
     def test_parameters_with_max_score(self):
         score = {0: 5, 1: 3, 2: 5}
         assert paynt.utils.scoring.parameters_with_max_score(score) == [0, 2]
+
+
+class TestIncompatibilityScoring:
+    """
+    Paper Sec 3.3's L(h): cross-constraint disagreement among consistent candidate selections. Pure/hand-built
+    -- no real model needed, since compute_incompatibility_levels only ever looks at option-index lists.
+    """
+
+    def test_fewer_than_two_candidates_yields_no_disagreement(self):
+        assert paynt.utils.scoring.compute_incompatibility_levels([]) == {}
+        assert paynt.utils.scoring.compute_incompatibility_levels([[[0], [1]]]) == {}
+
+    def test_candidates_disagreeing_on_one_parameter_and_agreeing_on_another(self):
+        # 3 candidates (one per still-undecided constraint), 2 parameters: they disagree on parameter 0
+        # (three distinct values, in first-seen order) and agree on parameter 1 (always option 2)
+        candidates = [[[0], [2]], [[1], [2]], [[3], [2]]]
+        assert paynt.utils.scoring.compute_incompatibility_levels(candidates) == {0: [0, 1, 3]}
+
+    def test_a_parameter_with_zero_options_in_some_candidate_contributes_no_opinion_there(self):
+        """DtColoredMdp does not pad an irrelevant parameter to one arbitrary option -- a candidate whose
+        selection has an empty option list for some parameter must not crash and must not count as a vote."""
+        candidates = [[[0], []], [[1], []], [[0], []]]
+        assert paynt.utils.scoring.compute_incompatibility_levels(candidates) == {0: [0, 1]}
+
+    def test_an_inconsistent_own_candidate_is_the_callers_responsibility_to_exclude(self):
+        """compute_incompatibility_levels itself does not filter out locally-inconsistent selections (options
+        of length > 1 for some parameter) -- callers (split_parameter_space / split_undecided_space) are
+        responsible for only passing selections that are already fully consistent. Documented here since it's
+        a real, easy-to-get-wrong contract, not asserted defensively in the function itself (hot path)."""
+        candidates = [[[0, 1]], [[2]]]
+        # parameter 0's values across candidates are effectively {0, 1, 2} once fully expanded, but this
+        # function only ever looks at singleton selections (len(options) == 1) when voting -- the first,
+        # locally-inconsistent candidate is silently skipped rather than contributing multiple values
+        assert paynt.utils.scoring.compute_incompatibility_levels(candidates) == {}
+
+    def test_parameters_with_max_incompatibility_on_empty_input(self):
+        assert paynt.utils.scoring.parameters_with_max_incompatibility({}) == []
+
+    def test_parameters_with_max_incompatibility_on_unique_max(self):
+        levels = {0: [1, 2], 1: [1, 2, 3]}
+        assert paynt.utils.scoring.parameters_with_max_incompatibility(levels) == [1]
+
+    def test_parameters_with_max_incompatibility_on_tied_max(self):
+        levels = {0: [1, 2, 3], 1: [4, 5], 2: [6, 7, 8]}
+        assert paynt.utils.scoring.parameters_with_max_incompatibility(levels) == [0, 2]

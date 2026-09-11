@@ -134,8 +134,11 @@ class SynthesizerHybrid(paynt.synthesizer.synthesizer_ar.SynthesizerAR, paynt.sy
             if node.analysis_result.optimality_result is not None:
                 result = node.analysis_result.optimality_result
             else:
-                assert node.analysis_result.constraints_result is not None
-                result = node.analysis_result.constraints_result.results[0]
+                cr = node.analysis_result.constraints_result
+                assert cr is not None
+                # index 0 is wrong once a spec has 2+ constraints: constraint 0 may already be sat (dropped
+                # by an ancestor node, see SearchNode.collect_parent_info), leaving results[0] None
+                result = cr.results[cr.undecided_constraints[0]]
             priority_node = self.search_node_type(node.parameter_space.assume_options_copy(result.primary_selection))
 
             # explore parameter space assignments

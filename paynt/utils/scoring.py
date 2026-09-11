@@ -118,3 +118,36 @@ def estimate_scheduler_difference_pomdp(
 def parameters_with_max_score(parameter_score: dict[int, float]) -> list[int]:
     max_score = max(parameter_score.values())
     return [parameter_index for parameter_index in parameter_score if parameter_score[parameter_index] == max_score]
+
+
+def compute_incompatibility_levels(candidate_selections: list[list[list[int]]]) -> dict[int, list[int]]:
+    """
+    Paper Sec 3.3's L(h): given the primary_selection of every still-undecided property whose OWN scheduler
+    is already fully consistent (a genuine candidate delta_i in Delta), find parameters where those
+    candidates disagree. Returns {parameter: distinct_values} only where L(h) > 1 (>=2 distinct values);
+    empty if fewer than 2 candidates given. A parameter with 0 options in some candidate's selection
+    (possible for DtColoredMdp, which unlike the base ColoredMdp does not pad an irrelevant parameter to one
+    arbitrary option) contributes no opinion there rather than crashing. Order of each returned value list is
+    first-candidate-seen order, not sorted -- deterministic, and critical for the N=1 byte-identical guarantee
+    at the call site (see synthesizer_ar.split_parameter_space).
+    """
+    if len(candidate_selections) < 2:
+        return {}
+    disagreements: dict[int, list[int]] = {}
+    for parameter in range(len(candidate_selections[0])):
+        values: list[int] = []
+        for selection in candidate_selections:
+            options = selection[parameter]
+            if len(options) == 1 and options[0] not in values:
+                values.append(options[0])
+        if len(values) > 1:
+            disagreements[parameter] = values
+    return disagreements
+
+
+def parameters_with_max_incompatibility(disagreement_levels: dict[int, list[int]]) -> list[int]:
+    """argmax L(h); same tie-all-winners convention as parameters_with_max_score."""
+    if not disagreement_levels:
+        return []
+    max_level = max(len(values) for values in disagreement_levels.values())
+    return [parameter for parameter, values in disagreement_levels.items() if len(values) == max_level]
