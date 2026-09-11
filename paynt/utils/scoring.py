@@ -122,7 +122,7 @@ def parameters_with_max_score(parameter_score: dict[int, float]) -> list[int]:
 
 def compute_incompatibility_levels(candidate_selections: list[list[list[int]]]) -> dict[int, list[int]]:
     """
-    Paper Sec 3.3's L(h): given the primary_selection of every still-undecided property whose OWN scheduler
+    Paper https://www.jair.org/index.php/jair/article/view/16593 Section 3.3's L(h): given the primary_selection of every still-undecided property whose OWN scheduler
     is already fully consistent (a genuine candidate delta_i in Delta), find parameters where those
     candidates disagree. Returns {parameter: distinct_values} only where L(h) > 1 (>=2 distinct values);
     empty if fewer than 2 candidates given. A parameter with 0 options in some candidate's selection

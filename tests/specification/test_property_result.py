@@ -74,7 +74,7 @@ class TestAcceptingDtmc:
 class TestUndecidedResults:
     """
     Regression coverage for MdpSpecificationResult.undecided_results() -- the multi-constraint counterpart to
-    undecided_result() (paper Section 3.3, "AR for Feasibility Synthesis with Multiple Constraints"): returns
+    undecided_result() (paper Section https://www.jair.org/index.php/jair/article/view/16593 3.3, "AR for Feasibility Synthesis with Multiple Constraints"): returns
     every still-relevant property result (undecided constraints ascending, then optimality if it can still
     improve), not just one, since multi-constraint AR splitting (synthesizer_ar.split_parameter_space,
     dt.synthesizer_ar_dt.split_undecided_space) needs to compare every remaining property's own candidate

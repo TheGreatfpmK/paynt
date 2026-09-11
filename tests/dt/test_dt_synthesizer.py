@@ -40,7 +40,7 @@ class TestDtSynthesis:
 
     def test_split_undecided_space_survives_a_genuinely_multi_constraint_specification(self):
         """
-        Regression coverage for the multi-constraint AR splitting gap (paper Section 3.3): unlike
+        Regression coverage for the multi-constraint AR splitting gap (paper https://www.jair.org/index.php/jair/article/view/16593 Section 3.3): unlike
         test_split_undecided_space_survives_a_multi_property_specification above (one trivially-true
         constraint alongside optimality, which resolves before ever reaching split_undecided_space's new
         L(h)/undecided_results() logic in any interesting way), this specification has TWO real constraints

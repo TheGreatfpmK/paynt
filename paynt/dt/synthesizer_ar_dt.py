@@ -159,7 +159,7 @@ class SynthesizerARDt(paynt.synthesizer.synthesizer_ar.SynthesizerAR):
         assert cr is not None
 
         # (i) L(h): cross-constraint disagreement among undecided constraints whose OWN scheduler is already
-        # fully consistent -- same priority as the generic AR path (paper Section 3.3)
+        # fully consistent -- same priority as the generic AR path (paper https://www.jair.org/index.php/jair/article/view/16593 Section 3.3)
         candidates = [
             cr.results[i].primary_selection for i in cr.undecided_constraints if all(len(options) <= 1 for options in cr.results[i].primary_selection)
         ]
