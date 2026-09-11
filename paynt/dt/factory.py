@@ -4,7 +4,7 @@ from typing import Any
 
 import paynt.task
 import paynt.parameter_space.parameter_space
-import paynt.underlying_model.underlying_model
+import paynt.model.model
 from paynt.dt.colored_mdp import DtColoredMdp
 
 from paynt.parser._utils import make_rewards_action_based
@@ -49,11 +49,11 @@ class DtColoredMdpFactory:
 
         # identify relevant states: non-absorbing states with more than one action
         state_is_relevant = [True for state in range(mdp.nr_states)]
-        state_is_absorbing = paynt.underlying_model.underlying_model.ModelIndex.identify_absorbing_states(mdp)
+        state_is_absorbing = paynt.model.model.ModelIndex.identify_absorbing_states(mdp)
         state_is_relevant = [relevant and not state_is_absorbing[state] for state, relevant in enumerate(state_is_relevant)]
 
         if DtColoredMdpFactory.filter_deterministic_states:
-            state_has_actions = paynt.underlying_model.underlying_model.ModelIndex.identify_states_with_actions(mdp)
+            state_has_actions = paynt.model.model.ModelIndex.identify_states_with_actions(mdp)
             state_is_relevant = [relevant and state_has_actions[state] for state, relevant in enumerate(state_is_relevant)]
         state_is_relevant_bv = stormpy.BitVector(mdp.nr_states)
         [state_is_relevant_bv.set(state, value) for state, value in enumerate(state_is_relevant)]

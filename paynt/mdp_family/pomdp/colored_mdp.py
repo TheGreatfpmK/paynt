@@ -10,9 +10,9 @@ import payntbind
 
 import paynt.colored_mdp
 import paynt.parameter_space.parameter_space
-from paynt.family.colored_mdp import FamilyColoredMdp
+from paynt.mdp_family.colored_mdp import FamilyColoredMdp
 import paynt.pomdp.fsc
-import paynt.underlying_model.underlying_model
+import paynt.model.model
 
 import logging
 
@@ -75,9 +75,7 @@ class PomdpFamilyColoredMdp(FamilyColoredMdp):
         """Construct the sub-POMDP from the given parameter assignment."""
         assert parameter_space.size == 1, "expecting parameter space of size 1"
         choices = self.coloring.selectCompatibleChoices(parameter_space.native)
-        mdp, state_map, choice_map = paynt.underlying_model.underlying_model.SubmodelBuilder.restrict(
-            self.underlying_mdp, choices, self.subsystem_builder_options
-        )
+        mdp, state_map, choice_map = paynt.model.model.SubmodelBuilder.restrict(self.underlying_mdp, choices, self.subsystem_builder_options)
         pomdp = self.obs_evaluator.add_observations_to_submdp(mdp, state_map)
         return SubPomdp(pomdp, state_map, choice_map)
 

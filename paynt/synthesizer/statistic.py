@@ -5,7 +5,7 @@ from typing import Any, TYPE_CHECKING
 import stormpy.storage
 
 import paynt.utils.timer
-import paynt.underlying_model.underlying_model
+import paynt.model.model
 
 if TYPE_CHECKING:
     # synthesizer.py imports this module (for Statistic itself), so only import it for annotations to avoid
@@ -66,7 +66,7 @@ class Statistic:
 
         # MDP family (policy-tree synthesis): num_nodes/num_nodes_merged/num_leaves/num_leaves_merged/
         # postprocessing_time are set directly on a Statistic instance by
-        # paynt.family.policy_tree_synthesizer.PolicyTreeSynthesizer.evaluate_all, not by this constructor --
+        # paynt.mdp_family.policy_tree_synthesizer.PolicyTreeSynthesizer.evaluate_all, not by this constructor --
         # declared here (rather than left as an undeclared dynamic attribute) purely so their type is known.
         # Kept as Any (not "int | None"): print_mdp_family_table_entries, the only reader, is a debug-only
         # utility that assumes (and always has assumed, pre-existing to this backfill) these are already
@@ -95,7 +95,7 @@ class Statistic:
 
     def iteration(self, model: Any) -> None:
         """Identify the type of the model and count corresponding iteration."""
-        if isinstance(model, paynt.underlying_model.underlying_model.Mdp):
+        if isinstance(model, paynt.model.model.Mdp):
             model = model.model
         if type(model) in [stormpy.storage.SparseDtmc, stormpy.storage.SparseExactDtmc]:
             self.iteration_dtmc(model.nr_states)

@@ -4,7 +4,7 @@ import stormpy
 import paynt.dt
 import paynt.dt.decision_tree
 import paynt.dt.dtnest
-import paynt.underlying_model.model_builder
+import paynt.model.model_builder
 
 from helpers.helper import get_sketch_paths
 
@@ -18,7 +18,7 @@ def _dtnest_factory(properties_string):
     sketch_path, _ = get_sketch_paths("tests/dt-orchard")
     prism = stormpy.parse_prism_program(sketch_path, prism_compat=True)
     properties = stormpy.parse_properties_for_prism_program(properties_string, prism, None)
-    explicit_model = paynt.underlying_model.model_builder.ModelBuilder.from_prism(prism, None, False)
+    explicit_model = paynt.model.model_builder.ModelBuilder.from_prism(prism, None, False)
     return properties, explicit_model
 
 

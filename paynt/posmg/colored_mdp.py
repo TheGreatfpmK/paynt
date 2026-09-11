@@ -13,7 +13,7 @@ import stormpy
 
 import paynt.colored_mdp
 import paynt.parameter_space.parameter_space
-import paynt.underlying_model.underlying_model
+import paynt.model.model
 
 
 class PosmgColoredMdp(paynt.colored_mdp.ColoredMdp):
@@ -28,7 +28,7 @@ class PosmgColoredMdp(paynt.colored_mdp.ColoredMdp):
         # alone don't carry this
         self.posmg_manager = posmg_manager
 
-    def create_smg_from_mdp(self, mdp: paynt.underlying_model.underlying_model.SubMdp) -> paynt.underlying_model.underlying_model.Smg:
+    def create_smg_from_mdp(self, mdp: paynt.model.model.SubMdp) -> paynt.model.model.Smg:
         """Re-attach game (player-indication) structure to a restricted sub-MDP so it can be verified as a
         game rather than as a plain MDP."""
         underlying_player_indications = self.posmg_manager.get_state_player_indications()
@@ -47,14 +47,14 @@ class PosmgColoredMdp(paynt.colored_mdp.ColoredMdp):
             state_player_indications.append(player)
         components.state_player_indications = state_player_indications
 
-        return paynt.underlying_model.underlying_model.Smg(stormpy.storage.SparseSmg(components))
+        return paynt.model.model.Smg(stormpy.storage.SparseSmg(components))
 
-    def scheduler_selection(self, mdp: paynt.underlying_model.underlying_model.SubMdp, scheduler: Any) -> list[list[int]]:
+    def scheduler_selection(self, mdp: paynt.model.model.SubMdp, scheduler: Any) -> list[list[int]]:
         """Get parameter options involved in the scheduler selection. Unlike the base ColoredMdp, this
         keeps unreachable choices rather than discarding them."""
         assert scheduler.memoryless and scheduler.deterministic
-        state_to_choice = paynt.underlying_model.underlying_model.ModelIndex.scheduler_to_state_to_choice(
+        state_to_choice = paynt.model.model.ModelIndex.scheduler_to_state_to_choice(
             self.underlying_mdp, self.choice_destinations, mdp, scheduler, discard_unreachable_choices=False
         )
-        choices = paynt.underlying_model.underlying_model.ModelIndex.state_to_choice_to_choices(self.underlying_mdp, state_to_choice)
+        choices = paynt.model.model.ModelIndex.state_to_choice_to_choices(self.underlying_mdp, state_to_choice)
         return self.coloring.collectHoleOptions(choices)

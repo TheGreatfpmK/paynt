@@ -1,12 +1,12 @@
-import paynt.family
-import paynt.family.colored_mdp
+import paynt.mdp_family
+import paynt.mdp_family.colored_mdp
 import paynt.synthesizer.search_node
 
 
 class TestFamilyColoredMdpFactory:
 
     def test_load_sketch_produces_a_family_colored_mdp(self, family_colored_mdp):
-        assert isinstance(family_colored_mdp, paynt.family.colored_mdp.FamilyColoredMdp)
+        assert isinstance(family_colored_mdp, paynt.mdp_family.colored_mdp.FamilyColoredMdp)
         assert family_colored_mdp.feature_kind == "family"
 
     def test_build_produces_an_mdp_not_necessarily_deterministic(self, family_colored_mdp):

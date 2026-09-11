@@ -11,7 +11,7 @@ from typing import Any
 import paynt.parameter_space.parameter_space
 import paynt.parameter_space.smt
 import paynt.specification.property_result
-import paynt.underlying_model.underlying_model
+import paynt.model.model
 
 import logging
 
@@ -58,7 +58,7 @@ class SearchNode:
         # ColoredMdp.build override constructs one via SubmodelBuilder.build_submdp/build_from_choice_mask),
         # never a bare Mdp
         self.selected_choices: Any = None
-        self.mdp: paynt.underlying_model.underlying_model.SubMdp | None = None
+        self.mdp: paynt.model.model.SubMdp | None = None
         # populated by Synthesizer.check_specification / SynthesizerARDt.verify_parameter_space
         # always an MdpSpecificationResult in practice (every producer -- SynthesizerAR.check_specification,
         # SynthesizerARDt.build_unsat_result -- constructs that subclass, never the bare base), so typed as

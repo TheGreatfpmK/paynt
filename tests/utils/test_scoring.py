@@ -1,7 +1,7 @@
 import pytest
 
 import paynt.parser.sketch
-import paynt.underlying_model.underlying_model
+import paynt.model.model
 import paynt.utils.scoring
 import paynt.synthesizer.search_node
 
@@ -10,7 +10,7 @@ from helpers.helper import get_sketch_paths
 
 @pytest.fixture
 def colored_mdp_parameter_space_prop_result():
-    """A plain, non-specialized ColoredMdp -- see tests/underlying_model/test_model_index.py's fixture
+    """A plain, non-specialized ColoredMdp -- see tests/model/test_model_index.py's fixture
     docstring for why this no longer goes through paynt.quotient.quotient.Quotient (deleted)."""
     sketch_path, props_path = get_sketch_paths("archive/jair24-synthesis/maze")
     colored_mdp_factory, task = paynt.parser.sketch.Sketch.load_sketch(sketch_path, props_path)
@@ -37,9 +37,9 @@ class TestSchedulerScoring:
         inconsistent_assignments = {parameter: options for parameter, options in enumerate(selection) if len(options) > 1}
         assert inconsistent_assignments, "expected at least one inconsistent parameter for this fixture"
 
-        choice_values = paynt.underlying_model.underlying_model.ModelIndex.choice_values(node.mdp.model, prop, result.result.get_values())
+        choice_values = paynt.model.model.ModelIndex.choice_values(node.mdp.model, prop, result.result.get_values())
         local_choices = result.result.scheduler.compute_action_support(node.mdp.model.nondeterministic_choice_indices)
-        expected_visits = paynt.underlying_model.underlying_model.ModelIndex.compute_expected_visits(node.mdp.model, prop, local_choices)
+        expected_visits = paynt.model.model.ModelIndex.compute_expected_visits(node.mdp.model, prop, local_choices)
         underlying_choice_map = list(range(node.mdp.model.nr_choices))
 
         scores = paynt.utils.scoring.estimate_scheduler_difference(

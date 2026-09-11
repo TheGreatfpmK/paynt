@@ -1,4 +1,4 @@
-import paynt.family
+import paynt.mdp_family
 
 
 class TestPolicyTreeSynthesis:
@@ -12,7 +12,7 @@ class TestPolicyTreeSynthesis:
         "found N satisfying policies for M/M family members" summary is built from.
         """
         task = family_colored_mdp_factory.task
-        synthesizer = paynt.family.PolicyTreeSynthesizer(family_colored_mdp, task)
+        synthesizer = paynt.mdp_family.PolicyTreeSynthesizer(family_colored_mdp, task)
         prop = task.get_property()
         evaluations = synthesizer.evaluate(prop=prop, print_stats=False)
         assert len(evaluations) == 3, "expected exactly 3 distinct policies to cover this family"
@@ -34,7 +34,7 @@ class TestPolicyTreeSynthesis:
         """
         task = family_colored_mdp_factory.task
         task.disable_expected_visits = True
-        synthesizer = paynt.family.PolicyTreeSynthesizer(family_colored_mdp, task)
+        synthesizer = paynt.mdp_family.PolicyTreeSynthesizer(family_colored_mdp, task)
         prop = task.get_property()
         evaluations = synthesizer.evaluate(prop=prop, print_stats=False)
         assert len(evaluations) == 3, "expected exactly 3 distinct policies to cover this family"

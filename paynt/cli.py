@@ -14,7 +14,7 @@ import paynt.dt._cli
 import paynt.dt.dtnest._cli
 import paynt.pomdp._cli
 import paynt.pomdp.saynt._cli
-import paynt.family._cli
+import paynt.mdp_family._cli
 
 import rich_click as click
 import sys
@@ -114,7 +114,7 @@ def setup_logger(log_path: str | None = None) -> list[logging.Handler]:
 )
 @add_options(paynt.pomdp._cli.options)
 @add_options(paynt.pomdp.saynt._cli.options)
-@add_options(paynt.family._cli.options)
+@add_options(paynt.mdp_family._cli.options)
 @add_options(paynt.dt._cli.options)
 @add_options(paynt.dt.dtnest._cli.options)
 @click.option("--export", type=click.Choice(["jani", "drn", "pomdp"]), panel="Output", help="export the model to specified format and abort")

@@ -8,7 +8,7 @@ import payntbind
 import paynt.parameter_space.parameter_space
 import paynt.specification.property
 import paynt.parser.jani
-import paynt.underlying_model.model_builder
+import paynt.model.model_builder
 
 import os
 import re
@@ -70,7 +70,7 @@ class PrismParser:
             else:
                 underlying_mdp = payntbind.synthesis.addChoiceLabelsFromJani(underlying_mdp)
         else:
-            underlying_mdp = paynt.underlying_model.model_builder.ModelBuilder.from_prism(prism, specification, use_exact)
+            underlying_mdp = paynt.model.model_builder.ModelBuilder.from_prism(prism, specification, use_exact)
 
         return prism, underlying_mdp, specification, parameter_space, coloring, jani_unfolder, obs_evaluator
 

@@ -11,7 +11,7 @@ import payntbind
 
 import paynt.colored_mdp
 import paynt.parameter_space.parameter_space
-import paynt.underlying_model.underlying_model
+import paynt.model.model
 import paynt.specification.property
 
 import json
@@ -49,7 +49,7 @@ class FamilyColoredMdp(paynt.colored_mdp.ColoredMdp):
         # for each state of the underlying MDP, a list of available actions
         self.state_to_actions = state_to_actions
 
-    def build_assignment(self, parameter_space: paynt.parameter_space.parameter_space.ParameterSpace) -> paynt.underlying_model.underlying_model.SubMdp:
+    def build_assignment(self, parameter_space: paynt.parameter_space.parameter_space.ParameterSpace) -> paynt.model.model.SubMdp:
         """
         Overrides ColoredMdp.build_assignment: fixing every parameter (i.e. picking one member of the
         parameter_space) does not fix the agent's policy -- that is separate, handled by apply_policy_to_parameter_space --
@@ -57,18 +57,14 @@ class FamilyColoredMdp(paynt.colored_mdp.ColoredMdp):
         """
         assert parameter_space.size == 1, "expecting parameter_space of size 1"
         choices = self.coloring.selectCompatibleChoices(parameter_space.native)
-        model, state_map, choice_map = paynt.underlying_model.underlying_model.SubmodelBuilder.restrict(
-            self.underlying_mdp, choices, self.subsystem_builder_options
-        )
-        return paynt.underlying_model.underlying_model.SubMdp(model, state_map, choice_map)
+        model, state_map, choice_map = paynt.model.model.SubmodelBuilder.restrict(self.underlying_mdp, choices, self.subsystem_builder_options)
+        return paynt.model.model.SubMdp(model, state_map, choice_map)
 
     def empty_policy(self) -> list[int | None]:
-        return paynt.underlying_model.underlying_model.ModelIndex.empty_scheduler(self.underlying_mdp)
+        return paynt.model.model.ModelIndex.empty_scheduler(self.underlying_mdp)
 
-    def scheduler_to_policy(self, scheduler: Any, mdp: paynt.underlying_model.underlying_model.SubMdp) -> list[int | None]:
-        state_to_choice = paynt.underlying_model.underlying_model.ModelIndex.scheduler_to_state_to_choice(
-            self.underlying_mdp, self.choice_destinations, mdp, scheduler
-        )
+    def scheduler_to_policy(self, scheduler: Any, mdp: paynt.model.model.SubMdp) -> list[int | None]:
+        state_to_choice = paynt.model.model.ModelIndex.scheduler_to_state_to_choice(self.underlying_mdp, self.choice_destinations, mdp, scheduler)
         policy = self.empty_policy()
         for state in range(self.underlying_mdp.nr_states):
             choice = state_to_choice[state]
@@ -137,7 +133,7 @@ class FamilyColoredMdp(paynt.colored_mdp.ColoredMdp):
 
     def fix_and_apply_policy_to_parameter_space(
         self, selected_choices: Any, policy: list[int | None]
-    ) -> tuple[tuple[list[int | None], list[int]], paynt.underlying_model.underlying_model.SubMdp]:
+    ) -> tuple[tuple[list[int | None], list[int]], paynt.model.model.SubMdp]:
         """
         Apply policy to the underlying MDP restricted to selected_choices. Every undefined action in a policy
         is set to an arbitrary one. Upon constructing the MDP, reset unused actions in a policy to None.
@@ -155,7 +151,7 @@ class FamilyColoredMdp(paynt.colored_mdp.ColoredMdp):
         choices = payntbind.synthesis.policyToChoicesForFamily(policy_choices, selected_choices)
 
         # build MDP and keep only reachable states in policy
-        mdp = paynt.underlying_model.underlying_model.SubmodelBuilder.build_submdp(self.underlying_mdp, choices, self.subsystem_builder_options)
+        mdp = paynt.model.model.SubmodelBuilder.build_submdp(self.underlying_mdp, choices, self.subsystem_builder_options)
         policy_fixed = self.empty_policy()
         for state in mdp.underlying_mdp_state_map:
             policy_fixed[state] = policy[state]
@@ -163,7 +159,7 @@ class FamilyColoredMdp(paynt.colored_mdp.ColoredMdp):
         mask = [state for state, action in enumerate(policy_fixed) if action is not None]
         return (policy_fixed, mask), mdp
 
-    def apply_policy_to_parameter_space(self, selected_choices: Any, policy: list[int | None]) -> paynt.underlying_model.underlying_model.SubMdp:
+    def apply_policy_to_parameter_space(self, selected_choices: Any, policy: list[int | None]) -> paynt.model.model.SubMdp:
         policy_choices = []
         for state, action in enumerate(policy):
             if action is None:
@@ -173,11 +169,9 @@ class FamilyColoredMdp(paynt.colored_mdp.ColoredMdp):
                 policy_choices += self.state_action_choices[state][action]
         choices = payntbind.synthesis.policyToChoicesForFamily(policy_choices, selected_choices)
 
-        return paynt.underlying_model.underlying_model.SubmodelBuilder.build_submdp(self.underlying_mdp, choices, self.subsystem_builder_options)
+        return paynt.model.model.SubmodelBuilder.build_submdp(self.underlying_mdp, choices, self.subsystem_builder_options)
 
-    def assert_mdp_is_deterministic(
-        self, mdp: paynt.underlying_model.underlying_model.SubMdp, parameter_space: paynt.parameter_space.parameter_space.ParameterSpace
-    ) -> None:
+    def assert_mdp_is_deterministic(self, mdp: paynt.model.model.SubMdp, parameter_space: paynt.parameter_space.parameter_space.ParameterSpace) -> None:
         if mdp.is_deterministic:
             return
 

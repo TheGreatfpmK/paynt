@@ -5,11 +5,11 @@ from typing import Any
 import stormpy
 import payntbind
 
-import paynt.underlying_model.model_builder
+import paynt.model.model_builder
 import paynt.colored_mdp
 import paynt.parameter_space.parameter_space
-import paynt.family
-import paynt.family.task
+import paynt.mdp_family
+import paynt.mdp_family.task
 import paynt.posmg
 import paynt.posmg.task
 import paynt.pomdp
@@ -80,7 +80,7 @@ class Sketch:
         if filetype is None:
             try:
                 logger.info("assuming sketch in DRN format...")
-                explicit_model = paynt.underlying_model.model_builder.ModelBuilder.from_drn(sketch_path, use_exact)
+                explicit_model = paynt.model.model_builder.ModelBuilder.from_drn(sketch_path, use_exact)
                 specification = PrismParser.parse_specification(properties_path, relative_error, use_exact=use_exact)
                 filetype = "drn"
                 project_path = os.path.dirname(sketch_path)
@@ -157,11 +157,11 @@ class Sketch:
                 colored_mdp = paynt.colored_mdp.ColoredMdp(explicit_model, parameter_space, coloring, use_exact=use_exact)
                 colored_mdp_factory = paynt.colored_mdp.IdentityColoredMdpFactory(colored_mdp, task)
             elif prism.model_type == stormpy.storage.PrismModelType.MDP:
-                task = paynt.family.task.FamilyTask.from_specification(specification, use_exact=use_exact, **task_kwargs)
-                colored_mdp_factory = paynt.family.FamilyColoredMdpFactory(explicit_model, parameter_space, coloring, task, use_exact=use_exact)
+                task = paynt.mdp_family.task.FamilyTask.from_specification(specification, use_exact=use_exact, **task_kwargs)
+                colored_mdp_factory = paynt.mdp_family.FamilyColoredMdpFactory(explicit_model, parameter_space, coloring, task, use_exact=use_exact)
             elif prism.model_type == stormpy.storage.PrismModelType.POMDP:
-                task = paynt.family.task.FamilyTask.from_specification(specification, use_exact=use_exact, **task_kwargs)
-                colored_mdp_factory = paynt.family.PomdpFamilyColoredMdpFactory(
+                task = paynt.mdp_family.task.FamilyTask.from_specification(specification, use_exact=use_exact, **task_kwargs)
+                colored_mdp_factory = paynt.mdp_family.PomdpFamilyColoredMdpFactory(
                     explicit_model, parameter_space, coloring, task, obs_evaluator, use_exact=use_exact
                 )
         else:

@@ -15,7 +15,7 @@ import paynt.colored_mdp
 import paynt.parameter_space.parameter_space
 import paynt.synthesizer.search_node
 import paynt.dt.decision_tree
-import paynt.underlying_model.underlying_model
+import paynt.model.model
 from paynt.dt._utils import get_state_valuations
 
 import logging
@@ -67,16 +67,14 @@ class DtColoredMdp(paynt.colored_mdp.ColoredMdp):
         self.tree_helper: Any = None
         self.tree_helper_tree: paynt.dt.decision_tree.DecisionTree | None = None
 
-    def build_from_choice_mask(self, choices: Any) -> paynt.underlying_model.underlying_model.SubMdp:
+    def build_from_choice_mask(self, choices: Any) -> paynt.model.model.SubMdp:
         """Convenience used throughout dt/dtnest: restrict to a choice mask without needing a parameter space."""
-        model, state_map, choice_map = paynt.underlying_model.underlying_model.SubmodelBuilder.restrict(
-            self.underlying_mdp, choices, self.subsystem_builder_options
-        )
-        return paynt.underlying_model.underlying_model.SubMdp(model, state_map, choice_map)
+        model, state_map, choice_map = paynt.model.model.SubmodelBuilder.restrict(self.underlying_mdp, choices, self.subsystem_builder_options)
+        return paynt.model.model.SubMdp(model, state_map, choice_map)
 
     def build(
         self, parameter_space: paynt.parameter_space.parameter_space.ParameterSpace, parent_selected_choices: Any = None
-    ) -> tuple[paynt.underlying_model.underlying_model.SubMdp, Any]:
+    ) -> tuple[paynt.model.model.SubMdp, Any]:
         if parent_selected_choices is None:
             choices = self.coloring.selectCompatibleChoices(parameter_space.native)
         else:
@@ -104,10 +102,8 @@ class DtColoredMdp(paynt.colored_mdp.ColoredMdp):
         """Get parameter options involved in the scheduler selection."""
         scheduler = result.scheduler
         assert scheduler.memoryless and scheduler.deterministic
-        state_to_choice = paynt.underlying_model.underlying_model.ModelIndex.scheduler_to_state_to_choice(
-            self.underlying_mdp, self.choice_destinations, mdp, scheduler
-        )
-        choices = paynt.underlying_model.underlying_model.ModelIndex.state_to_choice_to_choices(self.underlying_mdp, state_to_choice)
+        state_to_choice = paynt.model.model.ModelIndex.scheduler_to_state_to_choice(self.underlying_mdp, self.choice_destinations, mdp, scheduler)
+        choices = paynt.model.model.ModelIndex.state_to_choice_to_choices(self.underlying_mdp, state_to_choice)
         if specification.is_single_property:
             node.scheduler_choices = choices  # type: ignore[attr-defined]
         consistent, parameter_selection = self.are_choices_consistent(choices, mdp.parameter_space)
@@ -117,7 +113,7 @@ class DtColoredMdp(paynt.colored_mdp.ColoredMdp):
         variable_name, state_valuations = get_state_valuations(self.underlying_mdp)
         nci = self.underlying_mdp.nondeterministic_choice_indices.copy()
         assert self.underlying_mdp.nr_states == len(scheduler_json)
-        state_to_choice = paynt.underlying_model.underlying_model.ModelIndex.empty_scheduler(self.underlying_mdp)
+        state_to_choice = paynt.model.model.ModelIndex.empty_scheduler(self.underlying_mdp)
         for state_decision in scheduler_json:
             valuation = [state_decision["s"][name] for name in variable_name]
             for state, state_valuation in enumerate(state_valuations):  # noqa: B007 -- state used below
@@ -148,12 +144,10 @@ class DtColoredMdp(paynt.colored_mdp.ColoredMdp):
                 state_to_choice[state] = nci[state]
 
         if discard_unreachable_states:
-            state_to_choice = paynt.underlying_model.underlying_model.ModelIndex.discard_unreachable_choices(
-                self.underlying_mdp, self.choice_destinations, state_to_choice
-            )
+            state_to_choice = paynt.model.model.ModelIndex.discard_unreachable_choices(self.underlying_mdp, self.choice_destinations, state_to_choice)
         # keep only relevant states
         state_to_choice = [choice if self.state_is_relevant[state] else None for state, choice in enumerate(state_to_choice)]
-        choices = paynt.underlying_model.underlying_model.ModelIndex.state_to_choice_to_choices(self.underlying_mdp, state_to_choice)
+        choices = paynt.model.model.ModelIndex.state_to_choice_to_choices(self.underlying_mdp, state_to_choice)
 
         scheduler_json_relevant = []
         for state_decision in scheduler_json:
@@ -170,7 +164,7 @@ class DtColoredMdp(paynt.colored_mdp.ColoredMdp):
     def get_random_choices(self) -> Any:
         """Gets all choices that represent random action, used to compute the value of uniformly random scheduler."""
         nci = self.underlying_mdp.nondeterministic_choice_indices.copy()
-        state_to_choice = paynt.underlying_model.underlying_model.ModelIndex.empty_scheduler(self.underlying_mdp)
+        state_to_choice = paynt.model.model.ModelIndex.empty_scheduler(self.underlying_mdp)
         random_action = self.action_labels.index(DtColoredMdp.DONT_CARE_ACTION_LABEL)
         for state in range(self.underlying_mdp.nr_states):
             for choice in range(nci[state], nci[state + 1]):
@@ -181,4 +175,4 @@ class DtColoredMdp(paynt.colored_mdp.ColoredMdp):
             if existing_choice is None:
                 state_to_choice[state] = nci[state]
 
-        return paynt.underlying_model.underlying_model.ModelIndex.state_to_choice_to_choices(self.underlying_mdp, state_to_choice)
+        return paynt.model.model.ModelIndex.state_to_choice_to_choices(self.underlying_mdp, state_to_choice)

@@ -10,7 +10,7 @@ inverts kappa to interpret a scheduler (scheduler_selection/scheduler_is_consist
 genuinely touches the coloring or the parameter space. Generic stormpy/index-space plumbing and numeric
 model-checking-result facts that touch neither (restricting an MDP to a choice mask, converting between
 scheduler/choice representations, choice values, expected visits) live in
-paynt.underlying_model.underlying_model.ModelIndex; the one splitting heuristic that does need the coloring
+paynt.model.model.ModelIndex; the one splitting heuristic that does need the coloring
 (estimate_scheduler_difference) lives in paynt.utils.scoring instead, since it is search-algorithm support
 shared by multiple synthesizer classes, not part of the representation.
 """
@@ -21,7 +21,7 @@ from typing import Any
 
 import paynt.task
 import paynt.parameter_space.parameter_space
-import paynt.underlying_model.underlying_model
+import paynt.model.model
 import paynt.synthesizer.search_node
 
 import logging
@@ -48,15 +48,15 @@ class ColoredMdp:
         self.use_exact = use_exact
 
         # internal plumbing needed by build()/scheduler_selection() below, not part of the public contract
-        self.subsystem_builder_options = paynt.underlying_model.underlying_model.SubmodelBuilder.default_builder_options()
-        self.choice_destinations = paynt.underlying_model.underlying_model.ModelIndex.compute_choice_destinations(underlying_mdp, use_exact)
+        self.subsystem_builder_options = paynt.model.model.SubmodelBuilder.default_builder_options()
+        self.choice_destinations = paynt.model.model.ModelIndex.compute_choice_destinations(underlying_mdp, use_exact)
 
     def export_result(self, dtmc: Any) -> None:
         """to be overridden"""
 
     def build(
         self, parameter_space: paynt.parameter_space.parameter_space.ParameterSpace, parent_selected_choices: Any = None
-    ) -> tuple[paynt.underlying_model.underlying_model.SubMdp, Any]:
+    ) -> tuple[paynt.model.model.SubMdp, Any]:
         """
         Compute the induced sub-MDP C[eta] for the given parameter (sub)space.
         :param parent_selected_choices unused by this base implementation; DtColoredMdp's override uses it
@@ -65,28 +65,24 @@ class ColoredMdp:
         :returns (mdp, selected_choices)
         """
         choices = self.coloring.selectCompatibleChoices(parameter_space.native)
-        mdp = paynt.underlying_model.underlying_model.SubmodelBuilder.build_submdp(self.underlying_mdp, choices, self.subsystem_builder_options)
+        mdp = paynt.model.model.SubmodelBuilder.build_submdp(self.underlying_mdp, choices, self.subsystem_builder_options)
         mdp.parameter_space = parameter_space
         return mdp, choices
 
-    def build_assignment(self, parameter_space: paynt.parameter_space.parameter_space.ParameterSpace) -> paynt.underlying_model.underlying_model.SubMdp:
+    def build_assignment(self, parameter_space: paynt.parameter_space.parameter_space.ParameterSpace) -> paynt.model.model.SubMdp:
         """Compute the induced DTMC C[theta] for a full parameter assignment."""
         assert parameter_space.size == 1, "expecting parameter space of size 1"
         choices = self.coloring.selectCompatibleChoices(parameter_space.native)
         assert choices.number_of_set_bits() > 0
-        model, state_map, choice_map = paynt.underlying_model.underlying_model.SubmodelBuilder.restrict(
-            self.underlying_mdp, choices, self.subsystem_builder_options
-        )
-        dtmc = paynt.underlying_model.underlying_model.SubmodelBuilder.mdp_to_dtmc(model)
-        return paynt.underlying_model.underlying_model.SubMdp(dtmc, state_map, choice_map)
+        model, state_map, choice_map = paynt.model.model.SubmodelBuilder.restrict(self.underlying_mdp, choices, self.subsystem_builder_options)
+        dtmc = paynt.model.model.SubmodelBuilder.mdp_to_dtmc(model)
+        return paynt.model.model.SubMdp(dtmc, state_map, choice_map)
 
     def scheduler_selection(self, mdp: Any, scheduler: Any) -> list[list[int]]:
         """Get parameter options involved in the scheduler selection (the inverse of build(): choices -> V)."""
         assert scheduler.memoryless and scheduler.deterministic
-        state_to_choice = paynt.underlying_model.underlying_model.ModelIndex.scheduler_to_state_to_choice(
-            self.underlying_mdp, self.choice_destinations, mdp, scheduler
-        )
-        choices = paynt.underlying_model.underlying_model.ModelIndex.state_to_choice_to_choices(self.underlying_mdp, state_to_choice)
+        state_to_choice = paynt.model.model.ModelIndex.scheduler_to_state_to_choice(self.underlying_mdp, self.choice_destinations, mdp, scheduler)
+        choices = paynt.model.model.ModelIndex.state_to_choice_to_choices(self.underlying_mdp, state_to_choice)
         return self.coloring.collectHoleOptions(choices)
 
     def scheduler_is_consistent(

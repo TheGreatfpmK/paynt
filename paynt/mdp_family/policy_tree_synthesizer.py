@@ -1,5 +1,5 @@
 """
-AR-based synthesis of a policy tree (paynt.family.policy_tree.PolicyTree): splits a family's parameter space
+AR-based synthesis of a policy tree (paynt.mdp_family.policy_tree.PolicyTree): splits a family's parameter space
 until every subspace either has a policy that satisfies all its members, or is proven unsatisfiable. Unlike
 the generic AR/CEGIS/Hybrid synthesizers, this never goes through SynthesizerAR -- policy-tree splitting is a
 genuinely different algorithm (game abstraction + policy compatibility merging), not a scoring variant.
@@ -12,10 +12,10 @@ from typing import Any
 import paynt.synthesizer.synthesizer
 import paynt.parameter_space.parameter_space
 import paynt.specification.property
-import paynt.underlying_model.underlying_model
+import paynt.model.model
 import paynt.utils.scoring
-import paynt.family.result
-from paynt.family.policy_tree import Policy, PolicyTree, PolicyTreeNode
+import paynt.mdp_family.result
+from paynt.mdp_family.policy_tree import Policy, PolicyTree, PolicyTreeNode
 
 import logging
 
@@ -69,7 +69,7 @@ class PolicyTreeSynthesizer(paynt.synthesizer.synthesizer.Synthesizer):
         return self.colored_mdp.scheduler_to_policy(result.result.scheduler, node.mdp)  # type: ignore[attr-defined]
 
         # uncomment below to preemptively double-check the policy
-        # paynt.family.policy_tree.double_check_policy(self.colored_mdp, node, prop, policy)
+        # paynt.mdp_family.policy_tree.double_check_policy(self.colored_mdp, node, prop, policy)
 
     def solve_game_abstraction(self, node: PolicyTreeNode, prop: paynt.specification.property.Property, game_solver: Any) -> tuple[list[int | None], bool]:
         # construct and solve the game abstraction
@@ -95,10 +95,10 @@ class PolicyTreeSynthesizer(paynt.synthesizer.synthesizer.Synthesizer):
 
     def state_to_choice_to_parameter_selection(self, state_to_choice: list[int | None]) -> tuple[Any, list[list[int]]]:
         if self.task.discard_unreachable_choices:
-            state_to_choice = paynt.underlying_model.underlying_model.ModelIndex.discard_unreachable_choices(
+            state_to_choice = paynt.model.model.ModelIndex.discard_unreachable_choices(
                 self.colored_mdp.underlying_mdp, self.colored_mdp.choice_destinations, state_to_choice
             )
-        scheduler_choices = paynt.underlying_model.underlying_model.ModelIndex.state_to_choice_to_choices(self.colored_mdp.underlying_mdp, state_to_choice)
+        scheduler_choices = paynt.model.model.ModelIndex.state_to_choice_to_choices(self.colored_mdp.underlying_mdp, state_to_choice)
         parameter_selection = self.colored_mdp.coloring.collectHoleOptions(scheduler_choices)
         return scheduler_choices, parameter_selection
 
@@ -178,8 +178,8 @@ class PolicyTreeSynthesizer(paynt.synthesizer.synthesizer.Synthesizer):
         self, prop: paynt.specification.property.Property, scheduler_choices: Any, state_values: list[float], inconsistent_assignments: dict[int, list[int]]
     ) -> dict[int, float]:
         mdp = self.colored_mdp.underlying_mdp
-        choice_values = paynt.underlying_model.underlying_model.ModelIndex.choice_values(mdp, prop, state_values)
-        expected_visits = paynt.underlying_model.underlying_model.ModelIndex.compute_expected_visits(
+        choice_values = paynt.model.model.ModelIndex.choice_values(mdp, prop, state_values)
+        expected_visits = paynt.model.model.ModelIndex.compute_expected_visits(
             mdp, prop, scheduler_choices, disable_expected_visits=self.task.disable_expected_visits
         )
         underlying_mdp_choice_map = list(range(self.colored_mdp.underlying_mdp.nr_choices))
@@ -321,10 +321,10 @@ class PolicyTreeSynthesizer(paynt.synthesizer.synthesizer.Synthesizer):
             evaluations.append(evaluation)
         return evaluations
 
-    def run(self, optimum_threshold: Any = None) -> paynt.family.result.PolicyTreeResult:
+    def run(self, optimum_threshold: Any = None) -> paynt.mdp_family.result.PolicyTreeResult:
         evaluations = self.evaluate()
         success = len(evaluations) > 0 and all(evaluation.sat for evaluation in evaluations)
-        return paynt.family.result.PolicyTreeResult(success, policy_tree=self.policy_tree)
+        return paynt.mdp_family.result.PolicyTreeResult(success, policy_tree=self.policy_tree)
 
     def export_evaluation_result(self, evaluations: list[Any], export_filename_base: str) -> None:
         import json

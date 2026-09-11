@@ -7,7 +7,7 @@ import payntbind
 
 import paynt.parameter_space.parameter_space
 import paynt.specification.property
-import paynt.underlying_model.model_builder
+import paynt.model.model_builder
 
 import itertools
 
@@ -73,7 +73,7 @@ class JaniUnfolder:
         self.jani_unfolded, edge_to_parameter_options = JaniUnfolder.unfold_jani(jani, parameter_space, parameter_expressions)
 
         logger.debug("constructing the underlying model...")
-        underlying_mdp = paynt.underlying_model.model_builder.ModelBuilder.from_jani(self.jani_unfolded, self.specification, use_exact=use_exact)
+        underlying_mdp = paynt.model.model_builder.ModelBuilder.from_jani(self.jani_unfolded, self.specification, use_exact=use_exact)
 
         # associate each action of the underlying MDP with parameter options
         # reconstruct choice labels from choice origins

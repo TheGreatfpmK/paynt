@@ -10,6 +10,8 @@ from typing import Any
 
 from . import version
 
+__all__ = ["get_version", "get_synthesizer"]
+
 
 def get_version() -> str:
     """Return PAYNT version string."""
@@ -71,9 +73,9 @@ def get_synthesizer(colored_mdp_factory: Any, method: str = "ar", fsc_synthesis:
     if feature_kind == "family":
         if method == "onebyone":
             return paynt.synthesizer.synthesizer.Synthesizer.for_method(colored_mdp, task, method)
-        import paynt.family
+        import paynt.mdp_family
 
-        return paynt.family.PolicyTreeSynthesizer(colored_mdp, task)
+        return paynt.mdp_family.PolicyTreeSynthesizer(colored_mdp, task)
 
     if feature_kind == "posmg" and fsc_synthesis:
         import paynt.posmg

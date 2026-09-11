@@ -3,7 +3,7 @@ import stormpy
 
 import paynt.dt
 import paynt.dt.dtnest.task
-import paynt.underlying_model.model_builder
+import paynt.model.model_builder
 import paynt.utils.timer
 
 from helpers.helper import get_sketch_paths
@@ -29,7 +29,7 @@ class TestDtSynthesis:
         properties = stormpy.parse_properties_for_prism_program('P>=0 [F "goal"]; Pmax=? [F "goal"]', prism, None)
         assert len(properties) == 2
 
-        explicit_model = paynt.underlying_model.model_builder.ModelBuilder.from_prism(prism, None, False)
+        explicit_model = paynt.model.model_builder.ModelBuilder.from_prism(prism, None, False)
         task = paynt.dt.dtnest.task.DtNestTask(properties, error_threshold=0.05, tree_depth=2, timeout=15)
         assert not task.specification.is_single_property
 
@@ -62,7 +62,7 @@ class TestDtSynthesis:
         properties = stormpy.parse_properties_for_prism_program('P>=0.55 [F "goal"]; P>=0.5 [F "goal"]', prism, None)
         assert len(properties) == 2
 
-        explicit_model = paynt.underlying_model.model_builder.ModelBuilder.from_prism(prism, None, False)
+        explicit_model = paynt.model.model_builder.ModelBuilder.from_prism(prism, None, False)
         task = paynt.dt.dtnest.task.DtNestTask(properties, error_threshold=0.05, tree_depth=2, timeout=8)
         assert len(task.specification.constraints) == 2
         assert task.specification.optimality is None

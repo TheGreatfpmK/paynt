@@ -11,10 +11,10 @@ from typing import Any
 
 import payntbind
 
-import paynt.family.colored_mdp
-import paynt.family.task
+import paynt.mdp_family.colored_mdp
+import paynt.mdp_family.task
 import paynt.parameter_space.parameter_space
-import paynt.underlying_model.underlying_model
+import paynt.model.model
 
 import logging
 
@@ -28,7 +28,7 @@ class FamilyColoredMdpFactory:
         underlying_mdp: Any,
         parameter_space: paynt.parameter_space.parameter_space.ParameterSpace,
         coloring: Any,
-        task: paynt.family.task.FamilyTask,
+        task: paynt.mdp_family.task.FamilyTask,
         use_exact: bool = False,
     ):
         self.task = task
@@ -51,10 +51,10 @@ class FamilyColoredMdpFactory:
 
         self.colored_mdp = self._construct_colored_mdp()
 
-    def _construct_colored_mdp(self) -> paynt.family.colored_mdp.FamilyColoredMdp:
+    def _construct_colored_mdp(self) -> paynt.mdp_family.colored_mdp.FamilyColoredMdp:
         """Overridable so subclasses (e.g. PomdpFamilyColoredMdpFactory) can produce their own ColoredMdp
         subclass while reusing all of the construction above."""
-        return paynt.family.colored_mdp.FamilyColoredMdp(
+        return paynt.mdp_family.colored_mdp.FamilyColoredMdp(
             self.underlying_mdp,
             self.parameter_space,
             self.coloring,

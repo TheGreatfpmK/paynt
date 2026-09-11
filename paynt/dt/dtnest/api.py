@@ -3,6 +3,8 @@ from .task import DtNestTask
 from ..result import DtResult
 from ..factory import DtColoredMdpFactory
 
+__all__ = ["synthesize"]
+
 
 def synthesize(
     cmdp_factory_dt: DtColoredMdpFactory,

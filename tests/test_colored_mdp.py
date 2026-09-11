@@ -18,7 +18,7 @@ class TestColoredMdp:
         """
         ColoredMdp is a realization of colored MDP = (M, V, kappa) (Definition 2, arXiv:2511.08078): it must
         not carry algorithm/scoring helpers that don't touch the coloring or the parameter space. Those live
-        in paynt.underlying_model.underlying_model.ModelIndex (generic scheduler/choice-index plumbing and
+        in paynt.model.model.ModelIndex (generic scheduler/choice-index plumbing and
         model-checking-result facts) or paynt.utils.scoring (the one coloring-aware splitting heuristic) instead.
         """
         removed = [

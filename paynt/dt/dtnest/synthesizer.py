@@ -9,7 +9,7 @@ from ..synthesizer import DtSynthesizer
 from ..result import DtResult
 import paynt.task
 import paynt.utils.timer
-import paynt.underlying_model.underlying_model
+import paynt.model.model
 from ._utils import (
     create_uniform_random_tree,
     get_submdp_from_unfixed_states,
@@ -338,7 +338,7 @@ class DtNest(DtSynthesizer):
                             submpd_dtlearn_of_subtree = get_submdp_from_unfixed_states(self.colored_mdp, ~node_states)
                             oos_result = submpd_dtlearn_of_subtree.check_specification(self.task.specification)
                             new_scheduler = oos_result.optimality_result.result.scheduler
-                            state_to_choice = paynt.underlying_model.underlying_model.ModelIndex.scheduler_to_state_to_choice(
+                            state_to_choice = paynt.model.model.ModelIndex.scheduler_to_state_to_choice(
                                 self.colored_mdp.underlying_mdp, self.colored_mdp.choice_destinations, submpd_dtlearn_of_subtree, new_scheduler
                             )
 
@@ -441,7 +441,7 @@ class DtNest(DtSynthesizer):
         # see initialize_settings's comment: DtNest always actually gets a DtNestTask
         task: DtNestTask = self.task  # type: ignore[assignment]
 
-        paynt_mdp = paynt.underlying_model.underlying_model.SubMdp(
+        paynt_mdp = paynt.model.model.SubMdp(
             self.colored_mdp.underlying_mdp, list(range(self.colored_mdp.underlying_mdp.nr_states)), list(range(self.colored_mdp.underlying_mdp.nr_choices))
         )
 
@@ -479,7 +479,7 @@ class DtNest(DtSynthesizer):
         mc_result = paynt_mdp.model_check_property(self.task.get_property())
         opt_scheduler = mc_result.result.scheduler
 
-        state_to_choice = paynt.underlying_model.underlying_model.ModelIndex.scheduler_to_state_to_choice(
+        state_to_choice = paynt.model.model.ModelIndex.scheduler_to_state_to_choice(
             self.colored_mdp.underlying_mdp, self.colored_mdp.choice_destinations, paynt_mdp, opt_scheduler
         )
 

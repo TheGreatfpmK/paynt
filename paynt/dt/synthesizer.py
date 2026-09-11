@@ -8,7 +8,7 @@ import paynt.dt.factory
 import paynt.dt.decision_tree
 import paynt.synthesizer.statistic
 import paynt.utils.timer
-import paynt.underlying_model.underlying_model
+import paynt.model.model
 
 import paynt.dt.result
 from paynt.dt.synthesizer_ar_dt import SynthesizerARDt
@@ -37,10 +37,10 @@ def _run_dt_map_scheduler(cmdp_factory_dt: paynt.dt.factory.DtColoredMdpFactory,
     state_to_choice = payntbind.synthesis.schedulerToStateToGlobalChoice(
         scheduler, cmdp_factory_dt.underlying_mdp, list(range(cmdp_factory_dt.underlying_mdp.nr_choices))
     )
-    state_to_choice = paynt.underlying_model.underlying_model.ModelIndex.discard_unreachable_choices(
+    state_to_choice = paynt.model.model.ModelIndex.discard_unreachable_choices(
         cmdp_factory_dt.underlying_mdp, cmdp_factory_dt.choice_destinations, state_to_choice
     )
-    choices = paynt.underlying_model.underlying_model.ModelIndex.state_to_choice_to_choices(cmdp_factory_dt.underlying_mdp, state_to_choice)
+    choices = paynt.model.model.ModelIndex.state_to_choice_to_choices(cmdp_factory_dt.underlying_mdp, state_to_choice)
 
     dt_synthesizer = DtSynthesizer(cmdp_factory_dt)
     dt_synthesizer.map_scheduler(choices, tree_depth=tree_depth)
@@ -217,7 +217,7 @@ class DtSynthesizer:
     def run(self, optimum_threshold: Any = None) -> paynt.dt.result.DtResult:
         scheduler_choices = None
         if self.task.scheduler_path is None:
-            paynt_mdp = paynt.underlying_model.underlying_model.Mdp(self.colored_mdp.underlying_mdp)
+            paynt_mdp = paynt.model.model.Mdp(self.colored_mdp.underlying_mdp)
             mc_result = paynt_mdp.model_check_property(self.task.get_property())
         else:
             opt_result_value = None

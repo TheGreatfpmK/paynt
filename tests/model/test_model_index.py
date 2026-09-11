@@ -3,7 +3,7 @@ import math
 import pytest
 
 import paynt.parser.sketch
-import paynt.underlying_model.underlying_model
+import paynt.model.model
 import paynt.synthesizer.search_node
 
 from helpers.helper import get_sketch_paths
@@ -39,7 +39,7 @@ class TestModelIndexScoring:
         """
         colored_mdp, node, prop, result = colored_mdp_parameter_space_prop_result
         state_values = result.result.get_values()
-        choice_values = paynt.underlying_model.underlying_model.ModelIndex.choice_values(node.mdp.model, prop, state_values)
+        choice_values = paynt.model.model.ModelIndex.choice_values(node.mdp.model, prop, state_values)
 
         mdp = node.mdp.model
         tm = mdp.transition_matrix
@@ -59,7 +59,7 @@ class TestModelIndexScoring:
         # choices must be local to node.mdp.model's own indexing, as scheduler_scores derives
         # them via result.scheduler.compute_action_support(...) -- not the underlying-model-global selected_choices
         local_choices = result.result.scheduler.compute_action_support(node.mdp.model.nondeterministic_choice_indices)
-        visits = paynt.underlying_model.underlying_model.ModelIndex.compute_expected_visits(node.mdp.model, prop, local_choices)
+        visits = paynt.model.model.ModelIndex.compute_expected_visits(node.mdp.model, prop, local_choices)
         assert len(visits) == node.mdp.model.nr_states
         assert all(v >= 0 for v in visits)
         # the initial state is visited at least once by construction, before any transition happens
@@ -74,12 +74,12 @@ class TestModelIndexScoring:
         the same process can't leak this setting into each other -- see paynt.task.Task."""
         _, node, prop, result = colored_mdp_parameter_space_prop_result
         local_choices = result.result.scheduler.compute_action_support(node.mdp.model.nondeterministic_choice_indices)
-        visits = paynt.underlying_model.underlying_model.ModelIndex.compute_expected_visits(node.mdp.model, prop, local_choices, disable_expected_visits=True)
+        visits = paynt.model.model.ModelIndex.compute_expected_visits(node.mdp.model, prop, local_choices, disable_expected_visits=True)
         assert visits == [1] * node.mdp.model.nr_states
 
     def test_make_vector_defined_replaces_infinities_with_average_of_finite_values(self):
         vector = [1.0, math.inf, 3.0]
-        result = paynt.underlying_model.underlying_model.ModelIndex.make_vector_defined(vector)
+        result = paynt.model.model.ModelIndex.make_vector_defined(vector)
         assert result[0] == 1.0
         assert result[2] == 3.0
         assert result[1] == pytest.approx((1.0 + 0 + 3.0) / 3)

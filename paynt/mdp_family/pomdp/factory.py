@@ -7,10 +7,10 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-import paynt.family.task
+import paynt.mdp_family.task
 import paynt.parameter_space.parameter_space
-from paynt.family.factory import FamilyColoredMdpFactory
-from paynt.family.pomdp.colored_mdp import PomdpFamilyColoredMdp
+from paynt.mdp_family.factory import FamilyColoredMdpFactory
+from paynt.mdp_family.pomdp.colored_mdp import PomdpFamilyColoredMdp
 
 import logging
 
@@ -24,7 +24,7 @@ class PomdpFamilyColoredMdpFactory(FamilyColoredMdpFactory):
         underlying_mdp: Any,
         parameter_space: paynt.parameter_space.parameter_space.ParameterSpace,
         coloring: Any,
-        task: paynt.family.task.FamilyTask,
+        task: paynt.mdp_family.task.FamilyTask,
         obs_evaluator: Any,
         use_exact: bool = False,
     ):

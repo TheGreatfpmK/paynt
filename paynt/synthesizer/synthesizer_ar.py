@@ -8,7 +8,7 @@ import paynt.parameter_space.parameter_space
 import paynt.synthesizer.synthesizer
 import paynt.synthesizer.search_node
 import paynt.specification.property_result
-import paynt.underlying_model.underlying_model
+import paynt.model.model
 import paynt.utils.scoring
 
 import logging
@@ -20,11 +20,9 @@ def scheduler_scores(
     colored_mdp: paynt.colored_mdp.ColoredMdp, task: paynt.task.Task, mdp: Any, prop: Any, result: Any, selection: list[list[int]]
 ) -> dict[int, float] | None:
     inconsistent_assignments = {parameter: options for parameter, options in enumerate(selection) if len(options) > 1}
-    choice_values = paynt.underlying_model.underlying_model.ModelIndex.choice_values(mdp.model, prop, result.get_values())
+    choice_values = paynt.model.model.ModelIndex.choice_values(mdp.model, prop, result.get_values())
     choices = result.scheduler.compute_action_support(mdp.model.nondeterministic_choice_indices)
-    expected_visits = paynt.underlying_model.underlying_model.ModelIndex.compute_expected_visits(
-        mdp.model, prop, choices, disable_expected_visits=task.disable_expected_visits
-    )
+    expected_visits = paynt.model.model.ModelIndex.compute_expected_visits(mdp.model, prop, choices, disable_expected_visits=task.disable_expected_visits)
     # POMDP has a specialized, hand-optimized scorer for the common posterior-unaware case; every other
     # colored-MDP variant (and posterior-aware POMDPs) uses the generic implementation. Dispatched by
     # feature_kind, not an isinstance check, so this module never needs to import paynt.pomdp.
