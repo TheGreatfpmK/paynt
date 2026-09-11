@@ -20,6 +20,8 @@ class SynthesizerOneByOne(paynt.synthesizer.synthesizer.Synthesizer):
     def synthesize_one(self, node: paynt.synthesizer.search_node.SearchNode) -> paynt.parameter_space.parameter_space.ParameterSpace | None:
 
         for parameter_combination in node.parameter_space.all_combinations():
+            if self.resource_limit_reached():
+                break
 
             assignment = node.parameter_space.construct_assignment(parameter_combination)
             dtmc = self.colored_mdp.build_assignment(assignment)
@@ -49,6 +51,8 @@ class SynthesizerOneByOne(paynt.synthesizer.synthesizer.Synthesizer):
         evaluations = []
         assert self.stat is not None
         for parameter_combination in parameter_space.all_combinations():
+            if self.resource_limit_reached():
+                break
             assignment = parameter_space.construct_assignment(parameter_combination)
             model = self.colored_mdp.build_assignment(assignment)
             self.stat.iteration(model)

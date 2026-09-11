@@ -115,6 +115,8 @@ class SynthesizerCEGIS(paynt.synthesizer.synthesizer.Synthesizer):
         # CEGIS loop
         assignment = smt_solver.pick_assignment(node)
         while assignment is not None:
+            if self.resource_limit_reached():
+                break
 
             conflicts, accepting_assignment = self.analyze_parameter_space_assignment_cegis(node, assignment)
             if accepting_assignment is not None:

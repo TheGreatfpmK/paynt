@@ -108,6 +108,8 @@ class SynthesizerHybrid(paynt.synthesizer.synthesizer_ar.SynthesizerAR, paynt.sy
         nodes = [node]
         self.stage_control = StageControl(node.parameter_space.size)
         while nodes:
+            if self.resource_limit_reached():
+                break
 
             # initiate AR analysis
             self.stage_control.start_ar()
@@ -145,8 +147,8 @@ class SynthesizerHybrid(paynt.synthesizer.synthesizer_ar.SynthesizerAR, paynt.sy
             parameter_space_explored = False
             while True:
 
-                if not self.stage_control.cegis_has_time():
-                    break  # CEGIS timeout
+                if not self.stage_control.cegis_has_time() or self.resource_limit_reached():
+                    break  # CEGIS timeout (or a global resource limit was reached)
 
                 node.encode(smt_solver)
                 # assignment = smt_solver.pick_assignment(node)

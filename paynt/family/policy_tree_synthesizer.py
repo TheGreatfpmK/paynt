@@ -256,6 +256,8 @@ class PolicyTreeSynthesizer(paynt.synthesizer.synthesizer.Synthesizer):
 
         undecided_leaves = [policy_tree.root]
         while undecided_leaves:
+            if self.resource_limit_reached():
+                break
 
             # gi = self.stat.iterations_game
             # if gi is not None and gi > 1000:
