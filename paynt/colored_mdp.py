@@ -59,12 +59,18 @@ class ColoredMdp:
     ) -> tuple[paynt.model.model.SubMdp, Any]:
         """
         Compute the induced sub-MDP C[eta] for the given parameter (sub)space.
-        :param parent_selected_choices unused by this base implementation; DtColoredMdp's override uses it
-            as a reuse hint from the parent search node. Part of the shared signature since callers dispatch
-            polymorphically without knowing which override they're calling.
+        :param parent_selected_choices optional reuse hint: the parent search node's own selected_choices
+            (its compatible-choices bitmask). Since parameter_space is always a narrowing of the parent's
+            (a child never widens what its parent already assumed), any choice compatible with
+            parameter_space must already have been compatible with the parent -- so restricting the search
+            to parent_selected_choices is sound and cannot miss a choice, only skip ones already known
+            incompatible with an ancestor. None for the search root, which has no parent to reuse.
         :returns (mdp, selected_choices)
         """
-        choices = self.coloring.selectCompatibleChoices(parameter_space.native)
+        if parent_selected_choices is None:
+            choices = self.coloring.selectCompatibleChoices(parameter_space.native)
+        else:
+            choices = self.coloring.selectCompatibleChoices(parameter_space.native, parent_selected_choices)
         mdp = paynt.model.model.SubmodelBuilder.build_submdp(self.underlying_mdp, choices, self.subsystem_builder_options)
         mdp.parameter_space = parameter_space
         return mdp, choices

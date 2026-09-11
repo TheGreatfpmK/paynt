@@ -110,7 +110,8 @@ class PolicyTreeSynthesizer(paynt.synthesizer.synthesizer.Synthesizer):
 
     def verify_parameter_space(self, node: PolicyTreeNode, game_solver: Any, prop: paynt.specification.property.Property) -> MdpFamilyResult:
         # logger.info("investigating parameter space of size {}".format(node.parameter_space.size))
-        node.mdp, node.selected_choices = self.colored_mdp.build(node.parameter_space)
+        parent_selected_choices = node.parent_info.selected_choices if node.parent_info is not None else None
+        node.mdp, node.selected_choices = self.colored_mdp.build(node.parameter_space, parent_selected_choices)
         mdp_family_result = MdpFamilyResult()
 
         if node.parameter_space.size == 1:

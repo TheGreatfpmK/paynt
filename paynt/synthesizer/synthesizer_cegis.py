@@ -106,7 +106,8 @@ class SynthesizerCEGIS(paynt.synthesizer.synthesizer.Synthesizer):
     def synthesize_one(self, node: paynt.synthesizer.search_node.SearchNode) -> paynt.parameter_space.parameter_space.ParameterSpace | None:
 
         # build the induced sub-MDP, mapping mdp states to parameter indices
-        node.mdp, node.selected_choices = self.colored_mdp.build(node.parameter_space)
+        parent_selected_choices = node.parent_info.selected_choices if node.parent_info is not None else None
+        node.mdp, node.selected_choices = self.colored_mdp.build(node.parameter_space, parent_selected_choices)
         self.conflict_generator.initialize()
 
         # use sketch design space as a SAT baseline (TODO why?)

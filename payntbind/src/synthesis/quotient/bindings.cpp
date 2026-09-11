@@ -345,7 +345,11 @@ void bindings_coloring(py::module& m) {
         >())
         .def("getChoiceToAssignment", &synthesis::Coloring::getChoiceToAssignment)
         .def("getStateToHoles", &synthesis::Coloring::getStateToHoles)
-        .def("selectCompatibleChoices", &synthesis::Coloring::selectCompatibleChoices)
+        .def("selectCompatibleChoices", py::overload_cast<synthesis::Family const&>(&synthesis::Coloring::selectCompatibleChoices, py::const_))
+        .def(
+            "selectCompatibleChoices",
+            py::overload_cast<synthesis::Family const&, storm::storage::BitVector const&>(&synthesis::Coloring::selectCompatibleChoices, py::const_)
+        )
         .def("collectHoleOptions", &synthesis::Coloring::collectHoleOptions)
         ;
 

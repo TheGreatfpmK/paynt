@@ -62,7 +62,7 @@ def split_parameter_space(
 ) -> list[paynt.synthesizer.search_node.SearchNode]:
     """
     AR splitting step: pick a parameter to split node's parameter_space on and split its options into
-    subspaces, wrapped as child search nodes. Two-tier choice, per the paper's Section 3.3 ("AR for
+    subspaces, wrapped as child search nodes. Two-tier choice, per the paper's https://www.jair.org/index.php/jair/article/view/16593 Section 3.3 ("AR for
     Feasibility Synthesis with Multiple Constraints"): first, cross-constraint incompatibility L(h) among
     undecided constraints whose own scheduler is already fully consistent (a genuine candidate delta_i,
     disagreeing with another constraint's own candidate); failing that (at most one relevant property, or
@@ -211,7 +211,8 @@ class SynthesizerAR(paynt.synthesizer.synthesizer.Synthesizer):
         node.analysis_result = spec_result
 
     def verify_parameter_space(self, node: paynt.synthesizer.search_node.SearchNode) -> None:
-        node.mdp, node.selected_choices = self.colored_mdp.build(node.parameter_space)
+        parent_selected_choices = node.parent_info.selected_choices if node.parent_info is not None else None
+        node.mdp, node.selected_choices = self.colored_mdp.build(node.parameter_space, parent_selected_choices)
         assert self.stat is not None
 
         # TODO include iteration_game in iteration? is it necessary?

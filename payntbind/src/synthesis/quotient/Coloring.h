@@ -28,6 +28,14 @@ public:
     
     /** Get a mask of choices compatible with the family. */
     BitVector selectCompatibleChoices(Family const& subfamily) const;
+    /**
+     * Get a mask of choices compatible with the family, restricting the search to base_choices.
+     * Sound whenever subfamily is a narrowing of the family that produced base_choices (i.e. every hole's
+     * allowed options in subfamily are a subset of what produced base_choices): a choice compatible with the
+     * narrower subfamily must also be compatible with the wider family, so any choice already excluded from
+     * base_choices is guaranteed to stay excluded and can be skipped, without changing the result.
+     */
+    BitVector selectCompatibleChoices(Family const& subfamily, BitVector const& base_choices) const;
     /** For each hole, collect options (colors) involved in any of the given choices. */
     std::vector<std::vector<uint64_t>> collectHoleOptions(BitVector const& choices) const;
     

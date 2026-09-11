@@ -52,8 +52,13 @@ std::vector<BitVector> const& Coloring::getStateToHoles() const {
 }
 
 BitVector Coloring::selectCompatibleChoices(Family const& subfamily) const {
+    return selectCompatibleChoices(subfamily, colored_choices);
+}
+
+BitVector Coloring::selectCompatibleChoices(Family const& subfamily, BitVector const& base_choices) const {
     auto selection = BitVector(uncolored_choices);
-    for(auto choice: colored_choices) {
+    auto candidate_choices = colored_choices & base_choices;
+    for(auto choice: candidate_choices) {
         if(subfamily.includesAssignment(choice_to_assignment[choice])) {
             selection.set(choice,true);
         }
