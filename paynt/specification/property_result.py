@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 
@@ -41,12 +42,12 @@ class ConstraintsResult:
         return ",".join([str(result) for result in self.results])
 
 
+@dataclass
 class SpecificationResult:
-    def __init__(self):
-        self.constraints_result: ConstraintsResult | None = None
-        # PropertyResult for a plain specification, MdpOptimalityResult for an MdpSpecificationResult -- kept
-        # as Any rather than a Union since the two concrete flows never mix on the same instance
-        self.optimality_result: Any = None
+    constraints_result: ConstraintsResult | None = None
+    # PropertyResult for a plain specification, MdpOptimalityResult for an MdpSpecificationResult -- kept
+    # as Any rather than a Union since the two concrete flows never mix on the same instance
+    optimality_result: Any = None
 
     def __str__(self) -> str:
         return str(self.constraints_result) + " : " + str(self.optimality_result)
@@ -81,13 +82,13 @@ class SpecificationResult:
         return self.constraints_result.results[self.constraints_result.undecided_constraints[0]]
 
 
+@dataclass
 class MdpPropertyResult:
-    def __init__(self, prop: Property):
-        self.prop = prop
-        self.primary: Any = None
-        self.secondary: Any = None
-        self.sat: bool | None = None
-        self.primary_selection: list[list[int]] | None = None
+    prop: Property
+    primary: Any = None
+    secondary: Any = None
+    sat: bool | None = None
+    primary_selection: list[list[int]] | None = None
 
     @property
     def minimizing(self) -> bool:
@@ -101,29 +102,27 @@ class MdpPropertyResult:
         return f"{seco} - {prim}"
 
 
+@dataclass
 class MdpOptimalityResult(MdpPropertyResult):
-    def __init__(self, prop: Property):
-        super().__init__(prop)
-        self.improving_assignment: Any = None
-        self.improving_value: Any = None
-        self.can_improve: bool | None = None
+    improving_assignment: Any = None
+    improving_value: Any = None
+    can_improve: bool | None = None
 
 
+@dataclass
 class MdpSpecificationResult(SpecificationResult):
-
-    def __init__(self):
-        super().__init__()
-        self.improving_assignment: Any = None
-        self.improving_value: Any = None
-        self.can_improve: bool | None = None
+    improving_assignment: Any = None
+    improving_value: Any = None
+    can_improve: bool | None = None
 
     def undecided_results(self) -> list[Any]:
         """
         Every still-relevant property result: undecided constraints (ascending index), then optimality if
         it can still improve. Deliberately constraints-first/optimality-last -- the opposite priority from
         undecided_result()'s single optimality-first pick, which is a different use case (Hybrid's priority-
-        node heuristic) and is kept as-is. Used by the multi-constraint AR splitting logic (paper Section 3.3)
-        to look at every property that could still inform which parameter to split on, not just one.
+        node heuristic) and is kept as-is. Used by the multi-constraint AR splitting logic (paper
+        https://www.jair.org/index.php/jair/article/view/16593 Section 3.3) to look at every property that
+        could still inform which parameter to split on, not just one.
         """
         cr = self.constraints_result
         assert cr is not None

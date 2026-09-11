@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 import paynt.colored_mdp
@@ -15,21 +16,19 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+@dataclass
 class ParameterSpaceEvaluation:
     """Result associated with a parameter space (subspace) after its evaluation."""
 
-    def __init__(
-        self, parameter_space: paynt.parameter_space.parameter_space.ParameterSpace, value: Any, sat: bool | None, policy: Any, selected_choices: Any = None
-    ):
-        self.parameter_space = parameter_space
-        self.value = value
-        self.sat = sat
-        self.policy = policy
-        # family/policy_tree.py only: the compatible-choices bitmask this evaluation's policy was verified
-        # against at decision time -- may be narrower than parameter_space's current bounds if postprocessing
-        # later merged this parameter_space with a sibling's, so re-verification (see PolicyTreeSynthesizer.
-        # verify_policy) uses this snapshot rather than recomputing from parameter_space.native
-        self.selected_choices = selected_choices
+    parameter_space: paynt.parameter_space.parameter_space.ParameterSpace
+    value: Any
+    sat: bool | None
+    policy: Any
+    # family/policy_tree.py only: the compatible-choices bitmask this evaluation's policy was verified
+    # against at decision time -- may be narrower than parameter_space's current bounds if postprocessing
+    # later merged this parameter_space with a sibling's, so re-verification (see PolicyTreeSynthesizer.
+    # verify_policy) uses this snapshot rather than recomputing from parameter_space.native
+    selected_choices: Any = None
 
 
 class Synthesizer:

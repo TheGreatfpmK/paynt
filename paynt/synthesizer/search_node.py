@@ -6,6 +6,7 @@ Search-time bookkeeping for AR/CEGIS/Hybrid/policy-tree synthesis, kept separate
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 import paynt.parameter_space.parameter_space
@@ -18,6 +19,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+@dataclass
 class ParentInfo:
     """
     Snapshot of a parent SearchNode's state, handed to each child produced by splitting it. A snapshot
@@ -26,14 +28,13 @@ class ParentInfo:
     keeps memory bounded on a deep search.
     """
 
-    def __init__(self):
-        self.selected_choices: Any = None
-        self.constraint_indices: list[int] | None = None
-        self.refinement_depth: int | None = None
-        # set only by dt.synthesizer.SynthesizerARDt.split_undecided_space; None for every other caller and
-        # for a multi-property DT specification
-        self.analysis_result: paynt.specification.property_result.MdpSpecificationResult | None = None
-        self.scheduler_choices: Any = None
+    selected_choices: Any = None
+    constraint_indices: list[int] | None = None
+    refinement_depth: int | None = None
+    # set only by dt.synthesizer.SynthesizerARDt.split_undecided_space; None for every other caller and
+    # for a multi-property DT specification
+    analysis_result: paynt.specification.property_result.MdpSpecificationResult | None = None
+    scheduler_choices: Any = None
 
 
 class SearchNode:
