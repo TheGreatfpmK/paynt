@@ -466,17 +466,26 @@ std::pair<bool,bool> CounterexampleGeneratorMdp<ValueType,StateType>::expandAndC
     this->timer_model_check.stop();
     storm::modelchecker::ExplicitQuantitativeCheckResult<ValueType>& model_check_result = this->hint_result->template asExplicitQuantitativeCheckResult<ValueType>();
 
-    auto comparisonType = this->formula_modified[formula_index]->asOperatorFormula().getComparisonType();
+    // formula_modified[formula_index] is constructed (see the constructor) from whatever formula Python
+    // passed in -- today, always a bound-free quantitative formula (Specification.stormpy_formulae()),
+    // since a bound-carrying variant of this formula is what's being *searched for*, not something known up
+    // front. getComparisonType() asserts a bound is present (storm::logic::OperatorFormula::
+    // getComparisonType(), only checked -- and only aborts -- in a debug-mode storm build), so it must not
+    // be called at all when there is none; the strict-vs-non-strict distinction below then simply defaults
+    // to non-strict, matching this method's behavior before bound-carrying formulas were ever considered.
+    auto const& operator_formula = this->formula_modified[formula_index]->asOperatorFormula();
+    bool use_strict_less = operator_formula.hasBound() && operator_formula.getComparisonType() == storm::logic::ComparisonType::Less;
+    bool use_strict_greater = operator_formula.hasBound() && operator_formula.getComparisonType() == storm::logic::ComparisonType::Greater;
 
     bool satisfied;
     if(this->formula_safety[formula_index]) {
-        if (comparisonType == storm::logic::ComparisonType::Less) {
+        if (use_strict_less) {
             satisfied = model_check_result[initial_state] < formula_bound;
         } else {
             satisfied = model_check_result[initial_state] <= formula_bound;
         }
     } else {
-        if (comparisonType == storm::logic::ComparisonType::Greater) {
+        if (use_strict_greater) {
             satisfied = model_check_result[initial_state] > formula_bound;
         } else {
             satisfied = model_check_result[initial_state] >= formula_bound;
