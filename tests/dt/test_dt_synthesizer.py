@@ -4,6 +4,7 @@ import stormpy
 import paynt.dt
 import paynt.dt.dtnest.task
 import paynt.model.model_builder
+import paynt.task
 import paynt.utils.timer
 
 from helpers.helper import get_sketch_paths
@@ -30,11 +31,12 @@ class TestDtSynthesis:
         assert len(properties) == 2
 
         explicit_model = paynt.model.model_builder.ModelBuilder.from_prism(prism, None, False)
-        task = paynt.dt.dtnest.task.DtNestTask(properties, error_threshold=0.05, tree_depth=2, timeout=15)
+        task = paynt.task.SynthesisTask(properties, timeout=15)
+        build_task = paynt.dt.dtnest.task.DtNestTask(error_threshold=0.05, tree_depth=2)
         assert not task.specification.is_single_property
 
-        factory = paynt.dt.DtColoredMdpFactory(explicit_model, task)
-        synthesizer = paynt.dt.DtSynthesizer(factory)
+        factory = paynt.dt.DtColoredMdpFactory(explicit_model, build_task)
+        synthesizer = paynt.dt.DtSynthesizer(factory, task)
         synthesizer.synthesize_tree(depth=2, timeout=15)
         assert synthesizer.best_tree is not None
 
@@ -63,19 +65,20 @@ class TestDtSynthesis:
         assert len(properties) == 2
 
         explicit_model = paynt.model.model_builder.ModelBuilder.from_prism(prism, None, False)
-        task = paynt.dt.dtnest.task.DtNestTask(properties, error_threshold=0.05, tree_depth=2, timeout=8)
+        task = paynt.task.SynthesisTask(properties, timeout=8)
+        build_task = paynt.dt.dtnest.task.DtNestTask(error_threshold=0.05, tree_depth=2)
         assert len(task.specification.constraints) == 2
         assert task.specification.optimality is None
 
-        factory = paynt.dt.DtColoredMdpFactory(explicit_model, task)
-        synthesizer = paynt.dt.DtSynthesizer(factory)
+        factory = paynt.dt.DtColoredMdpFactory(explicit_model, build_task)
+        synthesizer = paynt.dt.DtSynthesizer(factory, task)
         paynt.utils.timer.GlobalTimer.start(8)
         try:
             synthesizer.synthesize_tree(depth=2, timeout=8)
         finally:
             paynt.utils.timer.GlobalTimer.start()
 
-    def test_synthesize_finds_the_known_optimum(self, dt_colored_mdp_factory):
+    def test_synthesize_finds_the_known_optimum(self, dt_colored_mdp_factory, dt_task):
         """
         Regression test for DtSynthesizer.split_undecided_space/scheduler_scores (the search-policy methods moved
         off the factory during this migration). Kept at depth 0 deliberately: full AR-based tree synthesis
@@ -87,7 +90,7 @@ class TestDtSynthesis:
         Since synthesis is deterministic, the tree itself (not just its value) is checked too: at depth 0
         the only admissible tree is a single leaf, so its string form is a one-line action label.
         """
-        synthesizer = paynt.dt.DtSynthesizer(dt_colored_mdp_factory)
+        synthesizer = paynt.dt.DtSynthesizer(dt_colored_mdp_factory, dt_task)
         synthesizer.synthesize_tree(depth=0)
         assert synthesizer.best_tree is not None
         assert synthesizer.best_tree_value == pytest.approx(0.48450450140758644, abs=1e-6)

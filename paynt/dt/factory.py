@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-import paynt.task
+import paynt.dt.task
 import paynt.parameter_space.parameter_space
 import paynt.model.model
 from paynt.dt.colored_mdp import DtColoredMdp
@@ -27,9 +27,10 @@ class DtColoredMdpFactory:
     (DtSynthesizer.synthesize_tree_sequence tries several), not just when memory needs to grow -- so
     reset_tree is the main entry point, called far more often than __init__ itself.
 
-    task is optional (unlike the other factories) to support constructing a DtColoredMdpFactory purely from
-    an MDP before the specification/tree-depth/timeout are known, then attaching the real Task once it is
-    (see paynt.dt.api.get_synthesizer) -- this is a real, exercised library usage pattern, not a hypothetical.
+    build_task is optional (unlike the other factories) to support constructing a DtColoredMdpFactory purely
+    from an MDP before the tree-depth/scheduler-path settings are known, then attaching the real DtTask
+    once it is (see paynt.dt.api.synthesize) -- this is a real, exercised library usage pattern, not a
+    hypothetical.
     """
 
     # label for action executing a random action selection
@@ -37,13 +38,12 @@ class DtColoredMdpFactory:
     # if true, irrelevant states will not be considered for tree mapping
     filter_deterministic_states = True
 
-    def __init__(self, mdp: Any, task: paynt.task.Task | None = None, use_exact: bool = False):
-        self.task = task
+    def __init__(self, mdp: Any, build_task: paynt.dt.task.DtTask | None = None, use_exact: bool = False):
+        self.build_task = build_task
         self.use_exact = use_exact
-        # task is optional here (see class docstring), and even when present may be a plain Task rather than
-        # a DtTask (e.g. dtnest's per-subtree re-synthesis constructs one via Task.from_specification, which
-        # has no add_dont_care_action field at all) -- getattr falls back to DtTask's own default in both cases
-        add_dont_care_action = getattr(task, "add_dont_care_action", True)
+        # build_task is optional here (see class docstring) -- getattr falls back to DtTask's own
+        # default when it is None
+        add_dont_care_action = getattr(build_task, "add_dont_care_action", True)
 
         make_rewards_action_based(mdp)  # needed for initialization
 

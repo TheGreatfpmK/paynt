@@ -28,10 +28,10 @@ logger = logging.getLogger(__name__)
 
 class PomdpColoredMdpFactory:
 
-    def __init__(self, pomdp: Any, task: paynt.pomdp.task.PomdpTask, decpomdp_manager: Any = None, use_exact: bool = False):
-        self.task = task
+    def __init__(self, pomdp: Any, build_task: paynt.pomdp.task.PomdpTask, decpomdp_manager: Any = None, use_exact: bool = False):
+        self.build_task = build_task
         self.use_exact = use_exact
-        self.posterior_aware = task.posterior_aware
+        self.posterior_aware = build_task.posterior_aware
 
         # construct the canonical POMDP
         self.pomdp = stormpy.pomdp.make_canonic(pomdp)
@@ -107,8 +107,8 @@ class PomdpColoredMdpFactory:
         self.current_memory_size: int | None = None
 
         # do initial unfolding
-        self.colored_mdp = self.set_imperfect_memory_size(task.memory_size)
-        self.current_memory_size = task.memory_size
+        self.colored_mdp = self.set_imperfect_memory_size(build_task.memory_size)
+        self.current_memory_size = build_task.memory_size
 
     @property
     def observations(self) -> int:

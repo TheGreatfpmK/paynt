@@ -19,7 +19,14 @@ def get_version() -> str:
     return version()
 
 
-def get_synthesizer(colored_mdp_factory: Any, method: str = "ar", fsc_synthesis: bool = False, storm_control: Any = None, dtnest: bool = False) -> Any:
+def get_synthesizer(
+    colored_mdp_factory: Any,
+    task: Any,
+    method: str = "ar",
+    fsc_synthesis: bool = False,
+    storm_control: Any = None,
+    dtnest: bool = False,
+) -> Any:
     """
     The one canonical synthesis dispatcher: reads colored_mdp_factory.colored_mdp.feature_kind and routes to
     the right synthesizer, so callers (paynt.cli, library users) never need to isinstance-check or import a
@@ -29,6 +36,9 @@ def get_synthesizer(colored_mdp_factory: Any, method: str = "ar", fsc_synthesis:
         the bare ColoredMdp) so that FSC/tree-unfolding synthesizers (DT, POMDP, POSMG, Dec-POMDP, SAYNT) can
         re-unfold at a different depth/memory size later without the ColoredMdp needing to carry a
         back-reference to its own factory
+    :param task the SynthesisTask this run is solving -- passed explicitly rather than read off
+        colored_mdp_factory (which instead carries the feature-specific build task, a separate,
+        non-inheriting object; see paynt.task.SynthesisTask / paynt.dt.task.DtTask and friends)
     :param method the generic algorithm to fall back on when no feature-specific driver applies
         ("onebyone"/"ar"/"cegis"/"hybrid")
     :param fsc_synthesis for FSC-unfolding features (POMDP/POSMG/Dec-POMDP), enable incremental FSC
@@ -41,7 +51,6 @@ def get_synthesizer(colored_mdp_factory: Any, method: str = "ar", fsc_synthesis:
     import paynt.synthesizer.synthesizer
 
     colored_mdp = colored_mdp_factory.colored_mdp
-    task = colored_mdp_factory.task
     feature_kind = colored_mdp.feature_kind
 
     if feature_kind == "pomdp_family":
@@ -56,19 +65,19 @@ def get_synthesizer(colored_mdp_factory: Any, method: str = "ar", fsc_synthesis:
         from paynt.dt import DtSynthesizer
         from paynt.dt.dtnest import DtNest
 
-        return DtNest(colored_mdp_factory) if dtnest else DtSynthesizer(colored_mdp_factory)
+        return DtNest(colored_mdp_factory, task) if dtnest else DtSynthesizer(colored_mdp_factory, task)
 
     if feature_kind == "pomdp" and fsc_synthesis:
         import paynt.pomdp
 
         if storm_control is not None:
-            return paynt.pomdp.saynt.SayntSynthesizer(colored_mdp_factory, method, storm_control)
-        return paynt.pomdp.PomdpSynthesizer(colored_mdp_factory, method)
+            return paynt.pomdp.saynt.SayntSynthesizer(colored_mdp_factory, task, method, storm_control)
+        return paynt.pomdp.PomdpSynthesizer(colored_mdp_factory, task, method)
 
     if feature_kind == "decpomdp" and fsc_synthesis:
         import paynt.pomdp
 
-        return paynt.pomdp.decpomdp.DecPomdpSynthesizer(colored_mdp_factory)
+        return paynt.pomdp.decpomdp.DecPomdpSynthesizer(colored_mdp_factory, task)
 
     if feature_kind == "family":
         if method == "onebyone":
@@ -80,6 +89,6 @@ def get_synthesizer(colored_mdp_factory: Any, method: str = "ar", fsc_synthesis:
     if feature_kind == "posmg" and fsc_synthesis:
         import paynt.posmg
 
-        return paynt.posmg.PosmgSynthesizer(colored_mdp_factory)
+        return paynt.posmg.PosmgSynthesizer(colored_mdp_factory, task)
 
     return paynt.synthesizer.synthesizer.Synthesizer.for_method(colored_mdp, task, method)

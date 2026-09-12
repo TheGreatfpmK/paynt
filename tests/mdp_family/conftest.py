@@ -15,6 +15,16 @@ def family_colored_mdp_factory():
 
 
 @pytest.fixture
+def family_task():
+    """The SynthesisTask sibling of family_colored_mdp_factory -- see tests/dt/conftest.py's dt_task for why
+    this loads the sketch itself rather than reaching into the factory (which now only carries the
+    family-specific FamilyTask, not the base task fields like disable_expected_visits)."""
+    sketch_path, props_path = get_sketch_paths("tests/mdp-family-avoid-8-2-easy")
+    _, task = paynt.parser.sketch.Sketch.load_sketch(sketch_path, props_path)
+    return task
+
+
+@pytest.fixture
 def family_colored_mdp(family_colored_mdp_factory):
     return family_colored_mdp_factory.colored_mdp
 
@@ -28,6 +38,14 @@ def pomdp_family_colored_mdp_factory():
     sketch_path, props_path = get_sketch_paths("tests/pomdp-family-avoid-smaller")
     factory, task = paynt.parser.sketch.Sketch.load_sketch(sketch_path, props_path)
     return factory
+
+
+@pytest.fixture
+def pomdp_family_task():
+    """The SynthesisTask sibling of pomdp_family_colored_mdp_factory."""
+    sketch_path, props_path = get_sketch_paths("tests/pomdp-family-avoid-smaller")
+    _, task = paynt.parser.sketch.Sketch.load_sketch(sketch_path, props_path)
+    return task
 
 
 @pytest.fixture

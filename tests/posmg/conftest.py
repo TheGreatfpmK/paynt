@@ -28,3 +28,11 @@ def posmg_test_game_colored_mdp_factory():
     sketch_path, props_path = get_sketch_paths("tests/posmg-test-game")
     factory, task = paynt.parser.sketch.Sketch.load_sketch(sketch_path, props_path)
     return factory
+
+
+@pytest.fixture
+def posmg_test_game_task():
+    """The SynthesisTask sibling of posmg_test_game_colored_mdp_factory."""
+    sketch_path, props_path = get_sketch_paths("tests/posmg-test-game")
+    _, task = paynt.parser.sketch.Sketch.load_sketch(sketch_path, props_path)
+    return task

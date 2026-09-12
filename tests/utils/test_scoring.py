@@ -56,8 +56,9 @@ class TestSchedulerScoring:
 
 class TestIncompatibilityScoring:
     """
-    Paper https://www.jair.org/index.php/jair/article/view/16593 Sec 3.3's L(h): cross-constraint disagreement among consistent candidate selections. Pure/hand-built
-    -- no real model needed, since compute_incompatibility_levels only ever looks at option-index lists.
+    Paper https://www.jair.org/index.php/jair/article/view/16593 Sec 3.3's L(h): cross-constraint
+    disagreement among consistent candidate selections. Pure/hand-built -- no real model needed, since
+    compute_incompatibility_levels only ever looks at option-index lists.
     """
 
     def test_fewer_than_two_candidates_yields_no_disagreement(self):

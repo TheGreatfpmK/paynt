@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import Any
 
 import paynt.posmg.factory
-import paynt.posmg.task
+import paynt.task
 import paynt.parameter_space.parameter_space
 import paynt.synthesizer.synthesizer_ar
 import paynt.utils.timer
@@ -22,10 +22,10 @@ logger = logging.getLogger(__name__)
 
 class PosmgSynthesizer:
 
-    def __init__(self, colored_mdp_factory: paynt.posmg.factory.PosmgColoredMdpFactory):
+    def __init__(self, colored_mdp_factory: paynt.posmg.factory.PosmgColoredMdpFactory, task: paynt.task.SynthesisTask):
         self.colored_mdp_factory = colored_mdp_factory
         self.colored_mdp = colored_mdp_factory.colored_mdp
-        self.task: paynt.posmg.task.PosmgTask = colored_mdp_factory.task
+        self.task = task
         # TODO add support for more engines
         self.synthesizer = paynt.synthesizer.synthesizer_ar.SynthesizerAR
         self.total_iters = 0
@@ -51,7 +51,7 @@ class PosmgSynthesizer:
         return assignment
 
     def strategy_iterative(self) -> None:
-        mem_size = self.colored_mdp_factory.task.memory_size
+        mem_size = self.colored_mdp_factory.build_task.memory_size
         while True:
             if paynt.utils.timer.GlobalTimer.time_limit_reached():
                 break

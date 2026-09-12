@@ -1,23 +1,18 @@
 from __future__ import annotations
 
-from typing import Any
-
-import paynt.task
-import paynt.specification.property
+from dataclasses import dataclass
 
 
-class PosmgTask(paynt.task.Task):
+@dataclass(kw_only=True)
+class PosmgTask:
+    """
+    Feature-specific build knobs for POSMG FSC-unfolding synthesis, owned by PosmgColoredMdpFactory
+    (factory.build_task) -- deliberately not a subclass of paynt.task.SynthesisTask, since this
+    field is read only by the factory that unfolds a PosmgColoredMdp, never by the generic AR/CEGIS/Hybrid
+    algorithms. A plain dataclass (see paynt.dt.task.DtTask's docstring for why, and why kw_only) -- no
+    **kwargs catch-all; see sketch.py's _dataclass_task_kwargs for how Sketch.load_sketch copes with that.
+    """
 
-    def __init__(self, properties: list[Any], memory_size: int = 1, **kwargs: Any):
-        super().__init__(properties, **kwargs)
-        # implicit initial size for FSC memory unfolding, consumed by PosmgColoredMdpFactory at
-        # construction time
-        self.memory_size = memory_size
-
-    @classmethod
-    def from_specification(  # type: ignore[override]
-        cls, specification: paynt.specification.property.Specification, memory_size: int = 1, **kwargs: Any
-    ) -> PosmgTask:
-        task: PosmgTask = super().from_specification(specification, **kwargs)  # type: ignore[assignment]
-        task.memory_size = memory_size
-        return task
+    # implicit initial size for FSC memory unfolding, consumed by PosmgColoredMdpFactory at
+    # construction time
+    memory_size: int = 1

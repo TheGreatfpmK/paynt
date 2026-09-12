@@ -61,7 +61,7 @@ def construct_reward_property(reward_name: str, minimizing: bool, target_label: 
 def construct_specification(stormpy_properties: list[Any], relative_error: float = 0, use_exact: bool = False) -> Specification:
     """
     The canonical way to build a Specification from a list of raw stormpy properties. This is the one path
-    every parser (and paynt.task.Task) should funnel through, replacing several previously-duplicated,
+    every parser (and paynt.task.SynthesisTask) should funnel through, replacing several previously-duplicated,
     independently-hand-rolled construction sites that could drift out of sync (e.g. one of them used to
     silently drop use_exact).
     """

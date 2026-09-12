@@ -71,7 +71,7 @@ class TestModelIndexScoring:
         full underlying MDP's state count on this early-return path, which is wrong whenever `mdp` is a
         restricted sub-MDP with fewer states. ModelIndex sizes the vector to `mdp` itself instead.
         disable_expected_visits is a plain parameter (not a class attribute) precisely so two syntheses in
-        the same process can't leak this setting into each other -- see paynt.task.Task."""
+        the same process can't leak this setting into each other -- see paynt.task.SynthesisTask."""
         _, node, prop, result = colored_mdp_parameter_space_prop_result
         local_choices = result.result.scheduler.compute_action_support(node.mdp.model.nondeterministic_choice_indices)
         visits = paynt.model.model.ModelIndex.compute_expected_visits(node.mdp.model, prop, local_choices, disable_expected_visits=True)

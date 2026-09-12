@@ -1,6 +1,6 @@
 """
-The final result of a completed synthesis run for a Task. Feature-specific results subclass this to add
-their own fields -- e.g. paynt.dt.result.DtResult adds the synthesized tree.
+The final result of a completed synthesis run for a SynthesisTask. Feature-specific results subclass this to
+add their own fields -- e.g. paynt.dt.result.DtResult adds the synthesized tree.
 """
 
 from __future__ import annotations

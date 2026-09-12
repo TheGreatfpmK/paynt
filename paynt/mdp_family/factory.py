@@ -28,14 +28,14 @@ class FamilyColoredMdpFactory:
         underlying_mdp: Any,
         parameter_space: paynt.parameter_space.parameter_space.ParameterSpace,
         coloring: Any,
-        task: paynt.mdp_family.task.FamilyTask,
+        build_task: paynt.mdp_family.task.FamilyTask,
         use_exact: bool = False,
     ):
-        self.task = task
+        self.build_task = build_task
         self.use_exact = use_exact
         self.memory_unfolder: Any = None
 
-        if self.task.memory_size > 1:
+        if self.build_task.memory_size > 1:
             underlying_mdp, parameter_space, coloring = self.unfold_scheduler_memory(underlying_mdp, parameter_space, coloring)
 
         self.underlying_mdp = underlying_mdp
@@ -74,11 +74,11 @@ class FamilyColoredMdpFactory:
         :returns a new underlying MDP with unfolded scheduler memory
         """
 
-        logger.info(f"unfolding scheduler memory of {self.task.memory_size} into the model.")
+        logger.info(f"unfolding scheduler memory of {self.build_task.memory_size} into the model.")
 
         # unfold the scheduler memory into the model
         self.memory_unfolder = payntbind.synthesis.MemoryUnfolder(underlying_mdp)
-        unfolded_mdp = self.memory_unfolder.construct_unfolded_model(self.task.memory_size)
+        unfolded_mdp = self.memory_unfolder.construct_unfolded_model(self.build_task.memory_size)
 
         # create new coloring
         choice_to_parameter_options = []

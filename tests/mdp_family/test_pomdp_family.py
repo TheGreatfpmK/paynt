@@ -43,15 +43,14 @@ def _trivial_fsc(pomdp_family_colored_mdp, ambiguous_action):
     return fsc
 
 
-def _task_for_dtmc_sketch(pomdp_family_colored_mdp_factory):
+def _task_for_dtmc_sketch(pomdp_family_task, pomdp_family_colored_mdp_factory):
     """build_dtmc_sketch produces a bare (task-less) ColoredMdp -- since the same product can be reused
     across different tasks, the caller supplies its own. Here we just carry over the original task's
     specification/timeout/use_exact unchanged (a copy, so synthesize()'s specification.reset() can't affect
-    the factory's own task)."""
-    task = pomdp_family_colored_mdp_factory.task
-    return paynt.task.Task.from_specification(
-        task.specification.copy(),
-        timeout=task.timeout,
+    the original task)."""
+    return paynt.task.SynthesisTask.from_specification(
+        pomdp_family_task.specification.copy(),
+        timeout=pomdp_family_task.timeout,
         use_exact=pomdp_family_colored_mdp_factory.use_exact,
     )
 
@@ -67,7 +66,9 @@ class TestPomdpFamilyDtmcSketch:
         assert dtmc_sketch.feature_kind == "generic"
         assert dtmc_sketch.parameter_space.size == pomdp_family_colored_mdp.parameter_space.size
 
-    def test_synthesize_over_the_fsc_fixed_family_finds_the_best_environment(self, pomdp_family_colored_mdp, pomdp_family_colored_mdp_factory):
+    def test_synthesize_over_the_fsc_fixed_family_finds_the_best_environment(
+        self, pomdp_family_colored_mdp, pomdp_family_task, pomdp_family_colored_mdp_factory
+    ):
         """
         End-to-end regression test for the build_dtmc_sketch -> generic AR pipeline: fixing a memoryless FSC
         across all 64 environment variants turns the POMDP family into a plain family of DTMCs, and AR then
@@ -76,7 +77,7 @@ class TestPomdpFamilyDtmcSketch:
         """
         fsc = _trivial_fsc(pomdp_family_colored_mdp, ambiguous_action=7)
         dtmc_sketch = pomdp_family_colored_mdp.build_dtmc_sketch(fsc)
-        task = _task_for_dtmc_sketch(pomdp_family_colored_mdp_factory)
+        task = _task_for_dtmc_sketch(pomdp_family_task, pomdp_family_colored_mdp_factory)
         synthesizer = paynt.synthesizer.synthesizer.Synthesizer.for_method(dtmc_sketch, task, "ar")
         assignment = synthesizer.synthesize(print_stats=False, keep_optimum=True)
         assert assignment is not None

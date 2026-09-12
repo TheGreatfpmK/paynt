@@ -130,6 +130,6 @@ class IdentityColoredMdpFactory:
     can treat every feature uniformly as a (colored_mdp_factory, task) pair without special-casing this one.
     """
 
-    def __init__(self, colored_mdp: ColoredMdp, task: paynt.task.Task):
+    def __init__(self, colored_mdp: ColoredMdp, task: paynt.task.SynthesisTask):
         self.colored_mdp = colored_mdp
         self.task = task

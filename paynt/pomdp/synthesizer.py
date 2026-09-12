@@ -11,7 +11,7 @@ from __future__ import annotations
 from typing import Any
 
 import paynt.pomdp.factory
-import paynt.pomdp.task
+import paynt.task
 import paynt.pomdp.colored_mdp
 import paynt.parameter_space.parameter_space
 import paynt.synthesizer.synthesizer_ar
@@ -26,10 +26,10 @@ logger = logging.getLogger(__name__)
 
 class PomdpSynthesizer:
 
-    def __init__(self, colored_mdp_factory: paynt.pomdp.factory.PomdpColoredMdpFactory, method: str):
+    def __init__(self, colored_mdp_factory: paynt.pomdp.factory.PomdpColoredMdpFactory, task: paynt.task.SynthesisTask, method: str):
         self.colored_mdp_factory = colored_mdp_factory
         self.colored_mdp = colored_mdp_factory.colored_mdp
-        self.task: paynt.pomdp.task.PomdpTask = colored_mdp_factory.task
+        self.task = task
         self.synthesizer: type[paynt.synthesizer.synthesizer_ar.SynthesizerAR] | None = None
         if method == "ar":
             self.synthesizer = paynt.synthesizer.synthesizer_ar.SynthesizerAR
@@ -70,7 +70,7 @@ class PomdpSynthesizer:
         """
         @param unfold_imperfect_only if True, only imperfect observations will be unfolded
         """
-        mem_size = self.colored_mdp_factory.task.memory_size
+        mem_size = self.colored_mdp_factory.build_task.memory_size
         while True:
             if paynt.utils.timer.GlobalTimer.time_limit_reached():
                 break

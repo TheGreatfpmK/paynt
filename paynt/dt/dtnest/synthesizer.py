@@ -31,6 +31,7 @@ logger = logging.getLogger(__name__)
 
 def _run_dtnest(
     cmdp_factory_dt: DtColoredMdpFactory,
+    task: paynt.task.SynthesisTask,
     epsilon_error_threshold: float,
     max_subtree_depth: int,
     depth_fine_tuning: bool = True,
@@ -38,7 +39,7 @@ def _run_dtnest(
     recompute_scheduler_perturbation: bool = True,
     timeout: int | None = 600,
 ) -> DtResult:
-    synthesizer = DtNest(cmdp_factory_dt)
+    synthesizer = DtNest(cmdp_factory_dt, task)
     synthesizer.epsilon = epsilon_error_threshold
     synthesizer.subtree_depth = max_subtree_depth
     synthesizer.depth_fine_tuning = depth_fine_tuning
@@ -62,12 +63,12 @@ class DtNest(DtSynthesizer):
         self.initialize_settings()
 
     def initialize_settings(self) -> None:
-        # self.task is declared DtTask on the base DtSynthesizer, but DtNest always actually gets a DtNestTask
-        # (max_subtree_depth/error_threshold are DtNestTask-only fields)
-        task: DtNestTask = self.task  # type: ignore[assignment]
-        self.subtree_depth = task.max_subtree_depth
+        # self.build_task is declared DtTask on the base DtSynthesizer, but DtNest always actually gets
+        # a DtNestTask (max_subtree_depth/error_threshold are DtNestTask-only fields)
+        build_task: DtNestTask = self.build_task  # type: ignore[assignment]
+        self.subtree_depth = build_task.max_subtree_depth
         self.max_iter = 100000  # max number of subtrees to be investigated
-        self.epsilon = task.error_threshold
+        self.epsilon = build_task.error_threshold
         self.timeout = paynt.utils.timer.GlobalTimer.global_timer.time_limit_seconds if paynt.utils.timer.GlobalTimer.global_timer is not None else 600
         self.depth_fine_tuning = True  # decreases sub-tree depth once all subtrees of the current depth have been explored
         self.break_on_small_tree = True  # dtPAYNT synthesis ends when an implementable tree with good enough value is found
@@ -276,12 +277,12 @@ class DtNest(DtSynthesizer):
                 submdp = get_submdp_from_unfixed_states(self.colored_mdp, node_states)
                 logger.info(f"subtree MDP has {submdp.model.nr_states} states and {submdp.model.nr_choices} choices")
                 subtree_spec = self.task.specification.copy()
-                subtree_task = paynt.task.Task.from_specification(subtree_spec, use_exact=self.colored_mdp.use_exact)
-                subtree_colored_mdp_factory = DtColoredMdpFactory(submdp.model, subtree_task)
+                subtree_task = paynt.task.SynthesisTask.from_specification(subtree_spec, use_exact=self.colored_mdp.use_exact)
+                subtree_colored_mdp_factory = DtColoredMdpFactory(submdp.model, self.colored_mdp_factory.build_task)
                 subtree_colored_mdp = subtree_colored_mdp_factory.colored_mdp
                 assert subtree_task.specification.optimality is not None
                 subtree_task.specification.optimality.update_optimum(eps_optimum_threshold)
-                subtree_synthesizer = DtSynthesizer(subtree_colored_mdp_factory)
+                subtree_synthesizer = DtSynthesizer(subtree_colored_mdp_factory, subtree_task)
                 self.dtpaynt_calls += 1
 
                 if subtree_colored_mdp.state_is_relevant_bv.number_of_set_bits() == 0:
@@ -439,7 +440,7 @@ class DtNest(DtSynthesizer):
 
     def run(self, optimum_threshold: Any = None) -> DtResult:
         # see initialize_settings's comment: DtNest always actually gets a DtNestTask
-        task: DtNestTask = self.task  # type: ignore[assignment]
+        build_task: DtNestTask = self.build_task  # type: ignore[assignment]
 
         paynt_mdp = paynt.model.model.SubMdp(
             self.colored_mdp.underlying_mdp, list(range(self.colored_mdp.underlying_mdp.nr_states)), list(range(self.colored_mdp.underlying_mdp.nr_choices))
@@ -483,7 +484,7 @@ class DtNest(DtSynthesizer):
             self.colored_mdp.underlying_mdp, self.colored_mdp.choice_destinations, paynt_mdp, opt_scheduler
         )
 
-        if task.initial_tree is None:
+        if build_task.initial_tree is None:
 
             state_to_action = state_to_choice_to_state_to_action(state_to_choice, self.colored_mdp)
             initial_tree_helper = run_scikit_learn_tree(

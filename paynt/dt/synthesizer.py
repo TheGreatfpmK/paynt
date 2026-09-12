@@ -25,13 +25,15 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def _choose_solver_for_dt_task(paynt_task_dt: paynt.dt.task.DtTask) -> str:
-    if paynt_task_dt.has_scheduler_to_map:
+def _choose_solver_for_dt_task(build_task: paynt.dt.task.DtTask) -> str:
+    if build_task.has_scheduler_to_map:
         return "dtmap"
     return "dtpaynt"
 
 
-def _run_dt_map_scheduler(cmdp_factory_dt: paynt.dt.factory.DtColoredMdpFactory, scheduler: Any, tree_depth: int) -> paynt.dt.result.DtResult:
+def _run_dt_map_scheduler(
+    cmdp_factory_dt: paynt.dt.factory.DtColoredMdpFactory, task: paynt.task.SynthesisTask, scheduler: Any, tree_depth: int
+) -> paynt.dt.result.DtResult:
     """Helper function to map a scheduler to a decision tree using the DTMap algorithm. Returns a tuple (success, decision_tree)."""
 
     state_to_choice = payntbind.synthesis.schedulerToStateToGlobalChoice(
@@ -42,7 +44,7 @@ def _run_dt_map_scheduler(cmdp_factory_dt: paynt.dt.factory.DtColoredMdpFactory,
     )
     choices = paynt.model.model.ModelIndex.state_to_choice_to_choices(cmdp_factory_dt.underlying_mdp, state_to_choice)
 
-    dt_synthesizer = DtSynthesizer(cmdp_factory_dt)
+    dt_synthesizer = DtSynthesizer(cmdp_factory_dt, task)
     dt_synthesizer.map_scheduler(choices, tree_depth=tree_depth)
 
     simplify_tree(dt_synthesizer.best_tree, dt_synthesizer.colored_mdp)
@@ -50,8 +52,10 @@ def _run_dt_map_scheduler(cmdp_factory_dt: paynt.dt.factory.DtColoredMdpFactory,
     return paynt.dt.result.DtResult(success=dt_synthesizer.best_tree is not None, value=dt_synthesizer.best_tree_value, tree=dt_synthesizer.best_tree)
 
 
-def _run_dtpaynt(cmdp_factory_dt: paynt.dt.factory.DtColoredMdpFactory, tree_depth: int, timeout: int | None = None) -> paynt.dt.result.DtResult:
-    dt_synthesizer = DtSynthesizer(cmdp_factory_dt)
+def _run_dtpaynt(
+    cmdp_factory_dt: paynt.dt.factory.DtColoredMdpFactory, task: paynt.task.SynthesisTask, tree_depth: int, timeout: int | None = None
+) -> paynt.dt.result.DtResult:
+    dt_synthesizer = DtSynthesizer(cmdp_factory_dt, task)
     dt_synthesizer.synthesize_tree(tree_depth, timeout=timeout)
 
     simplify_tree(dt_synthesizer.best_tree, dt_synthesizer.colored_mdp)
@@ -68,18 +72,17 @@ class DtSynthesizer:
     own inner AR engine.
     """
 
-    def __init__(self, colored_mdp_factory: paynt.dt.factory.DtColoredMdpFactory):
+    def __init__(self, colored_mdp_factory: paynt.dt.factory.DtColoredMdpFactory, task: paynt.task.SynthesisTask):
         self.colored_mdp_factory = colored_mdp_factory
         self.colored_mdp = colored_mdp_factory.colored_mdp
-        # factory.task is Optional at the type level (see DtColoredMdpFactory's own docstring: a factory can
-        # be constructed before its Task is known), but DtSynthesizer always needs one already attached by
-        # construction time. Typed as DtTask (not just the base Task) since run()/synthesize_tree_sequence's
-        # default-max_depth branch read DT-specific fields (tree_depth/tree_enumeration/scheduler_path) --
-        # the one documented exception is dtnest's per-subtree recursion, which only ever drives this class
-        # through synthesize_tree_sequence with an explicit max_depth, never touching those fields, despite
-        # constructing the factory with a bare Task (see the type: ignore at that construction site instead)
-        assert colored_mdp_factory.task is not None
-        self.task: paynt.dt.task.DtTask = colored_mdp_factory.task  # type: ignore[assignment]
+        self.task = task
+        # build_task is Optional at the type level (see DtColoredMdpFactory's own docstring: a factory can be
+        # constructed before its DtTask is known), but DtSynthesizer always needs one already attached
+        # by construction time -- run()/synthesize_tree_sequence's default-max_depth branch reads DT-specific
+        # fields (tree_depth/tree_enumeration/scheduler_path) constantly, so this is cached rather than read
+        # through colored_mdp_factory.build_task on every use
+        assert colored_mdp_factory.build_task is not None
+        self.build_task: paynt.dt.task.DtTask = colored_mdp_factory.build_task
         self.best_tree: paynt.dt.decision_tree.DecisionTree | None = None
         self.best_tree_value: Any = None
 
@@ -124,7 +127,7 @@ class DtSynthesizer:
         self.best_tree = self.best_tree_value = None
 
         if max_depth is None:
-            max_depth = self.task.tree_depth + 1
+            max_depth = self.build_task.tree_depth + 1
         if overall_timeout is None:
             assert paynt.utils.timer.GlobalTimer.global_timer is not None
             global_timeout = paynt.utils.timer.GlobalTimer.global_timer.time_limit_seconds
@@ -195,7 +198,7 @@ class DtSynthesizer:
 
     def map_scheduler(self, scheduler_choices: Any, tree_depth: int | None = None) -> None:
         if tree_depth is None:
-            tree_depth = self.task.tree_depth
+            tree_depth = self.build_task.tree_depth
         for depth in range(tree_depth + 1):
             self.colored_mdp = self.colored_mdp_factory.reset_tree(depth, enable_harmonization=False)
             synthesizer = SynthesizerARDt(self.colored_mdp, self.task)
@@ -216,12 +219,12 @@ class DtSynthesizer:
 
     def run(self, optimum_threshold: Any = None) -> paynt.dt.result.DtResult:
         scheduler_choices = None
-        if self.task.scheduler_path is None:
+        if self.build_task.scheduler_path is None:
             paynt_mdp = paynt.model.model.Mdp(self.colored_mdp.underlying_mdp)
             mc_result = paynt_mdp.model_check_property(self.task.get_property())
         else:
             opt_result_value = None
-            with open(self.task.scheduler_path) as f:
+            with open(self.build_task.scheduler_path) as f:
                 scheduler_json = json.load(f)
             scheduler_choices, scheduler_json_relevant = self.colored_mdp.scheduler_json_to_choices(scheduler_json, discard_unreachable_states=True)
 
@@ -251,8 +254,8 @@ class DtSynthesizer:
             if self.task.specification.optimality is not None and optimum_threshold is not None:
                 self.task.specification.optimality.update_optimum(optimum_threshold)
 
-            if not self.task.tree_enumeration:
-                self.synthesize_tree(self.task.tree_depth)
+            if not self.build_task.tree_enumeration:
+                self.synthesize_tree(self.build_task.tree_depth)
             else:
                 self.synthesize_tree_sequence(opt_result_value)
 

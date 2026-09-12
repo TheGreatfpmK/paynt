@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import Any
 
 import paynt.pomdp.decpomdp.factory
-import paynt.pomdp.task
+import paynt.task
 import paynt.parameter_space.parameter_space
 import paynt.synthesizer.synthesizer_ar
 import paynt.utils.timer
@@ -22,10 +22,10 @@ logger = logging.getLogger(__name__)
 
 class DecPomdpSynthesizer:
 
-    def __init__(self, colored_mdp_factory: paynt.pomdp.decpomdp.factory.DecPomdpColoredMdpFactory):
+    def __init__(self, colored_mdp_factory: paynt.pomdp.decpomdp.factory.DecPomdpColoredMdpFactory, task: paynt.task.SynthesisTask):
         self.colored_mdp_factory = colored_mdp_factory
         self.colored_mdp = colored_mdp_factory.colored_mdp
-        self.task: paynt.pomdp.task.PomdpTask = colored_mdp_factory.task
+        self.task = task
         # TODO add support for more engines
         self.synthesizer = paynt.synthesizer.synthesizer_ar.SynthesizerAR
         self.total_iters = 0
@@ -52,7 +52,7 @@ class DecPomdpSynthesizer:
 
     def strategy_iterative(self) -> None:
         """Unfolds imperfect (multi-state) observations for every agent at increasing memory sizes."""
-        mem_size = self.colored_mdp_factory.task.memory_size
+        mem_size = self.colored_mdp_factory.build_task.memory_size
         while True:
             if paynt.utils.timer.GlobalTimer.time_limit_reached():
                 break

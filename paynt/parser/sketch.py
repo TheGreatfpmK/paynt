@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 from typing import Any
 
 import stormpy
@@ -34,6 +35,18 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+def _dataclass_task_kwargs(cls: type, task_kwargs: dict[str, Any]) -> dict[str, Any]:
+    """
+    load_sketch doesn't know which feature a sketch needs until it has parsed it, so task_kwargs carries
+    every feature's CLI options at once; each feature task (DtTask, DtNestTask, PomdpTask, PosmgTask,
+    FamilyTask) is a plain dataclass with no **kwargs catch-all of its own to swallow the rest (unlike
+    SynthesisTask.from_specification, which still has one, since SynthesisTask isn't a dataclass) -- this
+    keeps only the keys the target dataclass actually declares as real constructor (init=True) fields.
+    """
+    field_names = {f.name for f in dataclasses.fields(cls) if f.init}
+    return {key: value for key, value in task_kwargs.items() if key in field_names}
+
+
 class Sketch:
 
     @classmethod
@@ -47,7 +60,7 @@ class Sketch:
         constraint_bound: Any = None,
         use_exact: bool = False,
         task_kwargs: dict[str, Any] | None = None,
-    ) -> tuple[Any, paynt.task.Task]:
+    ) -> tuple[Any, paynt.task.SynthesisTask]:
 
         # this function's real types are heavily branch-dependent (which of the PRISM/DRN/Cassandra parsers
         # ran, and, for PRISM, whether the sketch had parameters) -- kept as Any/Optional rather than forcing
@@ -147,39 +160,40 @@ class Sketch:
             exit(0)
 
         task_kwargs = task_kwargs or {}
+        task = paynt.task.SynthesisTask.from_specification(specification, use_exact=use_exact, **task_kwargs)
 
         colored_mdp_factory: Any
-        task: paynt.task.Task
+        build_task: Any
         if jani_unfolder is not None:
             assert parameter_space is not None
             if prism.model_type == stormpy.storage.PrismModelType.DTMC:
-                task = paynt.task.Task.from_specification(specification, use_exact=use_exact, **task_kwargs)
                 colored_mdp = paynt.colored_mdp.ColoredMdp(explicit_model, parameter_space, coloring, use_exact=use_exact)
                 colored_mdp_factory = paynt.colored_mdp.IdentityColoredMdpFactory(colored_mdp, task)
             elif prism.model_type == stormpy.storage.PrismModelType.MDP:
-                task = paynt.mdp_family.task.FamilyTask.from_specification(specification, use_exact=use_exact, **task_kwargs)
-                colored_mdp_factory = paynt.mdp_family.FamilyColoredMdpFactory(explicit_model, parameter_space, coloring, task, use_exact=use_exact)
+                build_task = paynt.mdp_family.task.FamilyTask(**_dataclass_task_kwargs(paynt.mdp_family.task.FamilyTask, task_kwargs))
+                colored_mdp_factory = paynt.mdp_family.FamilyColoredMdpFactory(explicit_model, parameter_space, coloring, build_task, use_exact=use_exact)
             elif prism.model_type == stormpy.storage.PrismModelType.POMDP:
-                task = paynt.mdp_family.task.FamilyTask.from_specification(specification, use_exact=use_exact, **task_kwargs)
+                build_task = paynt.mdp_family.task.FamilyTask(**_dataclass_task_kwargs(paynt.mdp_family.task.FamilyTask, task_kwargs))
                 colored_mdp_factory = paynt.mdp_family.PomdpFamilyColoredMdpFactory(
-                    explicit_model, parameter_space, coloring, task, obs_evaluator, use_exact=use_exact
+                    explicit_model, parameter_space, coloring, build_task, obs_evaluator, use_exact=use_exact
                 )
         else:
             # assert explicit_model.is_nondeterministic_model, "expected nondeterministic model"
             if decpomdp_manager is not None and decpomdp_manager.num_agents > 1:
-                task = paynt.pomdp.task.PomdpTask.from_specification(specification, use_exact=use_exact, **task_kwargs)
-                colored_mdp_factory = paynt.pomdp.decpomdp.DecPomdpColoredMdpFactory(decpomdp_manager, task, use_exact=use_exact)
+                build_task = paynt.pomdp.task.PomdpTask(**_dataclass_task_kwargs(paynt.pomdp.task.PomdpTask, task_kwargs))
+                colored_mdp_factory = paynt.pomdp.decpomdp.DecPomdpColoredMdpFactory(decpomdp_manager, build_task, use_exact=use_exact)
             elif isinstance(explicit_model, payntbind.synthesis.Posmg):
-                task = paynt.posmg.task.PosmgTask.from_specification(specification, use_exact=use_exact, **task_kwargs)
-                colored_mdp_factory = paynt.posmg.PosmgColoredMdpFactory(explicit_model, task, use_exact=use_exact)
+                build_task = paynt.posmg.task.PosmgTask(**_dataclass_task_kwargs(paynt.posmg.task.PosmgTask, task_kwargs))
+                colored_mdp_factory = paynt.posmg.PosmgColoredMdpFactory(explicit_model, build_task, specification, use_exact=use_exact)
             elif not explicit_model.is_partially_observable:
-                # always use the more capable DtNestTask (a strict superset of DtTask) since at this point
-                # we don't yet know whether the caller intends to run dtnest or plain AR on this sketch
-                task = paynt.dt.dtnest.task.DtNestTask.from_specification(specification, use_exact=use_exact, **task_kwargs)
-                colored_mdp_factory = DtColoredMdpFactory(explicit_model, task, use_exact=use_exact)
+                # always use the more capable DtNestTask (a strict superset of DtTask) since at
+                # this point we don't yet know whether the caller intends to run dtnest or plain AR on this
+                # sketch
+                build_task = paynt.dt.dtnest.task.DtNestTask(**_dataclass_task_kwargs(paynt.dt.dtnest.task.DtNestTask, task_kwargs))
+                colored_mdp_factory = DtColoredMdpFactory(explicit_model, build_task, use_exact=use_exact)
             else:
-                task = paynt.pomdp.task.PomdpTask.from_specification(specification, use_exact=use_exact, **task_kwargs)
-                colored_mdp_factory = paynt.pomdp.PomdpColoredMdpFactory(explicit_model, task, decpomdp_manager, use_exact=use_exact)
+                build_task = paynt.pomdp.task.PomdpTask(**_dataclass_task_kwargs(paynt.pomdp.task.PomdpTask, task_kwargs))
+                colored_mdp_factory = paynt.pomdp.PomdpColoredMdpFactory(explicit_model, build_task, decpomdp_manager, use_exact=use_exact)
         return colored_mdp_factory, task
 
     @classmethod

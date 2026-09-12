@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 class ConflictGeneratorDtmc:
 
-    def __init__(self, colored_mdp: paynt.colored_mdp.ColoredMdp, task: paynt.task.Task):
+    def __init__(self, colored_mdp: paynt.colored_mdp.ColoredMdp, task: paynt.task.SynthesisTask):
         self.colored_mdp = colored_mdp
         self.task = task
         self.counterexample_generator: Any = None

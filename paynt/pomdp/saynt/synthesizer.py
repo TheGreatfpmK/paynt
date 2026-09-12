@@ -13,6 +13,7 @@ import paynt.pomdp.factory
 import paynt.pomdp.saynt.control
 import paynt.pomdp.saynt.synthesizer_ar_storm
 import paynt.parameter_space.parameter_space
+import paynt.task
 import paynt.utils.timer
 
 from threading import Thread
@@ -29,10 +30,11 @@ class SayntSynthesizer(PomdpSynthesizer):
     def __init__(
         self,
         colored_mdp_factory: paynt.pomdp.factory.PomdpColoredMdpFactory,
+        task: paynt.task.SynthesisTask,
         method: str,
         storm_control: paynt.pomdp.saynt.control.StormPOMDPControl,
     ) -> None:
-        super().__init__(colored_mdp_factory, method)
+        super().__init__(colored_mdp_factory, task, method)
         self.storm_control = storm_control
         self.storm_control.colored_mdp = self.colored_mdp
         self.storm_control.pomdp = self.colored_mdp.pomdp
@@ -121,7 +123,7 @@ class SayntSynthesizer(PomdpSynthesizer):
         """
         @param unfold_imperfect_only if True, only imperfect observations will be unfolded
         """
-        mem_size = self.colored_mdp_factory.task.memory_size
+        mem_size = self.colored_mdp_factory.build_task.memory_size
         self.synthesizer.storm_control = self.storm_control
 
         while True:
@@ -230,7 +232,7 @@ class SayntSynthesizer(PomdpSynthesizer):
         """
         @param unfold_imperfect_only if True, only imperfect observations will be unfolded
         """
-        mem_size = self.colored_mdp_factory.task.memory_size
+        mem_size = self.colored_mdp_factory.build_task.memory_size
         self.synthesizer.storm_control = self.storm_control
 
         while True:

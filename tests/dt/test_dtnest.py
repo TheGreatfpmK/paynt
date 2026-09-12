@@ -5,6 +5,7 @@ import paynt.dt
 import paynt.dt.decision_tree
 import paynt.dt.dtnest
 import paynt.model.model_builder
+import paynt.task
 
 from helpers.helper import get_sketch_paths
 
@@ -14,12 +15,18 @@ OPTIMAL = 0.6313574509764854
 RANDOM = 0.48451914218945663
 
 
-def _dtnest_factory(properties_string):
+def _dtnest_task_and_factory(properties_string, error_threshold=0.05, timeout=30):
+    """Builds the (task, build_task, factory) triple TestDtNestConstraintHandling needs, mirroring what
+    Sketch.load_sketch would produce for this sketch -- constructed directly here (rather than going through
+    the parser) since these tests want full control over the properties string per case."""
     sketch_path, _ = get_sketch_paths("tests/dt-orchard")
     prism = stormpy.parse_prism_program(sketch_path, prism_compat=True)
     properties = stormpy.parse_properties_for_prism_program(properties_string, prism, None)
     explicit_model = paynt.model.model_builder.ModelBuilder.from_prism(prism, None, False)
-    return properties, explicit_model
+    task = paynt.task.SynthesisTask(properties, timeout=timeout)
+    build_task = paynt.dt.dtnest.DtNestTask(error_threshold=error_threshold)
+    factory = paynt.dt.DtColoredMdpFactory(explicit_model, build_task)
+    return task, build_task, factory
 
 
 class TestDtNestConstraintHandling:
@@ -37,47 +44,37 @@ class TestDtNestConstraintHandling:
     def test_constraint_between_random_and_optimal_is_treated_as_its_own_threshold(self):
         """P>=0.55 sits strictly between random (~0.4845) and optimal (~0.6314): DtNest should search for
         and find a tree clearing 0.55, not chase the unconstrained optimum."""
-        properties, explicit_model = _dtnest_factory('P>=0.55 [F "goal"]')
-        task = paynt.dt.dtnest.DtNestTask(properties, error_threshold=0.05, timeout=30)
-        factory = paynt.dt.DtColoredMdpFactory(explicit_model, task)
-        result = paynt.dt.dtnest.synthesize(factory, task)
+        task, build_task, factory = _dtnest_task_and_factory('P>=0.55 [F "goal"]')
+        result = paynt.dt.dtnest.synthesize(factory, task, build_task)
         assert result.success
         assert result.value >= 0.55
 
     def test_constraint_already_satisfied_by_random_returns_it_directly(self):
         """P>=0.3 is already cleared by the random/don't-care scheduler alone (~0.4845): DtNest should
         short-circuit to exactly the random scheduler's value without running any subtree search."""
-        properties, explicit_model = _dtnest_factory('P>=0.3 [F "goal"]')
-        task = paynt.dt.dtnest.DtNestTask(properties, error_threshold=0.05, timeout=30)
-        factory = paynt.dt.DtColoredMdpFactory(explicit_model, task)
-        result = paynt.dt.dtnest.synthesize(factory, task)
+        task, build_task, factory = _dtnest_task_and_factory('P>=0.3 [F "goal"]')
+        result = paynt.dt.dtnest.synthesize(factory, task, build_task)
         assert result.success
         assert result.value == pytest.approx(RANDOM, abs=1e-6)
 
     def test_constraint_above_optimal_is_unsatisfiable(self):
         """P>=0.9 is stricter than even the true optimum (~0.6314): no admissible tree exists."""
-        properties, explicit_model = _dtnest_factory('P>=0.9 [F "goal"]')
-        task = paynt.dt.dtnest.DtNestTask(properties, error_threshold=0.05, timeout=30)
-        factory = paynt.dt.DtColoredMdpFactory(explicit_model, task)
-        result = paynt.dt.dtnest.synthesize(factory, task)
+        task, build_task, factory = _dtnest_task_and_factory('P>=0.9 [F "goal"]')
+        result = paynt.dt.dtnest.synthesize(factory, task, build_task)
         assert not result.success
 
     def test_optimality_alongside_a_constraint_is_rejected(self):
         """DtNest has no mechanism to enforce a constraint at all -- silently dropping it would be worse
         than refusing outright."""
-        properties, explicit_model = _dtnest_factory('Pmax=? [F "goal"]; P>=0.5 [F "goal"]')
-        task = paynt.dt.dtnest.DtNestTask(properties, error_threshold=0.05, timeout=30)
-        factory = paynt.dt.DtColoredMdpFactory(explicit_model, task)
+        task, build_task, factory = _dtnest_task_and_factory('Pmax=? [F "goal"]; P>=0.5 [F "goal"]')
         with pytest.raises(ValueError):
-            paynt.dt.dtnest.synthesize(factory, task)
+            paynt.dt.dtnest.synthesize(factory, task, build_task)
 
     def test_multiple_constraints_without_optimality_is_rejected(self):
         """No sensible single-value reduction exists for more than one bare constraint."""
-        properties, explicit_model = _dtnest_factory('P>=0.5 [F "goal"]; P<=0.9 [F "goal"]')
-        task = paynt.dt.dtnest.DtNestTask(properties, error_threshold=0.05, timeout=30)
-        factory = paynt.dt.DtColoredMdpFactory(explicit_model, task)
+        task, build_task, factory = _dtnest_task_and_factory('P>=0.5 [F "goal"]; P<=0.9 [F "goal"]')
         with pytest.raises(ValueError):
-            paynt.dt.dtnest.synthesize(factory, task)
+            paynt.dt.dtnest.synthesize(factory, task, build_task)
 
 
 def _node(identifier, old_identifier):

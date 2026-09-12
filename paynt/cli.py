@@ -168,10 +168,11 @@ def paynt_run(
     logger.info(f"This is Paynt version {version()}.")
     paynt.utils.version_check.check_stormpy_compatibility()
 
-    # Every option below that affects synthesis behavior (as opposed to model loading/parsing) is threaded through as a Task field.
-    # Sketch.load_sketch doesn't know the sketch's feature until it has parsed it, so task_kwargs
-    # carries every feature's options at once; whichever Task subclass ends up being constructed picks out
-    # only the keys it recognizes (see paynt.task.Task.from_specification).
+    # Every option below that affects synthesis behavior (as opposed to model loading/parsing) is threaded
+    # through as a SynthesisTask/feature-task field. Sketch.load_sketch doesn't know the sketch's feature
+    # until it has parsed it, so task_kwargs carries every feature's options at once; both the generic
+    # SynthesisTask and whichever feature-specific task ends up being constructed pick out only the keys
+    # they recognize (see paynt.task.SynthesisTask.from_specification and e.g. paynt.dt.task.DtTask).
     task_kwargs: dict[str, Any] = {
         "export_synthesis_filename_base": export_synthesis,
         "conflict_generator_type": ce_generator,
@@ -197,7 +198,7 @@ def paynt_run(
     colored_mdp_factory, task = paynt.parser.sketch.Sketch.load_sketch(
         sketch_path, properties_path, export, relative_error, precision, constraint_bound, exact, task_kwargs=task_kwargs
     )
-    synthesizer = paynt.api.get_synthesizer(colored_mdp_factory, method, fsc_synthesis, storm_control, dtnest)
+    synthesizer = paynt.api.get_synthesizer(colored_mdp_factory, task, method, fsc_synthesis, storm_control, dtnest)
     synthesizer.run(optimum_threshold)
 
     if profiling:

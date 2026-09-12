@@ -24,12 +24,12 @@ class PomdpFamilyColoredMdpFactory(FamilyColoredMdpFactory):
         underlying_mdp: Any,
         parameter_space: paynt.parameter_space.parameter_space.ParameterSpace,
         coloring: Any,
-        task: paynt.mdp_family.task.FamilyTask,
+        build_task: paynt.mdp_family.task.FamilyTask,
         obs_evaluator: Any,
         use_exact: bool = False,
     ):
         self.obs_evaluator = obs_evaluator
-        super().__init__(underlying_mdp, parameter_space, coloring, task, use_exact=use_exact)
+        super().__init__(underlying_mdp, parameter_space, coloring, build_task, use_exact=use_exact)
 
     def unfold_scheduler_memory(
         self, underlying_mdp: Any, parameter_space: paynt.parameter_space.parameter_space.ParameterSpace, coloring: Any

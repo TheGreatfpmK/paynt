@@ -13,6 +13,15 @@ def pomdp_colored_mdp_factory():
 
 
 @pytest.fixture
+def pomdp_task():
+    """The SynthesisTask sibling of pomdp_colored_mdp_factory -- see tests/dt/conftest.py's dt_task for why
+    this loads the sketch itself rather than reaching into the factory."""
+    sketch_path, props_path = get_sketch_paths("tests/pomdp-maze")
+    _, task = paynt.parser.sketch.Sketch.load_sketch(sketch_path, props_path)
+    return task
+
+
+@pytest.fixture
 def pomdp_colored_mdp(pomdp_colored_mdp_factory):
     return pomdp_colored_mdp_factory.colored_mdp
 
@@ -28,6 +37,14 @@ def decpomdp_colored_mdp_factory():
     sketch_path, props_path = get_sketch_paths("tests/decpomdp-dectiger", sketch_name="dectiger.dpomdp", props_name="dectiger.dpomdp")
     factory, task = paynt.parser.sketch.Sketch.load_sketch(sketch_path, props_path)
     return factory
+
+
+@pytest.fixture
+def decpomdp_task():
+    """The SynthesisTask sibling of decpomdp_colored_mdp_factory."""
+    sketch_path, props_path = get_sketch_paths("tests/decpomdp-dectiger", sketch_name="dectiger.dpomdp", props_name="dectiger.dpomdp")
+    _, task = paynt.parser.sketch.Sketch.load_sketch(sketch_path, props_path)
+    return task
 
 
 @pytest.fixture

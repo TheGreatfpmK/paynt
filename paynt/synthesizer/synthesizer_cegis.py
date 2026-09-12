@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 class SynthesizerCEGIS(paynt.synthesizer.synthesizer.Synthesizer):
 
-    def __init__(self, colored_mdp: paynt.colored_mdp.ColoredMdp, task: paynt.task.Task):
+    def __init__(self, colored_mdp: paynt.colored_mdp.ColoredMdp, task: paynt.task.SynthesisTask):
         super().__init__(colored_mdp, task)
 
         self.conflict_generator = self.choose_conflict_generator(colored_mdp, task)
@@ -29,7 +29,7 @@ class SynthesizerCEGIS(paynt.synthesizer.synthesizer.Synthesizer):
         ), "Cannot use CEGIS for maximizing reward formulae -- consider using AR or hybrid methods."
 
     def choose_conflict_generator(
-        self, colored_mdp: paynt.colored_mdp.ColoredMdp, task: paynt.task.Task
+        self, colored_mdp: paynt.colored_mdp.ColoredMdp, task: paynt.task.SynthesisTask
     ) -> paynt.synthesizer.conflict_generator.dtmc.ConflictGeneratorDtmc:
         if task.conflict_generator_type == "mdp":
             conflict_generator: paynt.synthesizer.conflict_generator.dtmc.ConflictGeneratorDtmc = paynt.synthesizer.conflict_generator.mdp.ConflictGeneratorMdp(

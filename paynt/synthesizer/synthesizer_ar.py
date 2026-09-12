@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 def scheduler_scores(
-    colored_mdp: paynt.colored_mdp.ColoredMdp, task: paynt.task.Task, mdp: Any, prop: Any, result: Any, selection: list[list[int]]
+    colored_mdp: paynt.colored_mdp.ColoredMdp, task: paynt.task.SynthesisTask, mdp: Any, prop: Any, result: Any, selection: list[list[int]]
 ) -> dict[int, float] | None:
     inconsistent_assignments = {parameter: options for parameter, options in enumerate(selection) if len(options) > 1}
     choice_values = paynt.model.model.ModelIndex.choice_values(mdp.model, prop, result.get_values())
@@ -37,7 +37,7 @@ def scheduler_scores(
     return scores
 
 
-def scheduler_scores_combined(colored_mdp: paynt.colored_mdp.ColoredMdp, task: paynt.task.Task, mdp: Any, results: list[Any]) -> dict[int, float]:
+def scheduler_scores_combined(colored_mdp: paynt.colored_mdp.ColoredMdp, task: paynt.task.SynthesisTask, mdp: Any, results: list[Any]) -> dict[int, float]:
     """
     Aggregate v(h) across every still-relevant property (MdpSpecificationResult.undecided_results()), taking
     the max per parameter across properties that consider it inconsistent. A property whose own selection is
@@ -58,7 +58,7 @@ def scheduler_scores_combined(colored_mdp: paynt.colored_mdp.ColoredMdp, task: p
 
 
 def split_parameter_space(
-    colored_mdp: paynt.colored_mdp.ColoredMdp, task: paynt.task.Task, node: paynt.synthesizer.search_node.SearchNode
+    colored_mdp: paynt.colored_mdp.ColoredMdp, task: paynt.task.SynthesisTask, node: paynt.synthesizer.search_node.SearchNode
 ) -> list[paynt.synthesizer.search_node.SearchNode]:
     """
     AR splitting step: pick a parameter to split node's parameter_space on and split its options into
@@ -72,7 +72,7 @@ def split_parameter_space(
     works uniformly across every colored-MDP variant without any of them carrying search-decision logic
     themselves, and so it can be passed around as a plain callable on a future multiprocessing path.
     :param colored_mdp anything exposing .parameter_space/.coloring -- any ColoredMdp qualifies
-    :param task the Task currently being solved (not read from colored_mdp -- it doesn't carry one)
+    :param task the SynthesisTask currently being solved (not read from colored_mdp -- it doesn't carry one)
     :param node the SearchNode currently being split
     """
     mdp = node.mdp

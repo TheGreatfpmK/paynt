@@ -24,15 +24,13 @@ logger = logging.getLogger(__name__)
 
 class PosmgColoredMdpFactory:
 
-    def __init__(self, posmg: Any, task: paynt.posmg.task.PosmgTask, use_exact: bool = False):
+    def __init__(self, posmg: Any, build_task: paynt.posmg.task.PosmgTask, specification: Any, use_exact: bool = False):
         self.posmg = posmg
-        self.task = task
+        self.build_task = build_task
         self.use_exact = use_exact
 
         state_players = self.posmg.get_state_player_indications()
         state_obs = self.posmg.get_observations()
-
-        specification = task.specification
         if not specification.has_optimality:
             self.optimizing_player = 0
         else:
@@ -89,7 +87,7 @@ class PosmgColoredMdpFactory:
         # number of memory states allocated to each optimizing player observation, and the current unfolding
         self.opt_player_observation_memory_size: dict[int, int] | None = None
         self.current_memory_size: int | None = None
-        self.colored_mdp = self.set_imperfect_memory_size(task.memory_size)
+        self.colored_mdp = self.set_imperfect_memory_size(build_task.memory_size)
 
     def set_manager_memory_vector(self) -> None:
         assert self.opt_player_observation_memory_size is not None

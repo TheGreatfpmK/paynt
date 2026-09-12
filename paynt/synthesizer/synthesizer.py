@@ -34,7 +34,7 @@ class ParameterSpaceEvaluation:
 class Synthesizer:
 
     @staticmethod
-    def for_method(colored_mdp: paynt.colored_mdp.ColoredMdp, task: paynt.task.Task, method: str) -> Synthesizer:
+    def for_method(colored_mdp: paynt.colored_mdp.ColoredMdp, task: paynt.task.SynthesisTask, method: str) -> Synthesizer:
         """
         Feature-agnostic dispatch: knows only the generic algorithms, never imports a specific feature
         package. Feature-specific dispatch (FSC synthesis for POMDP/POSMG/Dec-POMDP, policy trees for
@@ -63,11 +63,12 @@ class Synthesizer:
     # scheduler_choices field these generic algorithms never need
     search_node_type = paynt.synthesizer.search_node.SearchNode
 
-    def __init__(self, colored_mdp: paynt.colored_mdp.ColoredMdp, task: paynt.task.Task):
+    def __init__(self, colored_mdp: paynt.colored_mdp.ColoredMdp, task: paynt.task.SynthesisTask):
         self.colored_mdp = colored_mdp
-        # the Task this synthesis run is solving -- deliberately not stored on colored_mdp itself, so the
-        # same representation can be reused across different tasks/specifications without going through
-        # whatever factory produced it; see paynt/task.py and the factories' own task fields
+        # the SynthesisTask this synthesis run is solving -- deliberately not stored on colored_mdp itself,
+        # so the same representation can be reused across different tasks/specifications without going
+        # through whatever factory produced it; see paynt/task.py and the factories' own
+        # build_task fields
         self.task = task
         self.stat: paynt.synthesizer.statistic.Statistic | None = None
         self.synthesis_timer: paynt.utils.timer.Timer | None = None

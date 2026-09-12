@@ -23,10 +23,10 @@ logger = logging.getLogger(__name__)
 
 class DecPomdpColoredMdpFactory:
 
-    def __init__(self, decpomdp_manager: Any, task: paynt.pomdp.task.PomdpTask, use_exact: bool = False):
+    def __init__(self, decpomdp_manager: Any, build_task: paynt.pomdp.task.PomdpTask, use_exact: bool = False):
         assert decpomdp_manager.num_agents > 1
         self.decpomdp_manager = decpomdp_manager
-        self.task = task
+        self.build_task = build_task
         self.use_exact = use_exact
 
         # for each agent a (simplified) label for each observation
@@ -56,7 +56,7 @@ class DecPomdpColoredMdpFactory:
         # for each agent and each observation, the size of the memory allocated to it, and the current unfolding
         self.agent_observation_memory_size: list[list[int]] = [[] for _ in range(self.nr_agents)]
         self.current_memory_size: int | None = None
-        self.colored_mdp = self.set_imperfect_memory_size(task.memory_size)
+        self.colored_mdp = self.set_imperfect_memory_size(build_task.memory_size)
 
     def create_parameter_name(self, agent: int, obs: int, mem: int, is_action_parameter: bool) -> str:
         category = "A" if is_action_parameter else "M"
