@@ -3,6 +3,7 @@ import re
 import pytest
 
 import paynt.pomdp
+import paynt.pomdp._utils
 
 
 class TestPomdpSynthesis:
@@ -33,6 +34,6 @@ class TestPomdpSynthesis:
         called -- previously unreachable except via SAYNT, so nothing had caught it."""
         synthesizer = paynt.pomdp.PomdpSynthesizer(pomdp_colored_mdp_factory, pomdp_task, method="ar")
         assignment = synthesizer.synthesize(synthesizer.colored_mdp.parameter_space, print_stats=False)
-        fsc = synthesizer.colored_mdp.assignment_to_fsc(assignment)
+        fsc = paynt.pomdp._utils.assignment_to_fsc(synthesizer.colored_mdp.feature_info, assignment)
         assert fsc.num_nodes == 1
-        assert synthesizer.colored_mdp.policy_size(assignment) == 16
+        assert paynt.pomdp._utils.policy_size(synthesizer.colored_mdp, assignment) == 16

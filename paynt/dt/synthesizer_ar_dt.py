@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 class DtSearchNode(paynt.synthesizer.search_node.SearchNode):
     def __init__(self, parameter_space, parent_info=None):
         super().__init__(parameter_space, parent_info)
-        # set only by DtColoredMdp.scheduler_is_consistent, and only for a single-property specification --
+        # set only by ColoredMdp.scheduler_is_consistent's "dt" branch, and only for a single-property specification --
         # None otherwise, giving the "scheduler preserved across split" shortcut in verify_parameter_space a
         # real declared default rather than the getattr(..., None) it used to need
         self.scheduler_choices = None
@@ -22,7 +22,7 @@ class SynthesizerARDt(paynt.synthesizer.synthesizer_ar.SynthesizerAR):
     AR specialized for decision-tree synthesis: splits by parameter kind (action/decision/variable) rather
     than by scored inconsistency variance, and adds harmonization (retrying an inconsistent scheduler
     selection against both directions of one parameter before giving up) plus a "scheduler preserved across
-    split" shortcut specific to how DtColoredMdp.scheduler_is_consistent reports single-property results.
+    split" shortcut specific to how ColoredMdp.scheduler_is_consistent's "dt" branch reports single-property results.
     This is the inner search engine; the outer DtSynthesizer (paynt.dt.synthesizer) constructs a fresh
     instance of this class for every tree depth it tries, mirroring the SynthesizerARStorm/SayntSynthesizer
     split.
@@ -86,7 +86,7 @@ class SynthesizerARDt(paynt.synthesizer.synthesizer_ar.SynthesizerAR):
         node.mdp, node.selected_choices = self.colored_mdp.build(node.parameter_space, parent_selected_choices)
 
         self.stat.iteration(node.mdp)
-        # scheduler_choices is only ever populated by DtColoredMdp.scheduler_is_consistent when the
+        # scheduler_choices is only ever populated by ColoredMdp.scheduler_is_consistent's "dt" branch when the
         # specification is single-property (see split_undecided_space below) -- for a multi-property specification
         # it stays None on every node, so the "scheduler preserved" shortcut must be skipped rather than
         # assumed available, falling through to a real (slower, but correct) model-check instead.
@@ -126,16 +126,17 @@ class SynthesizerARDt(paynt.synthesizer.synthesizer_ar.SynthesizerAR):
         """Decision-tree splitting heuristic: classify inconsistent parameters by kind (action/decision/
         variable) and pick one deterministically, rather than scoring by choice-value variance -- a
         genuinely different algorithm from the shared AR default, not a performance variant of it."""
+        info = self.colored_mdp.feature_info
         inconsistent_assignments = {parameter: options for parameter, options in enumerate(selection) if len(options) > 1}
         assert len(inconsistent_assignments) > 0, f"obtained selection with no inconsistencies: {selection}"
         inconsistent_action_parameters = [
-            (parameter, options) for parameter, options in inconsistent_assignments.items() if self.colored_mdp.is_action_parameter[parameter]
+            (parameter, options) for parameter, options in inconsistent_assignments.items() if info.is_action_parameter[parameter]
         ]
         inconsistent_decision_parameters = [
-            (parameter, options) for parameter, options in inconsistent_assignments.items() if self.colored_mdp.is_decision_parameter[parameter]
+            (parameter, options) for parameter, options in inconsistent_assignments.items() if info.is_decision_parameter[parameter]
         ]
         inconsistent_variable_parameters = [
-            (parameter, options) for parameter, options in inconsistent_assignments.items() if self.colored_mdp.is_variable_parameter[parameter]
+            (parameter, options) for parameter, options in inconsistent_assignments.items() if info.is_variable_parameter[parameter]
         ]
 
         # choose one splitter
@@ -178,7 +179,8 @@ class SynthesizerARDt(paynt.synthesizer.synthesizer_ar.SynthesizerAR):
             splitter = paynt.utils.scoring.parameters_with_max_score(scores)[0]
             used_options = parameter_assignments[splitter]
 
-        if self.colored_mdp.is_action_parameter[splitter] or self.colored_mdp.is_decision_parameter[splitter]:
+        info = self.colored_mdp.feature_info
+        if info.is_action_parameter[splitter] or info.is_decision_parameter[splitter]:
             assert len(used_options) > 1
             core_suboptions, other_suboptions = mdp.parameter_space.suboptions_enumerate(splitter, used_options)
         else:

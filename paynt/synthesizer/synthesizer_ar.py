@@ -26,7 +26,7 @@ def scheduler_scores(
     # POMDP has a specialized, hand-optimized scorer for the common posterior-unaware case; every other
     # colored-MDP variant (and posterior-aware POMDPs) uses the generic implementation. Dispatched by
     # feature_kind, not an isinstance check, so this module never needs to import paynt.pomdp.
-    if colored_mdp.feature_kind == "pomdp" and not colored_mdp.posterior_aware:  # type: ignore[attr-defined]
+    if colored_mdp.feature_kind == "pomdp" and not colored_mdp.feature_info.posterior_aware:
         scores = paynt.utils.scoring.estimate_scheduler_difference_pomdp(
             colored_mdp, mdp.model, mdp.underlying_mdp_choice_map, inconsistent_assignments, choice_values, expected_visits
         )
@@ -137,8 +137,15 @@ class SynthesizerAR(paynt.synthesizer.synthesizer.Synthesizer):
         mdp = node.mdp
         assert mdp is not None
 
+        model: paynt.model.model.Mdp
         if self.colored_mdp.feature_kind == "posmg":
-            model = self.colored_mdp.create_smg_from_mdp(mdp)  # type: ignore[attr-defined]
+            # local, not `import paynt.posmg._utils`: that form binds the name `paynt` itself in this
+            # function's local scope (Python's static scoping applies to the whole function body regardless
+            # of control flow), which would break every other bare `paynt.x` reference below whenever this
+            # branch isn't taken
+            from paynt.posmg import _utils as posmg_utils
+
+            model = posmg_utils.create_smg_from_mdp(self.colored_mdp.feature_info, mdp)
         else:
             model = mdp
 
@@ -240,8 +247,10 @@ class SynthesizerAR(paynt.synthesizer.synthesizer.Synthesizer):
         self.best_assignment_value = iv
         # logger.info(f"value {round(iv,4)} achieved after {round(paynt.utils.timer.GlobalTimer.read(),2)} seconds")
         if self.colored_mdp.feature_kind == "pomdp":
+            from paynt.pomdp import _utils as pomdp_utils
+
             assert self.stat is not None
-            self.stat.new_fsc_found(node.analysis_result.improving_value, ia, self.colored_mdp.policy_size(ia))  # type: ignore[attr-defined]
+            self.stat.new_fsc_found(node.analysis_result.improving_value, ia, pomdp_utils.policy_size(self.colored_mdp, ia))
 
     def synthesize_one(self, node: paynt.synthesizer.search_node.SearchNode) -> paynt.parameter_space.parameter_space.ParameterSpace | None:
         nodes = [node]

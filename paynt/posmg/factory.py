@@ -1,9 +1,10 @@
 """
-Constructs a PosmgColoredMdp by unfolding the optimizing player's imperfect-information strategy into an
-FSC template of a given memory size. Unlike the family/ factories, this must support re-unfolding at a
-larger memory size after construction (PosmgSynthesizer.strategy_iterative increases it step by step), so
-set_imperfect_memory_size is a public entry point, not just __init__-time setup: it produces a fresh
-PosmgColoredMdp each time rather than mutating the previous one in place, and the caller reassigns.
+Constructs a ColoredMdp (feature_kind "posmg") by unfolding the optimizing player's imperfect-information
+strategy into an FSC template of a given memory size. Unlike the family/ factories, this must support
+re-unfolding at a larger memory size after construction (PosmgSynthesizer.strategy_iterative increases it
+step by step), so set_imperfect_memory_size is a public entry point, not just __init__-time setup: it
+produces a fresh ColoredMdp each time rather than mutating the previous one in place, and the caller
+reassigns.
 """
 
 from __future__ import annotations
@@ -14,7 +15,7 @@ import payntbind
 
 import paynt.colored_mdp
 import paynt.posmg.task
-from paynt.posmg.colored_mdp import PosmgColoredMdp
+from paynt.posmg._utils import PosmgInfo
 import paynt.parameter_space.parameter_space
 
 import logging
@@ -94,9 +95,9 @@ class PosmgColoredMdpFactory:
         for obs, memory in self.opt_player_observation_memory_size.items():
             self.posmg_manager.set_observation_memory_size(obs, memory)
 
-    def set_imperfect_memory_size(self, memory_size: int) -> PosmgColoredMdp:
+    def set_imperfect_memory_size(self, memory_size: int) -> paynt.colored_mdp.ColoredMdp:
         """(Re-)unfold the optimizing player's FSC template at the given memory size, producing a fresh
-        PosmgColoredMdp -- callers reassign their reference (e.g. self.colored_mdp =
+        ColoredMdp -- callers reassign their reference (e.g. self.colored_mdp =
         factory.set_imperfect_memory_size(k)) rather than relying on in-place mutation."""
         self.opt_player_observation_memory_size = {
             obs: (memory_size if obs_states > 1 else 1) for obs, obs_states in self.opt_player_observation_states.items()
@@ -165,7 +166,7 @@ class PosmgColoredMdpFactory:
 
         return parameter_space, choice_to_parameter_options
 
-    def _unfold_memory(self) -> PosmgColoredMdp:
+    def _unfold_memory(self) -> paynt.colored_mdp.ColoredMdp:
         assert self.opt_player_observation_memory_size is not None
         logger.debug(f"unfolding {max(self.opt_player_observation_memory_size.values())}-FSC template into one-sided POSMG...")
         underlying_mdp = self.posmg_manager.construct_mdp()
@@ -174,4 +175,6 @@ class PosmgColoredMdpFactory:
         parameter_space, choice_to_parameter_options = self.create_coloring(underlying_mdp)
         coloring = payntbind.synthesis.Coloring(parameter_space.native, underlying_mdp.nondeterministic_choice_indices, choice_to_parameter_options)
 
-        return PosmgColoredMdp(underlying_mdp, parameter_space, coloring, self.use_exact, self.posmg_manager)
+        colored_mdp = paynt.colored_mdp.ColoredMdp(underlying_mdp, parameter_space, coloring, self.use_exact, feature_kind="posmg")
+        colored_mdp.feature_info = PosmgInfo(posmg_manager=self.posmg_manager)
+        return colored_mdp

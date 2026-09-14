@@ -5,6 +5,7 @@ from typing import Any, Literal
 import stormpy
 
 import paynt.specification.property
+from .._utils import DtInfo
 from ..decision_tree import DecisionTree, DecisionTreeNode
 
 from math import floor
@@ -81,26 +82,27 @@ def classify_constraint_threshold(
 
 
 def dt_to_state_to_actions(decision_tree: DecisionTree, colored_mdp: Any, reachable_states: Any = None) -> list[int]:
+    info = colored_mdp.feature_info
     if reachable_states is None:
         reachable_states = stormpy.BitVector(colored_mdp.underlying_mdp.nr_states, True)
     state_to_action = []
     nci = colored_mdp.underlying_mdp.nondeterministic_choice_indices.copy()
     for state in range(colored_mdp.underlying_mdp.nr_states):
-        if colored_mdp.state_is_relevant_bv.get(state) and reachable_states.get(state):
-            action_index = get_action_for_state(decision_tree.root, colored_mdp, state, colored_mdp.relevant_state_valuations[state], nci)
-            state_to_action.append(colored_mdp.choice_to_action[nci[state] + action_index])
+        if info.state_is_relevant_bv.get(state) and reachable_states.get(state):
+            action_index = get_action_for_state(decision_tree.root, info, state, info.relevant_state_valuations[state], nci)
+            state_to_action.append(info.choice_to_action[nci[state] + action_index])
         else:
             state_to_action.append(-1)
 
     return state_to_action
 
 
-def get_action_for_state(node: DecisionTreeNode, colored_mdp: Any, state: int, state_valuation: list[Any], nci: Any) -> int:
+def get_action_for_state(node: DecisionTreeNode, info: DtInfo, state: int, state_valuation: list[Any], nci: Any) -> int:
     if node.is_terminal:
         action_index = node.action
         index = 0
         for choice in range(nci[state], nci[state + 1]):
-            if colored_mdp.choice_to_action[choice] == action_index:
+            if info.choice_to_action[choice] == action_index:
                 return index
             index += 1
         else:
@@ -108,7 +110,7 @@ def get_action_for_state(node: DecisionTreeNode, colored_mdp: Any, state: int, s
             # for now we will treat this by using the __random__ action but it can lead to strange behaviour
             index = 0
             for choice in range(nci[state], nci[state + 1]):
-                if colored_mdp.action_labels[colored_mdp.choice_to_action[choice]] == "__random__":
+                if info.action_labels[info.choice_to_action[choice]] == "__random__":
                     return index
                 index += 1
             raise AssertionError()
@@ -117,16 +119,19 @@ def get_action_for_state(node: DecisionTreeNode, colored_mdp: Any, state: int, s
     # a node has children, but this function only ever recurses past that point
     assert node.variable is not None and node.variable_bound is not None
     assert node.child_true is not None and node.child_false is not None
-    var = colored_mdp.variables[node.variable]
+    var = info.variables[node.variable]
     bound = var.domain[node.variable_bound]
     if state_valuation[node.variable] <= bound:
-        return get_action_for_state(node.child_true, colored_mdp, state, state_valuation, nci)
-    return get_action_for_state(node.child_false, colored_mdp, state, state_valuation, nci)
+        return get_action_for_state(node.child_true, info, state, state_valuation, nci)
+    return get_action_for_state(node.child_false, info, state, state_valuation, nci)
 
 
-def get_states_satisfying_predicate(dt_colored_mdp_factory: Any, node: DecisionTreeNode, current_states: Any, leq: bool = True) -> Any:
-    bound = dt_colored_mdp_factory.variables[node.variable].domain[node.variable_bound]
-    for state, state_valuation in enumerate(dt_colored_mdp_factory.relevant_state_valuations):
+def get_states_satisfying_predicate(info: DtInfo, node: DecisionTreeNode, current_states: Any, leq: bool = True) -> Any:
+    # only ever called (from get_state_space_for_tree_helper_node) on a node reached by walking up via
+    # .parent from some node's root, i.e. a non-terminal node -- variable/variable_bound are guaranteed set
+    assert node.variable is not None and node.variable_bound is not None
+    bound = info.variables[node.variable].domain[node.variable_bound]
+    for state, state_valuation in enumerate(info.relevant_state_valuations):
         if not current_states.get(state):
             continue
         if leq and state_valuation[node.variable] > bound:
@@ -137,54 +142,57 @@ def get_states_satisfying_predicate(dt_colored_mdp_factory: Any, node: DecisionT
 
 
 def get_state_space_for_tree_helper_node(dt_colored_mdp_factory: Any, node_id: int) -> Any:
-    node = dt_colored_mdp_factory.tree_helper_tree.collect_nodes(lambda node: node.identifier == node_id)[0]
+    info = dt_colored_mdp_factory.feature_info
+    assert info.tree_helper_tree is not None
+    node = info.tree_helper_tree.collect_nodes(lambda node: node.identifier == node_id)[0]
     current_node = node
     states = stormpy.storage.BitVector(dt_colored_mdp_factory.underlying_mdp.nr_states, True)
     while current_node.parent is not None:
         parent_node = current_node.parent
         if parent_node.child_true.identifier == current_node.identifier:
-            states = get_states_satisfying_predicate(dt_colored_mdp_factory, parent_node, states, leq=True)
+            states = get_states_satisfying_predicate(info, parent_node, states, leq=True)
         else:
-            states = get_states_satisfying_predicate(dt_colored_mdp_factory, parent_node, states, leq=False)
+            states = get_states_satisfying_predicate(info, parent_node, states, leq=False)
         current_node = parent_node
     return states
 
 
-def get_chosen_action_for_state_from_tree_helper(dt_colored_mdp_factory: Any, state: int, tree: DecisionTree) -> str:
-    state_valuation = dt_colored_mdp_factory.relevant_state_valuations[state]
+def get_chosen_action_for_state_from_tree_helper(info: DtInfo, state: int, tree: DecisionTree) -> str:
+    state_valuation = info.relevant_state_valuations[state]
     current_node = tree.root
     while not current_node.is_terminal:
         assert current_node.variable is not None and current_node.variable_bound is not None
         assert current_node.child_true is not None and current_node.child_false is not None
-        bound = dt_colored_mdp_factory.variables[current_node.variable].domain[current_node.variable_bound]
+        bound = info.variables[current_node.variable].domain[current_node.variable_bound]
         next_node = current_node.child_true if state_valuation[current_node.variable] <= bound else current_node.child_false
         assert next_node is not None
         current_node = next_node
     assert current_node.action is not None
-    return dt_colored_mdp_factory.action_labels[current_node.action]
+    return info.action_labels[current_node.action]
 
 
 def get_selected_choices_from_tree_helper(dt_colored_mdp_factory: Any, state_to_exclude: Any, tree: DecisionTree | None = None) -> Any:
+    info = dt_colored_mdp_factory.feature_info
     if tree is None:
-        tree = dt_colored_mdp_factory.tree_helper_tree
+        tree = info.tree_helper_tree
     selected_choices = stormpy.storage.BitVector(dt_colored_mdp_factory.underlying_mdp.nr_choices, False)
     mdp_nci = dt_colored_mdp_factory.underlying_mdp.nondeterministic_choice_indices.copy()
     for state in range(dt_colored_mdp_factory.underlying_mdp.nr_states):
-        if state_to_exclude.get(state) or not dt_colored_mdp_factory.state_is_relevant_bv.get(state):
+        if state_to_exclude.get(state) or not info.state_is_relevant_bv.get(state):
             for choice in range(mdp_nci[state], mdp_nci[state + 1]):
                 selected_choices.set(choice, True)
             continue
-        chosen_action_label = get_chosen_action_for_state_from_tree_helper(dt_colored_mdp_factory, state, tree)
-        action_index = dt_colored_mdp_factory.action_labels.index(chosen_action_label)
+        chosen_action_label = get_chosen_action_for_state_from_tree_helper(info, state, tree)
+        action_index = info.action_labels.index(chosen_action_label)
         for choice in range(mdp_nci[state], mdp_nci[state + 1]):
-            if dt_colored_mdp_factory.choice_to_action[choice] == action_index:
+            if info.choice_to_action[choice] == action_index:
                 selected_choices.set(choice, True)
                 break
         else:
             # TODO as far as I know this happens only because of unreachable states not being included in the tree
             # for now we will treat this by using the __random__ action but it can lead to strange behaviour
             for choice in range(mdp_nci[state], mdp_nci[state + 1]):
-                if dt_colored_mdp_factory.action_labels[dt_colored_mdp_factory.choice_to_action[choice]] == "__random__":
+                if info.action_labels[info.choice_to_action[choice]] == "__random__":
                     selected_choices.set(choice, True)
                     break
             continue
@@ -193,10 +201,10 @@ def get_selected_choices_from_tree_helper(dt_colored_mdp_factory: Any, state_to_
     return selected_choices
 
 
-def build_tree_helper_tree(dt_colored_mdp_factory: Any, tree_helper: Any = None) -> DecisionTree:
+def build_tree_helper_tree(info: DtInfo, tree_helper: Any = None) -> DecisionTree:
     if tree_helper is None:
-        tree_helper = dt_colored_mdp_factory.tree_helper
-    helper_tree = DecisionTree(dt_colored_mdp_factory.action_labels, dt_colored_mdp_factory.variables)
+        tree_helper = info.tree_helper
+    helper_tree = DecisionTree(info.action_labels, info.variables)
     helper_tree.build_from_tree_helper(tree_helper)
     return helper_tree
 
@@ -210,19 +218,20 @@ def get_submdp_from_unfixed_states(dt_colored_mdp_factory: Any, unfixed_states: 
 
 
 # in dtNest, there might be an MDP for a subtree with no relevant states, in that case we want to replace this subtree with a random action
-def create_uniform_random_tree(dt_colored_mdp_factory: Any) -> DecisionTree:
-    decision_tree = DecisionTree(dt_colored_mdp_factory.action_labels, dt_colored_mdp_factory.variables)
+def create_uniform_random_tree(info: DtInfo) -> DecisionTree:
+    decision_tree = DecisionTree(info.action_labels, info.variables)
     decision_tree.random_tree()
     return decision_tree
 
 
 def state_to_choice_to_state_to_action(state_to_choice: list[int | None], colored_mdp: Any) -> list[int]:
+    info = colored_mdp.feature_info
     state_to_action = []
     for state in range(colored_mdp.underlying_mdp.nr_states):
-        if state_to_choice[state] is None or not colored_mdp.state_is_relevant_bv.get(state):
+        if state_to_choice[state] is None or not info.state_is_relevant_bv.get(state):
             state_to_action.append(-1)
         else:
-            state_to_action.append(colored_mdp.choice_to_action[state_to_choice[state]])
+            state_to_action.append(info.choice_to_action[state_to_choice[state]])
 
     return state_to_action
 

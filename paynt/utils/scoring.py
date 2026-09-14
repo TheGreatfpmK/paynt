@@ -54,7 +54,7 @@ def estimate_scheduler_difference_pomdp(
 ) -> dict[int, float]:
     """
     POMDP specialized variant of estimate_scheduler_difference, hand-optimized for posterior-unaware
-    unfolding using colored_mdp.parameter_option_to_actions (the reverse coloring built during unfolding) instead
+    unfolding using colored_mdp.feature_info.parameter_option_to_actions (the reverse coloring built during unfolding) instead
     of the generic payntbind call. Dispatched by feature_kind rather than an isinstance check, so this module
     stays free of a paynt.pomdp import; posterior-aware POMDPs fall back to the generic implementation above,
     exactly like the pre-refactor PomdpQuotient.estimate_scheduler_difference did via super().
@@ -77,7 +77,7 @@ def estimate_scheduler_difference_pomdp(
     for parameter_index, options in inconsistent_assignments.items():
         difference_sum = 0.0
         states_affected = 0
-        edges_0 = colored_mdp.parameter_option_to_actions[parameter_index][options[0]]  # type: ignore[attr-defined]
+        edges_0 = colored_mdp.feature_info.parameter_option_to_actions[parameter_index][options[0]]
         for choice_index, _ in enumerate(edges_0):
 
             choice_0_global = edges_0[choice_index]
@@ -93,8 +93,8 @@ def estimate_scheduler_difference_pomdp(
 
             state_values = []
             for option in options:
-                assert len(colored_mdp.parameter_option_to_actions[parameter_index][option]) > choice_index  # type: ignore[attr-defined]
-                choice_global = colored_mdp.parameter_option_to_actions[parameter_index][option][choice_index]  # type: ignore[attr-defined]
+                assert len(colored_mdp.feature_info.parameter_option_to_actions[parameter_index][option]) > choice_index
+                choice_global = colored_mdp.feature_info.parameter_option_to_actions[parameter_index][option][choice_index]
                 choice = underlying_to_restricted_action_map[choice_global]
                 choice_value = choice_values[choice]
                 state_values.append(choice_value)
@@ -127,7 +127,7 @@ def compute_incompatibility_levels(candidate_selections: list[list[list[int]]]) 
     genuine candidate delta_i in Delta), find parameters where those candidates disagree. Returns
     {parameter: distinct_values} only where L(h) > 1 (>=2 distinct values);
     empty if fewer than 2 candidates given. A parameter with 0 options in some candidate's selection
-    (possible for DtColoredMdp, which unlike the base ColoredMdp does not pad an irrelevant parameter to one
+    (possible for "dt", which unlike every other feature does not pad an irrelevant parameter to one
     arbitrary option) contributes no opinion there rather than crashing. Order of each returned value list is
     first-candidate-seen order, not sorted -- deterministic, and critical for the N=1 byte-identical guarantee
     at the call site (see synthesizer_ar.split_parameter_space).

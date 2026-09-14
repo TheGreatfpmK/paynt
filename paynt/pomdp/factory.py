@@ -1,8 +1,8 @@
 """
-Constructs a PomdpColoredMdp by unfolding the agent's imperfect-information strategy into an FSC template
+Constructs a ColoredMdp (feature_kind "pomdp") by unfolding the agent's imperfect-information strategy into an FSC template
 of a given memory size. Like paynt.posmg's factory, this supports re-unfolding at a larger memory size
 after construction (PomdpSynthesizer/SayntSynthesizer increase it step by step), so the set_*_memory_size
-methods are public entry points, not just __init__-time setup: each produces a fresh PomdpColoredMdp rather
+methods are public entry points, not just __init__-time setup: each produces a fresh ColoredMdp rather
 than mutating the previous one in place, and the caller reassigns.
 """
 
@@ -19,7 +19,7 @@ import re
 import paynt.colored_mdp
 import paynt.pomdp.task
 import paynt.parameter_space.parameter_space
-from paynt.pomdp.colored_mdp import PomdpColoredMdp
+from paynt.pomdp._utils import PomdpInfo
 
 import logging
 
@@ -147,14 +147,14 @@ class PomdpColoredMdpFactory:
             mem = self.observation_memory_size[obs]
             self.pomdp_manager.set_observation_memory_size(obs, mem)
 
-    def set_global_memory_size(self, memory_size: int) -> PomdpColoredMdp:
+    def set_global_memory_size(self, memory_size: int) -> paynt.colored_mdp.ColoredMdp:
         self.observation_memory_size = [memory_size] * self.observations
         self.set_manager_memory_vector()
         self.current_memory_size = memory_size
         self.colored_mdp = self._unfold_memory()
         return self.colored_mdp
 
-    def set_imperfect_memory_size(self, memory_size: int) -> PomdpColoredMdp:
+    def set_imperfect_memory_size(self, memory_size: int) -> paynt.colored_mdp.ColoredMdp:
         """Set given memory size only to imperfect observations."""
         self.observation_memory_size = [memory_size if self.observation_states[obs] > 1 else 1 for obs in range(self.observations)]
         self.set_manager_memory_vector()
@@ -162,14 +162,14 @@ class PomdpColoredMdpFactory:
         self.colored_mdp = self._unfold_memory()
         return self.colored_mdp
 
-    def increase_memory_size(self, obs: int) -> PomdpColoredMdp:
+    def increase_memory_size(self, obs: int) -> paynt.colored_mdp.ColoredMdp:
         assert self.observation_memory_size is not None
         self.observation_memory_size[obs] += 1
         self.set_manager_memory_vector()
         self.colored_mdp = self._unfold_memory()
         return self.colored_mdp
 
-    def set_memory_from_dict(self, obs_memory_dict: dict[int, int]) -> PomdpColoredMdp:
+    def set_memory_from_dict(self, obs_memory_dict: dict[int, int]) -> paynt.colored_mdp.ColoredMdp:
         memory_list = []
         for obs in range(self.observations):
             memory_list.append(obs_memory_dict[obs])
@@ -179,7 +179,9 @@ class PomdpColoredMdpFactory:
         self.colored_mdp = self._unfold_memory()
         return self.colored_mdp
 
-    def set_memory_from_result_new(self, obs_memory_dict: dict[int, int], obs_memory_dict_cutoff: dict[int, int], memory_limit: int) -> PomdpColoredMdp:
+    def set_memory_from_result_new(
+        self, obs_memory_dict: dict[int, int], obs_memory_dict_cutoff: dict[int, int], memory_limit: int
+    ) -> paynt.colored_mdp.ColoredMdp:
         assert self.observation_memory_size is not None
         memory_list = []
         for obs in range(self.observations):
@@ -314,7 +316,7 @@ class PomdpColoredMdpFactory:
 
         return parameter_space, choice_to_parameter_options, observation_action_parameters, observation_memory_parameters
 
-    def _unfold_memory(self) -> PomdpColoredMdp:
+    def _unfold_memory(self) -> paynt.colored_mdp.ColoredMdp:
         assert self.observation_memory_size is not None
         logger.debug(f"unfolding {max(self.observation_memory_size)}-FSC template into POMDP...")
         underlying_mdp = self.pomdp_manager.construct_mdp()
@@ -331,20 +333,18 @@ class PomdpColoredMdpFactory:
             for parameter, option in choice_to_parameter_options[choice]:
                 parameter_option_to_actions[parameter][option].append(choice)
 
-        return PomdpColoredMdp(
-            underlying_mdp,
-            parameter_space,
-            coloring,
-            self.use_exact,
-            self.pomdp,
-            self.pomdp_manager,
-            self.observation_labels,
-            self.actions_at_observation,
-            self.action_labels_at_observation,
-            self.observation_states,
-            self.observation_memory_size,
-            observation_action_parameters,
-            observation_memory_parameters,
-            parameter_option_to_actions,
-            self.posterior_aware,
+        colored_mdp = paynt.colored_mdp.ColoredMdp(underlying_mdp, parameter_space, coloring, self.use_exact, feature_kind="pomdp")
+        colored_mdp.feature_info = PomdpInfo(
+            pomdp=self.pomdp,
+            pomdp_manager=self.pomdp_manager,
+            observation_labels=self.observation_labels,
+            actions_at_observation=self.actions_at_observation,
+            action_labels_at_observation=self.action_labels_at_observation,
+            observation_states=self.observation_states,
+            observation_memory_size=self.observation_memory_size,
+            observation_action_parameters=observation_action_parameters,
+            observation_memory_parameters=observation_memory_parameters,
+            parameter_option_to_actions=parameter_option_to_actions,
+            posterior_aware=self.posterior_aware,
         )
+        return colored_mdp

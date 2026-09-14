@@ -72,7 +72,7 @@ class TestIncompatibilityScoring:
         assert paynt.utils.scoring.compute_incompatibility_levels(candidates) == {0: [0, 1, 3]}
 
     def test_a_parameter_with_zero_options_in_some_candidate_contributes_no_opinion_there(self):
-        """DtColoredMdp does not pad an irrelevant parameter to one arbitrary option -- a candidate whose
+        """ "dt" does not pad an irrelevant parameter to one arbitrary option -- a candidate whose
         selection has an empty option list for some parameter must not crash and must not count as a vote."""
         candidates = [[[0], []], [[1], []], [[0], []]]
         assert paynt.utils.scoring.compute_incompatibility_levels(candidates) == {0: [0, 1]}

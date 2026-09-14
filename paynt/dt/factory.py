@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from typing import Any
 
+import paynt.colored_mdp
+from paynt.dt._utils import DtInfo, DONT_CARE_ACTION_LABEL
 import paynt.dt.task
 import paynt.parameter_space.parameter_space
 import paynt.model.model
-from paynt.dt.colored_mdp import DtColoredMdp
 
 from paynt.parser._utils import make_rewards_action_based
 
@@ -22,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 class DtColoredMdpFactory:
     """
-    Constructs a DtColoredMdp for a given decision-tree depth. Unlike the FSC-unfolding factories
+    Constructs a ColoredMdp (feature_kind "dt") for a given decision-tree depth. Unlike the FSC-unfolding factories
     (POSMG/Dec-POMDP/POMDP), a fresh tree/coloring must be rebuilt for every depth tried during search
     (DtSynthesizer.synthesize_tree_sequence tries several), not just when memory needs to grow -- so
     reset_tree is the main entry point, called far more often than __init__ itself.
@@ -34,7 +35,7 @@ class DtColoredMdpFactory:
     """
 
     # label for action executing a random action selection
-    DONT_CARE_ACTION_LABEL = DtColoredMdp.DONT_CARE_ACTION_LABEL
+    DONT_CARE_ACTION_LABEL = DONT_CARE_ACTION_LABEL
     # if true, irrelevant states will not be considered for tree mapping
     filter_deterministic_states = True
 
@@ -99,10 +100,10 @@ class DtColoredMdpFactory:
         # every other colored-MDP factory -- 0 is also the CLI's own default --tree-depth
         self.colored_mdp = self.reset_tree(0)
 
-    def reset_tree(self, depth: int, enable_harmonization: bool = True) -> DtColoredMdp:
+    def reset_tree(self, depth: int, enable_harmonization: bool = True) -> paynt.colored_mdp.ColoredMdp:
         """
         Rebuild the decision tree template, the parameter space and the coloring, producing a fresh
-        DtColoredMdp -- callers reassign their reference (e.g. self.colored_mdp = factory.reset_tree(k)) rather
+        ColoredMdp -- callers reassign their reference (e.g. self.colored_mdp = factory.reset_tree(k)) rather
         than relying on in-place mutation.
         """
         logger.debug(f"building tree of depth {depth}")
@@ -156,21 +157,18 @@ class DtColoredMdpFactory:
             parameter_space.add_parameter(parameter_name, option_labels)
         decision_tree.root.associate_parameters(node_parameter_info)
 
-        colored_mdp = DtColoredMdp(
-            self.underlying_mdp,
-            parameter_space,
-            coloring,
-            self.use_exact,
-            self.action_labels,
-            self.choice_to_action,
-            self.state_is_relevant,
-            self.state_is_relevant_bv,
-            self.variables,
-            self.relevant_state_valuations,
-            decision_tree,
-            is_action_parameter,
-            is_decision_parameter,
-            is_variable_parameter,
+        colored_mdp = paynt.colored_mdp.ColoredMdp(self.underlying_mdp, parameter_space, coloring, self.use_exact, feature_kind="dt")
+        colored_mdp.feature_info = DtInfo(
+            action_labels=self.action_labels,
+            choice_to_action=self.choice_to_action,
+            state_is_relevant=self.state_is_relevant,
+            state_is_relevant_bv=self.state_is_relevant_bv,
+            variables=self.variables,
+            relevant_state_valuations=self.relevant_state_valuations,
+            decision_tree=decision_tree,
+            is_action_parameter=is_action_parameter,
+            is_decision_parameter=is_decision_parameter,
+            is_variable_parameter=is_variable_parameter,
         )
         self.colored_mdp = colored_mdp
         return colored_mdp

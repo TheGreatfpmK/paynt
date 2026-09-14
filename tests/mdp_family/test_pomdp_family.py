@@ -3,6 +3,7 @@ import pytest
 import paynt.colored_mdp
 import paynt.mdp_family
 import paynt.mdp_family.pomdp
+import paynt.mdp_family.pomdp._utils
 import paynt.pomdp.fsc
 import paynt.synthesizer.synthesizer
 import paynt.task
@@ -11,17 +12,20 @@ import paynt.task
 class TestPomdpFamilyColoredMdpFactory:
 
     def test_load_sketch_produces_a_pomdp_family_colored_mdp(self, pomdp_family_colored_mdp):
-        assert isinstance(pomdp_family_colored_mdp, paynt.mdp_family.pomdp.PomdpFamilyColoredMdp)
+        assert type(pomdp_family_colored_mdp) is paynt.colored_mdp.ColoredMdp
         assert pomdp_family_colored_mdp.feature_kind == "pomdp_family"
+        assert isinstance(pomdp_family_colored_mdp.feature_info, paynt.mdp_family.pomdp._utils.PomdpFamilyInfo)
 
     def test_observation_structure_is_populated(self, pomdp_family_colored_mdp):
-        assert pomdp_family_colored_mdp.num_observations > 0
-        assert len(pomdp_family_colored_mdp.observation_to_actions) == pomdp_family_colored_mdp.num_observations
-        assert len(pomdp_family_colored_mdp.state_to_observation) == pomdp_family_colored_mdp.underlying_mdp.nr_states
+        num_observations = paynt.mdp_family.pomdp._utils.num_observations(pomdp_family_colored_mdp.feature_info)
+        assert num_observations > 0
+        assert len(pomdp_family_colored_mdp.feature_info.observation_to_actions) == num_observations
+        state_to_observation = paynt.mdp_family.pomdp._utils.state_to_observation(pomdp_family_colored_mdp.feature_info)
+        assert len(state_to_observation) == pomdp_family_colored_mdp.underlying_mdp.nr_states
 
     def test_build_pomdp_produces_a_sub_pomdp_for_a_single_environment(self, pomdp_family_colored_mdp):
         assignment = pomdp_family_colored_mdp.parameter_space.pick_any()
-        sub_pomdp = pomdp_family_colored_mdp.build_pomdp(assignment)
+        sub_pomdp = paynt.mdp_family.pomdp._utils.build_pomdp(pomdp_family_colored_mdp, assignment)
         assert sub_pomdp.model.nr_states > 0
         assert len(sub_pomdp.underlying_mdp_state_map) == sub_pomdp.model.nr_states
 
@@ -32,13 +36,15 @@ def _trivial_fsc(pomdp_family_colored_mdp, ambiguous_action):
     a stochastic-form FSC (its native FscUnfolder binding rejects the bare int/deterministic form even when
     FscFactored.is_deterministic is True), hence make_stochastic() below -- this was never exercised before
     since build_dtmc_sketch had no callers anywhere in the codebase prior to this test."""
-    fsc = paynt.pomdp.fsc.FscFactored(1, pomdp_family_colored_mdp.num_observations, is_deterministic=True)
-    fsc.fill_trivial_actions(pomdp_family_colored_mdp.observation_to_actions)
-    for obs, actions in enumerate(pomdp_family_colored_mdp.observation_to_actions):
+    num_observations = paynt.mdp_family.pomdp._utils.num_observations(pomdp_family_colored_mdp.feature_info)
+    observation_to_actions = pomdp_family_colored_mdp.feature_info.observation_to_actions
+    fsc = paynt.pomdp.fsc.FscFactored(1, num_observations, is_deterministic=True)
+    fsc.fill_trivial_actions(observation_to_actions)
+    for obs, actions in enumerate(observation_to_actions):
         if len(actions) > 1:
             fsc.action_function[0][obs] = ambiguous_action
         fsc.update_function[0][obs] = 0
-    fsc.check(pomdp_family_colored_mdp.observation_to_actions)
+    fsc.check(observation_to_actions)
     fsc.make_stochastic()
     return fsc
 
@@ -59,9 +65,9 @@ class TestPomdpFamilyDtmcSketch:
 
     def test_build_dtmc_sketch_produces_a_plain_colored_mdp(self, pomdp_family_colored_mdp):
         """build_dtmc_sketch's whole point is to hand the FSC-fixed family off to the *generic* AR/CEGIS
-        machinery -- so its output must be a plain, unspecialized ColoredMdp, not another PomdpFamilyColoredMdp."""
+        machinery -- so its output must be a plain, unspecialized ColoredMdp, not another "pomdp_family" one."""
         fsc = _trivial_fsc(pomdp_family_colored_mdp, ambiguous_action=7)
-        dtmc_sketch = pomdp_family_colored_mdp.build_dtmc_sketch(fsc)
+        dtmc_sketch = paynt.mdp_family.pomdp._utils.build_dtmc_sketch(pomdp_family_colored_mdp, fsc)
         assert type(dtmc_sketch) is paynt.colored_mdp.ColoredMdp
         assert dtmc_sketch.feature_kind == "generic"
         assert dtmc_sketch.parameter_space.size == pomdp_family_colored_mdp.parameter_space.size
@@ -76,7 +82,7 @@ class TestPomdpFamilyDtmcSketch:
         objective. Synthesis is deterministic, so both the value and the winning environment are checked.
         """
         fsc = _trivial_fsc(pomdp_family_colored_mdp, ambiguous_action=7)
-        dtmc_sketch = pomdp_family_colored_mdp.build_dtmc_sketch(fsc)
+        dtmc_sketch = paynt.mdp_family.pomdp._utils.build_dtmc_sketch(pomdp_family_colored_mdp, fsc)
         task = _task_for_dtmc_sketch(pomdp_family_task, pomdp_family_colored_mdp_factory)
         synthesizer = paynt.synthesizer.synthesizer.Synthesizer.for_method(dtmc_sketch, task, "ar")
         assignment = synthesizer.synthesize(print_stats=False, keep_optimum=True)

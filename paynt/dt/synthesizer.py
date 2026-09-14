@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 import paynt.task
 import paynt.dt.task
 import paynt.dt.factory
+import paynt.dt._utils
 import paynt.dt.decision_tree
 import paynt.synthesizer.statistic
 import paynt.utils.timer
@@ -47,7 +48,7 @@ def _run_dt_map_scheduler(
     dt_synthesizer = DtSynthesizer(cmdp_factory_dt, task)
     dt_synthesizer.map_scheduler(choices, tree_depth=tree_depth)
 
-    simplify_tree(dt_synthesizer.best_tree, dt_synthesizer.colored_mdp)
+    simplify_tree(dt_synthesizer.best_tree, dt_synthesizer.colored_mdp.feature_info)
 
     return paynt.dt.result.DtResult(success=dt_synthesizer.best_tree is not None, value=dt_synthesizer.best_tree_value, tree=dt_synthesizer.best_tree)
 
@@ -58,7 +59,7 @@ def _run_dtpaynt(
     dt_synthesizer = DtSynthesizer(cmdp_factory_dt, task)
     dt_synthesizer.synthesize_tree(tree_depth, timeout=timeout)
 
-    simplify_tree(dt_synthesizer.best_tree, dt_synthesizer.colored_mdp)
+    simplify_tree(dt_synthesizer.best_tree, dt_synthesizer.colored_mdp.feature_info)
 
     return paynt.dt.result.DtResult(success=dt_synthesizer.best_tree is not None, value=dt_synthesizer.best_tree_value, tree=dt_synthesizer.best_tree)
 
@@ -117,8 +118,9 @@ class DtSynthesizer:
         synthesizer = SynthesizerARDt(self.colored_mdp, self.task)
         synthesizer.synthesize(keep_optimum=True, timeout=timeout)
         if synthesizer.best_assignment is not None:
-            self.colored_mdp.decision_tree.root.associate_assignment(synthesizer.best_assignment)
-            self.best_tree = self.colored_mdp.decision_tree
+            info = cast(paynt.dt._utils.DtInfo, self.colored_mdp.feature_info)
+            info.decision_tree.root.associate_assignment(synthesizer.best_assignment)
+            self.best_tree = info.decision_tree
             self.best_tree_value = synthesizer.best_assignment_value
 
     def synthesize_tree_sequence(
@@ -144,6 +146,7 @@ class DtSynthesizer:
         best_assignment: Any = None
         for depth in range(max_depth):
             self.colored_mdp = self.colored_mdp_factory.reset_tree(depth)
+            info = cast(paynt.dt._utils.DtInfo, self.colored_mdp.feature_info)
             synthesizer = SynthesizerARDt(self.colored_mdp, self.task)
             best_assignment_old = best_assignment
 
@@ -159,7 +162,7 @@ class DtSynthesizer:
 
             if self.best_tree is not None:
                 parameter_subspace = parameter_space.copy()
-                self.colored_mdp.decision_tree.root.apply_hint(parameter_subspace, self.best_tree.root)
+                info.decision_tree.root.apply_hint(parameter_subspace, self.best_tree.root)
                 nodes = [synthesizer.search_node_type(parameter_subspace), node]
 
             for n in nodes:
@@ -182,7 +185,7 @@ class DtSynthesizer:
                     result = dtmc.check_specification(self.task.specification)
                     logger.info(f"double-checking specification satisfiability: {result}")
 
-                self.best_tree = self.colored_mdp.decision_tree
+                self.best_tree = info.decision_tree
                 self.best_tree.root.associate_assignment(best_assignment)
                 self.best_tree_value = synthesizer.best_assignment_value
 
@@ -209,7 +212,8 @@ class DtSynthesizer:
             if consistent:
                 synthesizer.verify_parameter_selection(node, parameter_selection)
                 if synthesizer.best_assignment is not None:
-                    self.best_tree = self.colored_mdp.decision_tree
+                    info = cast(paynt.dt._utils.DtInfo, self.colored_mdp.feature_info)
+                    self.best_tree = info.decision_tree
                     self.best_tree.root.associate_assignment(synthesizer.best_assignment)
                     self.best_tree_value = synthesizer.best_assignment_value
                     break
@@ -226,15 +230,18 @@ class DtSynthesizer:
             opt_result_value = None
             with open(self.build_task.scheduler_path) as f:
                 scheduler_json = json.load(f)
-            scheduler_choices, scheduler_json_relevant = self.colored_mdp.scheduler_json_to_choices(scheduler_json, discard_unreachable_states=True)
+            scheduler_choices, scheduler_json_relevant = paynt.dt._utils.scheduler_json_to_choices(
+                self.colored_mdp, scheduler_json, discard_unreachable_states=True
+            )
 
             submdp = self.colored_mdp.build_from_choice_mask(scheduler_choices)
             mc_result = submdp.model_check_property(self.task.get_property())
         opt_result_value = mc_result.value
         logger.info(f"the optimal scheduler has value: {opt_result_value}")
 
-        if self.colored_mdp.DONT_CARE_ACTION_LABEL in self.colored_mdp.action_labels:
-            random_choices = self.colored_mdp.get_random_choices()
+        info = cast(paynt.dt._utils.DtInfo, self.colored_mdp.feature_info)
+        if paynt.dt._utils.DONT_CARE_ACTION_LABEL in info.action_labels:
+            random_choices = paynt.dt._utils.get_random_choices(self.colored_mdp)
             submdp_random = self.colored_mdp.build_from_choice_mask(random_choices)
             mc_result_random = submdp_random.model_check_property(self.task.get_property())
             random_result_value = mc_result_random.value
@@ -260,19 +267,23 @@ class DtSynthesizer:
                 self.synthesize_tree_sequence(opt_result_value)
 
         logger.info(f"the optimal scheduler has value: {opt_result_value}")
-        if self.colored_mdp.DONT_CARE_ACTION_LABEL in self.colored_mdp.action_labels:
+        # self.colored_mdp may have been reassigned by map_scheduler/synthesize_tree(_sequence) above, so
+        # re-fetch info -- action_labels/relevant_state_valuations/state_is_relevant_bv are the same MDP
+        # identity across every reset_tree() call regardless, but re-fetching avoids relying on that
+        info = cast(paynt.dt._utils.DtInfo, self.colored_mdp.feature_info)
+        if paynt.dt._utils.DONT_CARE_ACTION_LABEL in info.action_labels:
             logger.info(f"the random scheduler has value: {random_result_value}")
         if self.best_tree is None:
             logger.info("no admissible tree found")
         else:
-            relevant_state_valuations = [self.colored_mdp.relevant_state_valuations[state] for state in self.colored_mdp.state_is_relevant_bv]
+            relevant_state_valuations = [info.relevant_state_valuations[state] for state in info.state_is_relevant_bv]
             self.best_tree.simplify(relevant_state_valuations)
             depth = self.best_tree.get_depth()
             num_nodes = len(self.best_tree.collect_nonterminals())
             logger.info(f"synthesized tree of depth {depth} with {num_nodes} decision nodes")
             if self.task.specification.has_optimality:
                 logger.info(f"the synthesized tree has value {self.best_tree_value}")
-                if self.colored_mdp.DONT_CARE_ACTION_LABEL in self.colored_mdp.action_labels:
+                if paynt.dt._utils.DONT_CARE_ACTION_LABEL in info.action_labels:
                     logger.info(
                         f"the synthesized tree has relative value: {self.compute_normalized_value(self.best_tree_value, opt_result_value, random_result_value)}"
                     )

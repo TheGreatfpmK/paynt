@@ -1,5 +1,5 @@
 """
-Factory producing a FamilyColoredMdp from an already-built (underlying_mdp, parameter_space, coloring) triple
+Factory producing a ColoredMdp (feature_kind "family") from an already-built (underlying_mdp, parameter_space, coloring) triple
 -- unlike the POMDP/POSMG/Dec-POMDP factories, this one does not construct the parameter space/coloring from
 scratch (the parser already builds those for any PRISM-with-parameters sketch); its only extra job is
 optionally unfolding scheduler memory on top of what it was given.
@@ -11,7 +11,8 @@ from typing import Any
 
 import payntbind
 
-import paynt.mdp_family.colored_mdp
+import paynt.colored_mdp
+import paynt.mdp_family._utils
 import paynt.mdp_family.task
 import paynt.parameter_space.parameter_space
 import paynt.model.model
@@ -21,14 +22,14 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-class FamilyColoredMdpFactory:
+class MdpFamilyColoredMdpFactory:
 
     def __init__(
         self,
         underlying_mdp: Any,
         parameter_space: paynt.parameter_space.parameter_space.ParameterSpace,
         coloring: Any,
-        build_task: paynt.mdp_family.task.FamilyTask,
+        build_task: paynt.mdp_family.task.MdpFamilyTask,
         use_exact: bool = False,
     ):
         self.build_task = build_task
@@ -46,25 +47,23 @@ class FamilyColoredMdpFactory:
         self.choice_to_action: list[int]
         self.action_labels, self.choice_to_action = payntbind.synthesis.extractActionLabels(underlying_mdp)
         self.num_actions = len(self.action_labels)
-        self.state_action_choices = FamilyColoredMdpFactory.map_state_action_to_choices(underlying_mdp, self.num_actions, self.choice_to_action)
-        self.state_to_actions = FamilyColoredMdpFactory.map_state_to_available_actions(self.state_action_choices)
+        self.state_action_choices = MdpFamilyColoredMdpFactory.map_state_action_to_choices(underlying_mdp, self.num_actions, self.choice_to_action)
+        self.state_to_actions = MdpFamilyColoredMdpFactory.map_state_to_available_actions(self.state_action_choices)
 
         self.colored_mdp = self._construct_colored_mdp()
 
-    def _construct_colored_mdp(self) -> paynt.mdp_family.colored_mdp.FamilyColoredMdp:
-        """Overridable so subclasses (e.g. PomdpFamilyColoredMdpFactory) can produce their own ColoredMdp
-        subclass while reusing all of the construction above."""
-        return paynt.mdp_family.colored_mdp.FamilyColoredMdp(
-            self.underlying_mdp,
-            self.parameter_space,
-            self.coloring,
-            self.use_exact,
-            self.num_actions,
-            self.action_labels,
-            self.choice_to_action,
-            self.state_action_choices,
-            self.state_to_actions,
+    def _construct_colored_mdp(self) -> paynt.colored_mdp.ColoredMdp:
+        """Overridable so subclasses (e.g. PomdpFamilyColoredMdpFactory) can produce their own Info object
+        while reusing all of the construction above."""
+        colored_mdp = paynt.colored_mdp.ColoredMdp(self.underlying_mdp, self.parameter_space, self.coloring, self.use_exact, feature_kind="family")
+        colored_mdp.feature_info = paynt.mdp_family._utils.MdpFamilyInfo(
+            num_actions=self.num_actions,
+            action_labels=self.action_labels,
+            choice_to_action=self.choice_to_action,
+            state_action_choices=self.state_action_choices,
+            state_to_actions=self.state_to_actions,
         )
+        return colored_mdp
 
     def unfold_scheduler_memory(
         self, underlying_mdp: Any, parameter_space: paynt.parameter_space.parameter_space.ParameterSpace, coloring: Any

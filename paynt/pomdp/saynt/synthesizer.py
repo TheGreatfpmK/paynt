@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import Any
 
 from paynt.pomdp.synthesizer import PomdpSynthesizer
+import paynt.pomdp._utils
 import paynt.pomdp.factory
 import paynt.pomdp.saynt.control
 import paynt.pomdp.saynt.synthesizer_ar_storm
@@ -37,7 +38,7 @@ class SayntSynthesizer(PomdpSynthesizer):
         super().__init__(colored_mdp_factory, task, method)
         self.storm_control = storm_control
         self.storm_control.colored_mdp = self.colored_mdp
-        self.storm_control.pomdp = self.colored_mdp.pomdp
+        self.storm_control.pomdp = self.colored_mdp.feature_info.pomdp
         self.storm_control.specification = self.task.specification
         self.storm_control.spec_formulas = self.task.specification.stormpy_formulae()
         self.synthesis_terminate = False
@@ -78,16 +79,16 @@ class SayntSynthesizer(PomdpSynthesizer):
                         else:
                             # only consider the induced DTMC without cut-off states
                             result_dict = self.storm_control.result_dict_no_cutoffs
-                        for obs in range(self.colored_mdp.observations):
+                        for obs in range(paynt.pomdp._utils.observations(self.colored_mdp.feature_info)):
                             if obs in result_dict:
-                                obs_memory_dict[obs] = self.colored_mdp.observation_memory_size[obs] + 1
+                                obs_memory_dict[obs] = self.colored_mdp.feature_info.observation_memory_size[obs] + 1
                             else:
-                                obs_memory_dict[obs] = self.colored_mdp.observation_memory_size[obs]
+                                obs_memory_dict[obs] = self.colored_mdp.feature_info.observation_memory_size[obs]
                         logger.info("Added memory nodes for observations based on Storm data")
                 else:
-                    for obs in range(self.colored_mdp.observations):
-                        if self.colored_mdp.observation_states[obs] > 1:
-                            obs_memory_dict[obs] = self.colored_mdp.observation_memory_size[obs] + 1
+                    for obs in range(paynt.pomdp._utils.observations(self.colored_mdp.feature_info)):
+                        if self.colored_mdp.feature_info.observation_states[obs] > 1:
+                            obs_memory_dict[obs] = self.colored_mdp.feature_info.observation_memory_size[obs] + 1
                         else:
                             obs_memory_dict[obs] = 1
                     logger.info("Increased memory in all imperfect observation")
@@ -131,10 +132,12 @@ class SayntSynthesizer(PomdpSynthesizer):
             if assignment is not None:
                 assert self.task.specification.optimality is not None
                 self.storm_control.latest_paynt_result = assignment
-                self.storm_control.paynt_export = self.colored_mdp.extract_policy(assignment, self.task.specification)
+                self.storm_control.paynt_export = paynt.pomdp._utils.extract_policy(self.colored_mdp, assignment, self.task.specification)
                 self.storm_control.paynt_bounds = self.task.specification.optimality.optimum
-                self.storm_control.paynt_fsc_size = self.colored_mdp.policy_size(self.storm_control.latest_paynt_result)
-                self.storm_control.latest_paynt_result_fsc = self.colored_mdp.assignment_to_fsc(self.storm_control.latest_paynt_result)
+                self.storm_control.paynt_fsc_size = paynt.pomdp._utils.policy_size(self.colored_mdp, self.storm_control.latest_paynt_result)
+                self.storm_control.latest_paynt_result_fsc = paynt.pomdp._utils.assignment_to_fsc(
+                    self.colored_mdp.feature_info, self.storm_control.latest_paynt_result
+                )
             self.storm_control.update_data()
 
             if self.synthesis_terminate:
@@ -242,7 +245,7 @@ class SayntSynthesizer(PomdpSynthesizer):
             if assignment is not None:
                 assert self.task.specification.optimality is not None
                 self.storm_control.latest_paynt_result = assignment
-                self.storm_control.paynt_export = self.colored_mdp.extract_policy(assignment, self.task.specification)
+                self.storm_control.paynt_export = paynt.pomdp._utils.extract_policy(self.colored_mdp, assignment, self.task.specification)
                 self.storm_control.paynt_bounds = self.task.specification.optimality.optimum
 
             self.storm_control.update_data()

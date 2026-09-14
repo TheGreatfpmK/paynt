@@ -10,9 +10,10 @@ from __future__ import annotations
 
 from typing import Any
 
+import paynt.colored_mdp
 import paynt.pomdp.factory
 import paynt.task
-import paynt.pomdp.colored_mdp
+import paynt.pomdp._utils
 import paynt.parameter_space.parameter_space
 import paynt.synthesizer.synthesizer_ar
 import paynt.synthesizer.synthesizer_hybrid
@@ -39,13 +40,13 @@ class PomdpSynthesizer:
         # best assignment/value found so far across memory-size iterations -- strategy_iterative constructs a
         # fresh inner synthesizer per iteration and discards it, so this is the only place these survive once
         # a later, larger-memory iteration doesn't improve on an earlier one. best_colored_mdp is the specific
-        # PomdpColoredMdp instance (i.e. memory-size unfolding) that produced best_assignment -- needed
+        # colored MDP instance (i.e. memory-size unfolding) that produced best_assignment -- needed
         # because parameter indices are tied to one specific unfolding, and self.colored_mdp gets reassigned
         # to a fresh (larger) unfolding on every later iteration, so it can't be relied on to still match
         # best_assignment by the time synthesis finishes.
         self.best_assignment: paynt.parameter_space.parameter_space.ParameterSpace | None = None
         self.best_assignment_value: Any = None
-        self.best_colored_mdp: paynt.pomdp.colored_mdp.PomdpColoredMdp | None = None
+        self.best_colored_mdp: paynt.colored_mdp.ColoredMdp | None = None
 
     def synthesize(
         self, parameter_space: paynt.parameter_space.parameter_space.ParameterSpace | None = None, print_stats: bool = True
@@ -94,7 +95,7 @@ class PomdpSynthesizer:
         fsc = None
         if self.best_assignment is not None:
             assert self.best_colored_mdp is not None
-            fsc = self.best_colored_mdp.assignment_to_fsc(self.best_assignment)
+            fsc = paynt.pomdp._utils.assignment_to_fsc(self.best_colored_mdp.feature_info, self.best_assignment)
         return paynt.pomdp.result.PomdpResult(
             success=self.best_assignment is not None, value=self.best_assignment_value, assignment=self.best_assignment, fsc=fsc
         )

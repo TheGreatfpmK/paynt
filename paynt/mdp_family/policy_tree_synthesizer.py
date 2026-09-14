@@ -7,13 +7,14 @@ genuinely different algorithm (game abstraction + policy compatibility merging),
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 import paynt.synthesizer.synthesizer
 import paynt.parameter_space.parameter_space
 import paynt.specification.property
 import paynt.model.model
 import paynt.utils.scoring
+import paynt.mdp_family._utils
 import paynt.mdp_family.result
 from paynt.mdp_family.policy_tree import Policy, PolicyTree, PolicyTreeNode
 
@@ -52,7 +53,7 @@ class PolicyTreeSynthesizer(paynt.synthesizer.synthesizer.Synthesizer):
             class have no PolicyTreeNode to read it from, so it must be supplied explicitly (see
             ParameterSpaceEvaluation.selected_choices, captured at decision time)
         """
-        _, mdp = self.colored_mdp.fix_and_apply_policy_to_parameter_space(selected_choices, policy)  # type: ignore[attr-defined]
+        _, mdp = paynt.mdp_family._utils.fix_and_apply_policy_to_parameter_space(self.colored_mdp, selected_choices, policy)
         policy_result = mdp.model_check_property(prop, alt=True)
         assert self.stat is not None
         self.stat.iteration(mdp)
@@ -66,7 +67,7 @@ class PolicyTreeSynthesizer(paynt.synthesizer.synthesizer.Synthesizer):
         if not result.sat:
             return False
         assert result.result.scheduler is not None
-        return self.colored_mdp.scheduler_to_policy(result.result.scheduler, node.mdp)  # type: ignore[attr-defined]
+        return paynt.mdp_family._utils.scheduler_to_policy(self.colored_mdp, result.result.scheduler, node.mdp)
 
         # uncomment below to preemptively double-check the policy
         # paynt.mdp_family.policy_tree.double_check_policy(self.colored_mdp, node, prop, policy)
@@ -86,9 +87,10 @@ class PolicyTreeSynthesizer(paynt.synthesizer.synthesizer.Synthesizer):
         # logger.debug("game solved, value is {}".format(game_value))
         game_policy = game_solver.solution_state_to_player1_action
         # fix irrelevant choices
-        game_policy_fixed = self.colored_mdp.empty_policy()  # type: ignore[attr-defined]
+        game_policy_fixed = paynt.mdp_family._utils.empty_policy(self.colored_mdp)
+        info = cast(paynt.mdp_family._utils.MdpFamilyInfo, self.colored_mdp.feature_info)
         for state, action in enumerate(game_policy):
-            if action < self.colored_mdp.num_actions:  # type: ignore[attr-defined]
+            if action < info.num_actions:
                 game_policy_fixed[state] = action
         game_policy = game_policy_fixed
         return game_policy, game_sat
@@ -252,7 +254,7 @@ class PolicyTreeSynthesizer(paynt.synthesizer.synthesizer.Synthesizer):
     ) -> list[paynt.synthesizer.synthesizer.ParameterSpaceEvaluation]:
         assert not prop.reward, "expecting reachability probability propery"
         assert self.stat is not None
-        game_solver = self.colored_mdp.build_game_abstraction_solver(prop)  # type: ignore[attr-defined]
+        game_solver = paynt.mdp_family._utils.build_game_abstraction_solver(self.colored_mdp, prop)
         policy_tree = PolicyTree(parameter_space)
 
         undecided_leaves = [policy_tree.root]
@@ -291,7 +293,7 @@ class PolicyTreeSynthesizer(paynt.synthesizer.synthesizer.Synthesizer):
             undecided_leaves += node.child_nodes
 
         if PolicyTreeSynthesizer.double_check_policy_tree_leaves:
-            policy_tree.double_check(self.colored_mdp, prop)  # type: ignore[arg-type]
+            policy_tree.double_check(self.colored_mdp, prop)
         policy_tree.print_stats()
 
         self.stat.num_mdps_total = self.colored_mdp.parameter_space.size
@@ -299,7 +301,7 @@ class PolicyTreeSynthesizer(paynt.synthesizer.synthesizer.Synthesizer):
         self.stat.num_nodes = len(policy_tree.collect_all())
         self.stat.num_leaves = len(policy_tree.collect_leaves())
         self.stat.num_policies = len(policy_tree.policies)
-        postprocessing_time = policy_tree.postprocess(self.colored_mdp, prop)  # type: ignore[arg-type]
+        postprocessing_time = policy_tree.postprocess(self.colored_mdp, prop)
         policy_tree.print_stats()
         self.stat.postprocessing_time = postprocessing_time
         self.stat.num_nodes_merged = len(policy_tree.collect_all())
@@ -330,11 +332,11 @@ class PolicyTreeSynthesizer(paynt.synthesizer.synthesizer.Synthesizer):
     def export_evaluation_result(self, evaluations: list[Any], export_filename_base: str) -> None:
         import json
 
-        policies = self.policy_tree.extract_policies(self.colored_mdp)  # type: ignore[arg-type]
+        policies = self.policy_tree.extract_policies(self.colored_mdp)
         policies_json = {}
         for _index, key_value in enumerate(policies.items()):
             policy_id, policy = key_value
-            policy_json = self.colored_mdp.policy_to_json(policy)  # type: ignore[attr-defined]
+            policy_json = paynt.mdp_family._utils.policy_to_json(policy)
             policies_json[policy_id] = policy_json
         policies_string = json.dumps(policies_json, indent=4)
 
@@ -344,7 +346,7 @@ class PolicyTreeSynthesizer(paynt.synthesizer.synthesizer.Synthesizer):
 
         logger.info(f"exported policies to {policies_filename}")
 
-        tree = self.policy_tree.extract_policy_tree(self.colored_mdp)  # type: ignore[arg-type]
+        tree = self.policy_tree.extract_policy_tree(self.colored_mdp)
         tree_filename = export_filename_base + ".dot"
         with open(tree_filename, "w") as file:
             file.write(tree.source)

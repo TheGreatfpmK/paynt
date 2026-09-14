@@ -5,6 +5,7 @@ from typing import Any
 import paynt.synthesizer.synthesizer_ar
 import paynt.synthesizer.search_node
 import paynt.parameter_space.parameter_space
+import paynt.pomdp._utils
 from paynt.pomdp.saynt.control import StormPOMDPControl
 
 from time import sleep
@@ -88,7 +89,7 @@ class SynthesizerARStorm(paynt.synthesizer.synthesizer_ar.SynthesizerAR):
         assert node.analysis_result is not None
         assert self.task.specification.optimality is not None
         if node.analysis_result.improving_value is not None:
-            fsc_size = self.colored_mdp.policy_size(node.analysis_result.improving_assignment)  # type: ignore[attr-defined]
+            fsc_size = paynt.pomdp._utils.policy_size(self.colored_mdp, node.analysis_result.improving_assignment)
             if self.saynt_timer is not None:
                 elapsed = round(self.saynt_timer.read(), 1)
                 print(
@@ -107,7 +108,7 @@ class SynthesizerARStorm(paynt.synthesizer.synthesizer_ar.SynthesizerAR):
         # since nothing currently exercises it to verify the fix against.
         if self.task.specification.optimality.optimum and node.analysis_result.can_improve and self.storm_pruning:
 
-            parameter_space_pomdp = self.colored_mdp.get_parameter_space_pomdp(node.mdp)
+            parameter_space_pomdp = paynt.pomdp._utils.get_parameter_space_pomdp(self.colored_mdp.feature_info, node.mdp)
 
             storm_res = StormPOMDPControl.storm_pomdp_analysis(parameter_space_pomdp, self.task.specification.stormpy_formulae())
 
@@ -151,10 +152,12 @@ class SynthesizerARStorm(paynt.synthesizer.synthesizer_ar.SynthesizerAR):
                     if self.best_assignment is not None:
                         assert self.task.specification.optimality is not None
                         self.storm_control.latest_paynt_result = self.best_assignment
-                        self.storm_control.paynt_export = self.colored_mdp.extract_policy(self.best_assignment, self.task.specification)  # type: ignore[attr-defined]
+                        self.storm_control.paynt_export = paynt.pomdp._utils.extract_policy(self.colored_mdp, self.best_assignment, self.task.specification)
                         self.storm_control.paynt_bounds = self.task.specification.optimality.optimum
-                        self.storm_control.paynt_fsc_size = self.colored_mdp.policy_size(self.storm_control.latest_paynt_result)  # type: ignore[attr-defined]
-                        self.storm_control.latest_paynt_result_fsc = self.colored_mdp.assignment_to_fsc(self.storm_control.latest_paynt_result)  # type: ignore[attr-defined]
+                        self.storm_control.paynt_fsc_size = paynt.pomdp._utils.policy_size(self.colored_mdp, self.storm_control.latest_paynt_result)
+                        self.storm_control.latest_paynt_result_fsc = paynt.pomdp._utils.assignment_to_fsc(
+                            self.colored_mdp.feature_info, self.storm_control.latest_paynt_result
+                        )
                         self.storm_control.update_data()
                     logger.info("Pausing synthesis")
                     self.s_queue.get()

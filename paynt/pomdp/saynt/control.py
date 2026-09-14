@@ -6,7 +6,8 @@ import stormpy
 import stormpy.pomdp
 
 from paynt.pomdp.fsc import FscFactored
-import paynt.pomdp.colored_mdp
+import paynt.colored_mdp
+import paynt.pomdp._utils
 import paynt.parameter_space.parameter_space
 import paynt.specification.property
 import paynt.utils.timer
@@ -53,7 +54,7 @@ class StormPOMDPControl:
         self.is_storm_better = False
 
         self.pomdp: Any = None  # The original POMDP model
-        # genuinely Any rather than PomdpColoredMdp | None: set externally once by SayntSynthesizer.__init__
+        # genuinely Any rather than ColoredMdp | None: set externally once by SayntSynthesizer.__init__
         # right after construction, then read as non-None everywhere else in this file -- narrowing every
         # one of the ~50 read sites below would be far more noise than signal for this "settings blob" class
         self.colored_mdp: Any = None
@@ -383,7 +384,7 @@ class StormPOMDPControl:
         return belmc.check(formulas[0], [])  # calls Storm
 
     # parse the current Storm and PAYNT results if they are available
-    def parse_results(self, colored_mdp: paynt.pomdp.colored_mdp.PomdpColoredMdp) -> None:
+    def parse_results(self, colored_mdp: paynt.colored_mdp.ColoredMdp) -> None:
         if self.latest_storm_result is not None:
             self.parse_storm_result(colored_mdp)
         else:
@@ -396,15 +397,15 @@ class StormPOMDPControl:
             self.result_dict_paynt = {}
 
     # parse Storm results into a dictionary
-    def parse_storm_result(self, colored_mdp: paynt.pomdp.colored_mdp.PomdpColoredMdp) -> None:
+    def parse_storm_result(self, colored_mdp: paynt.colored_mdp.ColoredMdp) -> None:
         # to make the code cleaner
         get_choice_label = self.latest_storm_result.induced_mc_from_scheduler.choice_labeling.get_labels_of_choice
 
         cutoff_epxloration = list(range(len(self.latest_storm_result.cutoff_schedulers)))
         finite_mem = False
 
-        result: dict[int, list[int]] = {x: [] for x in range(colored_mdp.observations)}
-        result_no_cutoffs: dict[int, list[int]] = {x: [] for x in range(colored_mdp.observations)}
+        result: dict[int, list[int]] = {x: [] for x in range(paynt.pomdp._utils.observations(colored_mdp.feature_info))}
+        result_no_cutoffs: dict[int, list[int]] = {x: [] for x in range(paynt.pomdp._utils.observations(colored_mdp.feature_info))}
 
         for state in self.latest_storm_result.induced_mc_from_scheduler.states:
             # TODO what if there were no labels in the model?
@@ -417,14 +418,14 @@ class StormPOMDPControl:
                     observation = None
                     if "[" in label:
                         # observation based on prism observables
-                        observation = self.colored_mdp.observation_labels.index(label)
+                        observation = self.colored_mdp.feature_info.observation_labels.index(label)
                     elif "obs_" in label:
                         # explicit observation index
                         _, observation = label.split("_")
                     if observation is not None:
                         observation = int(observation)
                         choice_label = list(get_choice_label(state.id))[0]
-                        for index, action_label in enumerate(colored_mdp.action_labels_at_observation[observation]):
+                        for index, action_label in enumerate(colored_mdp.feature_info.action_labels_at_observation[observation]):
                             if choice_label == action_label:
                                 if index not in result[observation]:
                                     result[observation].append(index)
@@ -457,12 +458,12 @@ class StormPOMDPControl:
 
                         scheduler = self.latest_storm_result.cutoff_schedulers[int(scheduler_index)]
 
-                        for state in range(colored_mdp.pomdp.nr_states):
+                        for state in range(colored_mdp.feature_info.pomdp.nr_states):
 
                             choice_string = str(scheduler.get_choice(state).get_choice())
                             actions = self.parse_choice_string(choice_string)
 
-                            observation = colored_mdp.pomdp.get_observation(state)
+                            observation = colored_mdp.feature_info.pomdp.get_observation(state)
 
                             for action in actions:
                                 if action not in result[observation]:
@@ -500,9 +501,9 @@ class StormPOMDPControl:
         return result
 
     # parse PAYNT result to a dictionart
-    def parse_paynt_result(self, colored_mdp: paynt.pomdp.colored_mdp.PomdpColoredMdp) -> None:
+    def parse_paynt_result(self, colored_mdp: paynt.colored_mdp.ColoredMdp) -> None:
 
-        result: dict[int, list[int]] = {x: [] for x in range(colored_mdp.observations)}
+        result: dict[int, list[int]] = {x: [] for x in range(paynt.pomdp._utils.observations(colored_mdp.feature_info))}
 
         for parameter in range(self.latest_paynt_result.num_parameters):
             name = self.latest_paynt_result.parameter_name(parameter)
@@ -510,7 +511,7 @@ class StormPOMDPControl:
                 continue
             name = name.strip("A()")
             obs = name.split(",")[0]
-            observation = self.colored_mdp.observation_labels.index(obs)
+            observation = self.colored_mdp.feature_info.observation_labels.index(obs)
 
             option = self.latest_paynt_result.parameter_options(parameter)[0]
             if option not in result[observation]:
@@ -535,8 +536,8 @@ class StormPOMDPControl:
 
         restricted_parameter_space = parameter_space.copy()
         # go through each observation of interest
-        for obs in range(self.colored_mdp.observations):
-            for parameter in self.colored_mdp.observation_action_parameters[obs]:
+        for obs in range(paynt.pomdp._utils.observations(self.colored_mdp.feature_info)):
+            for parameter in self.colored_mdp.feature_info.observation_action_parameters[obs]:
 
                 if obs in result_dict.keys():
                     selected_actions = [action for action in parameter_space.parameter_options(parameter) if action in result_dict[obs]]
@@ -571,18 +572,17 @@ class StormPOMDPControl:
 
         for observ in result_dict.keys():
 
-            act_obs_parameters = self.colored_mdp.observation_action_parameters[observ]
+            act_obs_parameters = self.colored_mdp.feature_info.observation_action_parameters[observ]
             restricted_parameters_list.extend(act_obs_parameters)
 
         for parameter in restricted_parameters_list:
 
-            for obs_parameters, index in zip(
-                self.colored_mdp.observation_action_parameters, range(len(self.colored_mdp.observation_action_parameters)), strict=False
-            ):
+            observation_action_parameters = self.colored_mdp.feature_info.observation_action_parameters
+            for obs_parameters, index in zip(observation_action_parameters, range(len(observation_action_parameters)), strict=False):
                 if parameter in obs_parameters:
                     obs = index
 
-            if len(result_dict[obs]) == self.colored_mdp.actions_at_observation[obs]:
+            if len(result_dict[obs]) == self.colored_mdp.feature_info.actions_at_observation[obs]:
                 continue
 
             restriction = [action for action in parameter_space.parameter_options(parameter) if action in result_dict[obs]]
@@ -624,8 +624,8 @@ class StormPOMDPControl:
             return False
 
         memory_needed = False
-        for obs in range(self.colored_mdp.observations):
-            if self.colored_mdp.observation_memory_size[obs] < self.memory_vector[obs]:
+        for obs in range(paynt.pomdp._utils.observations(self.colored_mdp.feature_info)):
+            if self.colored_mdp.feature_info.observation_memory_size[obs] < self.memory_vector[obs]:
                 memory_needed = True
                 break
         return memory_needed
@@ -653,13 +653,13 @@ class StormPOMDPControl:
                     self.is_storm_better = True
 
         if self.unfold_strategy_storm in ["storm", "paynt"]:
-            for obs in range(self.colored_mdp.observations):
+            for obs in range(paynt.pomdp._utils.observations(self.colored_mdp.feature_info)):
                 if obs in self.result_dict_no_cutoffs.keys():
                     self.memory_vector[obs] = len(self.result_dict_no_cutoffs[obs])
                 else:
                     self.memory_vector[obs] = 1
         else:
-            for obs in range(self.colored_mdp.observations):
+            for obs in range(paynt.pomdp._utils.observations(self.colored_mdp.feature_info)):
                 if obs in self.result_dict.keys():
                     self.memory_vector[obs] = len(self.result_dict[obs])
                 else:
@@ -710,15 +710,15 @@ class StormPOMDPControl:
             fsc_nodes += paynt_fsc.num_nodes
             first_fsc_node = belief_mc.nr_states - paynt_cutoff_states + 1
 
-        result_fsc = FscFactored(fsc_nodes, self.colored_mdp.observations, is_deterministic=False)
+        result_fsc = FscFactored(fsc_nodes, paynt.pomdp._utils.observations(self.colored_mdp.feature_info), is_deterministic=False)
 
         action_labels_set = set()
-        for labels in self.colored_mdp.action_labels_at_observation:
+        for labels in self.colored_mdp.feature_info.action_labels_at_observation:
             action_labels_set.update(labels)
         action_labels = list(action_labels_set)
         result_fsc.action_labels = action_labels
 
-        result_fsc.observation_labels = self.colored_mdp.observation_labels
+        result_fsc.observation_labels = self.colored_mdp.feature_info.observation_labels
 
         if paynt_fsc is not None and uses_fsc:
             paynt_fsc.make_stochastic()
@@ -729,7 +729,7 @@ class StormPOMDPControl:
 
             for node in range(paynt_fsc_num_nodes):
                 new_fsc_update_function.append([])
-                for obs in range(self.colored_mdp.observations):
+                for obs in range(paynt.pomdp._utils.observations(self.colored_mdp.feature_info)):
                     new_fsc_update_function[node].append({list(paynt_fsc_update_function[node][obs].keys())[0] + first_fsc_node: 1.0})
 
             for node in range(paynt_fsc_num_nodes):
@@ -748,7 +748,7 @@ class StormPOMDPControl:
             for label in belief_mc.labeling.get_labels_of_state(init_belief_state):
                 if "[" in label:
                     # observation based on prism observables
-                    succ_observation = self.colored_mdp.observation_labels.index(label)
+                    succ_observation = self.colored_mdp.feature_info.observation_labels.index(label)
                 elif "obs_" in label:
                     # explicit observation index
                     _, succ_observation = label.split("_")
@@ -766,15 +766,15 @@ class StormPOMDPControl:
             elif cutoff_switch is not None:
                 scheduler = storm_result.cutoff_schedulers[cutoff_switch]
                 cutoff_node_id = belief_mc_nodes_map[used_randomized_schedulers[cutoff_switch]]
-                for pomdp_state in range(self.colored_mdp.pomdp.nr_states):
-                    obs_index = self.colored_mdp.pomdp.get_observation(pomdp_state)
+                for pomdp_state in range(self.colored_mdp.feature_info.pomdp.nr_states):
+                    obs_index = self.colored_mdp.feature_info.pomdp.get_observation(pomdp_state)
                     if obs_index != succ_observation:
                         continue
                     choice = scheduler.get_choice(pomdp_state).get_choice().__str__()
                     choice = choice.replace("{", "").replace("}", "").replace("[", "").replace("]", "").replace(" ", "").split(",")
                     for c in choice[:-1]:
                         prob, cutoff_action = c.split(":")
-                        action_label = self.colored_mdp.action_labels_at_observation[succ_observation][int(cutoff_action)]
+                        action_label = self.colored_mdp.feature_info.action_labels_at_observation[succ_observation][int(cutoff_action)]
                         action_index = action_labels.index(action_label)
                         # NOTE: this is node 0 (the initial node being constructed here), not node_id --
                         # node_id isn't defined in this scope at all (it's only ever assigned in the
@@ -806,11 +806,11 @@ class StormPOMDPControl:
                 else:
                     continue
                 scheduler = storm_result.cutoff_schedulers[int(scheduler_index)]
-                for obs in range(self.colored_mdp.observations):
+                for obs in range(paynt.pomdp._utils.observations(self.colored_mdp.feature_info)):
                     result_fsc.update_function[node_id][obs] = {node_id: 1.0}
                 processed_obs = []
-                for pomdp_state in range(self.colored_mdp.pomdp.nr_states):
-                    obs_index = self.colored_mdp.pomdp.get_observation(pomdp_state)
+                for pomdp_state in range(self.colored_mdp.feature_info.pomdp.nr_states):
+                    obs_index = self.colored_mdp.feature_info.pomdp.get_observation(pomdp_state)
                     if obs_index in processed_obs:
                         continue
                     processed_obs.append(obs_index)
@@ -819,15 +819,15 @@ class StormPOMDPControl:
                     for c in choice[:-1]:
                         prob, action = c.split(":")
                         action = int(action)
-                        action_label = self.colored_mdp.action_labels_at_observation[obs_index][action]
+                        action_label = self.colored_mdp.feature_info.action_labels_at_observation[obs_index][action]
                         action_index = action_labels.index(action_label)
                         if result_fsc.action_function[node_id][obs_index] is None:
                             result_fsc.action_function[node_id][obs_index] = {action_index: float(prob)}
                         else:
                             result_fsc.action_function[node_id][obs_index][action_index] = float(prob)
             elif "__extra" in state.labels or "target" in state.labels:  # basically target states so just loop with everything
-                for obs in range(self.colored_mdp.observations):
-                    first_action_in_obs = self.colored_mdp.action_labels_at_observation[obs][0]  # this ensures the looping action is available
+                for obs in range(paynt.pomdp._utils.observations(self.colored_mdp.feature_info)):
+                    first_action_in_obs = self.colored_mdp.feature_info.action_labels_at_observation[obs][0]  # this ensures the looping action is available
                     result_fsc.action_function[node_id][obs] = {action_labels.index(first_action_in_obs): 1.0}
                     result_fsc.update_function[node_id][obs] = {node_id: 1.0}
             else:  # normal belief mc states
@@ -844,7 +844,7 @@ class StormPOMDPControl:
                     for label in belief_mc.labeling.get_labels_of_state(succ):
                         if "[" in label:
                             # observation based on prism observables
-                            succ_observation = self.colored_mdp.observation_labels.index(label)
+                            succ_observation = self.colored_mdp.feature_info.observation_labels.index(label)
                         elif "obs_" in label:
                             # explicit observation index
                             _, succ_observation = label.split("_")
@@ -862,15 +862,15 @@ class StormPOMDPControl:
                     elif cutoff_switch is not None:
                         scheduler = storm_result.cutoff_schedulers[cutoff_switch]
                         cutoff_node_id = belief_mc_nodes_map[used_randomized_schedulers[cutoff_switch]]
-                        for pomdp_state in range(self.colored_mdp.pomdp.nr_states):
-                            obs_index = self.colored_mdp.pomdp.get_observation(pomdp_state)
+                        for pomdp_state in range(self.colored_mdp.feature_info.pomdp.nr_states):
+                            obs_index = self.colored_mdp.feature_info.pomdp.get_observation(pomdp_state)
                             if obs_index != succ_observation:
                                 continue
                             choice = scheduler.get_choice(pomdp_state).get_choice().__str__()
                             choice = choice.replace("{", "").replace("}", "").replace("[", "").replace("]", "").replace(" ", "").split(",")
                             for c in choice[:-1]:
                                 prob, cutoff_action = c.split(":")
-                                action_label = self.colored_mdp.action_labels_at_observation[succ_observation][int(cutoff_action)]
+                                action_label = self.colored_mdp.feature_info.action_labels_at_observation[succ_observation][int(cutoff_action)]
                                 action_index = action_labels.index(action_label)
                                 if result_fsc.action_function[node_id][succ_observation] is None:
                                     result_fsc.action_function[node_id][succ_observation] = {action_index: float(prob)}
@@ -880,7 +880,7 @@ class StormPOMDPControl:
                         result_fsc.update_function[node_id][succ_observation] = {cutoff_node_id: 1.0}
                     else:
                         if action == "loop":
-                            first_action_in_obs = self.colored_mdp.action_labels_at_observation[succ_observation][
+                            first_action_in_obs = self.colored_mdp.feature_info.action_labels_at_observation[succ_observation][
                                 0
                             ]  # this ensures the looping action is available
                             result_fsc.action_function[node_id][succ_observation] = {action_labels.index(first_action_in_obs): 1.0}
@@ -928,12 +928,12 @@ class StormPOMDPControl:
                 fsc_size = paynt_fsc_size
 
         for index in used_randomized_schedulers:
-            observation_actions: dict[int, list[int]] = {x: [] for x in range(self.colored_mdp.observations)}
+            observation_actions: dict[int, list[int]] = {x: [] for x in range(paynt.pomdp._utils.observations(self.colored_mdp.feature_info))}
             rand_scheduler = storm_result.cutoff_schedulers[index]
-            for state in range(self.colored_mdp.pomdp.nr_states):
+            for state in range(self.colored_mdp.feature_info.pomdp.nr_states):
                 choice_string = str(rand_scheduler.get_choice(state).get_choice())
                 actions = self.parse_choice_string(choice_string)
-                observation = self.colored_mdp.pomdp.get_observation(state)
+                observation = self.colored_mdp.feature_info.pomdp.get_observation(state)
                 for action in actions:
                     if action not in observation_actions[observation]:
                         observation_actions[observation].append(action)

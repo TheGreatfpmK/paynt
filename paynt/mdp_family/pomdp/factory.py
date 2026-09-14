@@ -1,5 +1,5 @@
 """
-Constructs a PomdpFamilyColoredMdp: like FamilyColoredMdpFactory, but tracks observation classes so that
+Constructs a ColoredMdp (feature_kind "pomdp_family"): like MdpFamilyColoredMdpFactory, but tracks observation classes so that
 policy decisions can be tied together across environment variants that look the same to the agent.
 """
 
@@ -7,24 +7,25 @@ from __future__ import annotations
 
 from typing import Any, cast
 
+import paynt.colored_mdp
 import paynt.mdp_family.task
 import paynt.parameter_space.parameter_space
-from paynt.mdp_family.factory import FamilyColoredMdpFactory
-from paynt.mdp_family.pomdp.colored_mdp import PomdpFamilyColoredMdp
+from paynt.mdp_family.factory import MdpFamilyColoredMdpFactory
+from paynt.mdp_family.pomdp._utils import PomdpFamilyInfo
 
 import logging
 
 logger = logging.getLogger(__name__)
 
 
-class PomdpFamilyColoredMdpFactory(FamilyColoredMdpFactory):
+class PomdpFamilyColoredMdpFactory(MdpFamilyColoredMdpFactory):
 
     def __init__(
         self,
         underlying_mdp: Any,
         parameter_space: paynt.parameter_space.parameter_space.ParameterSpace,
         coloring: Any,
-        build_task: paynt.mdp_family.task.FamilyTask,
+        build_task: paynt.mdp_family.task.MdpFamilyTask,
         obs_evaluator: Any,
         use_exact: bool = False,
     ):
@@ -42,7 +43,7 @@ class PomdpFamilyColoredMdpFactory(FamilyColoredMdpFactory):
         self.obs_evaluator.state_to_obs_class = new_obs_classes_map
         return unfolded_mdp, parameter_space, new_coloring
 
-    def _construct_colored_mdp(self) -> PomdpFamilyColoredMdp:
+    def _construct_colored_mdp(self) -> paynt.colored_mdp.ColoredMdp:
         # identify actions available at each observation
         observation_to_actions: list[list[int] | None] = [None] * self.obs_evaluator.num_obs_classes
         state_to_observation = self.obs_evaluator.state_to_obs_class
@@ -56,16 +57,14 @@ class PomdpFamilyColoredMdpFactory(FamilyColoredMdpFactory):
         # every observation class is populated by at least one state above, so no entry is left None
         assert all(actions is not None for actions in observation_to_actions)
 
-        return PomdpFamilyColoredMdp(
-            self.underlying_mdp,
-            self.parameter_space,
-            self.coloring,
-            self.use_exact,
-            self.num_actions,
-            self.action_labels,
-            self.choice_to_action,
-            self.state_action_choices,
-            self.state_to_actions,
-            self.obs_evaluator,
-            cast("list[list[int]]", observation_to_actions),
+        colored_mdp = paynt.colored_mdp.ColoredMdp(self.underlying_mdp, self.parameter_space, self.coloring, self.use_exact, feature_kind="pomdp_family")
+        colored_mdp.feature_info = PomdpFamilyInfo(
+            num_actions=self.num_actions,
+            action_labels=self.action_labels,
+            choice_to_action=self.choice_to_action,
+            state_action_choices=self.state_action_choices,
+            state_to_actions=self.state_to_actions,
+            obs_evaluator=self.obs_evaluator,
+            observation_to_actions=cast("list[list[int]]", observation_to_actions),
         )
+        return colored_mdp

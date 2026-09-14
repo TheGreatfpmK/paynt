@@ -14,7 +14,7 @@ class TestDtSynthesis:
 
     def test_split_undecided_space_survives_a_multi_property_specification(self):
         """
-        Regression test: scheduler_choices is only ever populated by DtColoredMdp.scheduler_is_consistent
+        Regression test: scheduler_choices is only ever populated by ColoredMdp.scheduler_is_consistent's "dt" branch
         when the specification is single-property (see split_undecided_space/verify_parameter_space's guards) -- for any
         specification with more than one property (a constraint alongside the optimality objective, as
         constructed here), it stays None on every parameter space. split_undecided_space used to copy it unconditionally

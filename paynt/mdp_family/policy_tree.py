@@ -10,9 +10,10 @@ from __future__ import annotations
 
 from typing import Any
 
+import paynt.colored_mdp
 import paynt.synthesizer.search_node
 import paynt.parameter_space.parameter_space
-import paynt.mdp_family.colored_mdp
+import paynt.mdp_family._utils
 from paynt.specification.property import Property
 import paynt.utils.timer
 
@@ -71,15 +72,15 @@ def merge_policies_exclusively(policy1: Policy, policy2: Policy) -> tuple[list[i
 
 
 def double_check_policy(
-    colored_mdp: paynt.mdp_family.colored_mdp.FamilyColoredMdp, node: paynt.synthesizer.search_node.SearchNode, prop: Property, policy: list[int | None]
+    colored_mdp: paynt.colored_mdp.ColoredMdp, node: paynt.synthesizer.search_node.SearchNode, prop: Property, policy: list[int | None]
 ) -> None:
     """Re-verify (at tighter precision) that policy is actually SAT for node's parameter space -- used by
     PolicyTreeNode.double_check, itself only run when PolicyTreeSynthesizer.double_check_policy_tree_leaves
     is enabled. Takes colored_mdp/node explicitly (not a Synthesizer instance) since it needs no search
     state, just the representation and a policy to check."""
-    _, mdp = colored_mdp.fix_and_apply_policy_to_parameter_space(node.selected_choices, policy)
+    _, mdp = paynt.mdp_family._utils.fix_and_apply_policy_to_parameter_space(colored_mdp, node.selected_choices, policy)
     if node.parameter_space.size == 1:
-        colored_mdp.assert_mdp_is_deterministic(mdp, node.parameter_space)
+        paynt.mdp_family._utils.assert_mdp_is_deterministic(colored_mdp, mdp, node.parameter_space)
     DOUBLE_CHECK_PRECISION = 1e-6
     default_precision = Property.model_checking_precision
     Property.set_model_checking_precision(DOUBLE_CHECK_PRECISION)
@@ -152,7 +153,7 @@ class PolicyTreeNode(paynt.synthesizer.search_node.SearchNode):
             child_node.candidate_policy = candidate_policy
             self.child_nodes.append(child_node)
 
-    def double_check(self, colored_mdp: paynt.mdp_family.colored_mdp.FamilyColoredMdp, prop: Property, policies: list[Policy | None]) -> None:
+    def double_check(self, colored_mdp: paynt.colored_mdp.ColoredMdp, prop: Property, policies: list[Policy | None]) -> None:
         assert self.sat is not None
         self.mdp, self.selected_choices = colored_mdp.build(self.parameter_space)
         if self.sat is False:
@@ -216,7 +217,7 @@ class PolicyTreeNode(paynt.synthesizer.search_node.SearchNode):
 
     @staticmethod
     def make_policies_compatible(
-        colored_mdp: paynt.mdp_family.colored_mdp.FamilyColoredMdp, prop: Property, node1: PolicyTreeNode, node2: PolicyTreeNode, policies: list[Policy | None]
+        colored_mdp: paynt.colored_mdp.ColoredMdp, prop: Property, node1: PolicyTreeNode, node2: PolicyTreeNode, policies: list[Policy | None]
     ) -> Policy | None:
         assert node1.policy_index is not None and node2.policy_index is not None
         policy1 = policies[node1.policy_index]
@@ -229,14 +230,14 @@ class PolicyTreeNode(paynt.synthesizer.search_node.SearchNode):
         policy12, policy21 = merge_policies_exclusively(policy1, policy2)
 
         # try policy1 for node2's parameter space
-        policy, mdp = colored_mdp.fix_and_apply_policy_to_parameter_space(node2.selected_choices, policy12)
+        policy, mdp = paynt.mdp_family._utils.fix_and_apply_policy_to_parameter_space(colored_mdp, node2.selected_choices, policy12)
         policy_result = mdp.model_check_property(prop, alt=True)
         PolicyTreeNode.mdps_model_checked += 1
         if policy_result.sat:
             return policy
 
         # try policy2 for node1's parameter space
-        policy, mdp = colored_mdp.fix_and_apply_policy_to_parameter_space(node1.selected_choices, policy21)
+        policy, mdp = paynt.mdp_family._utils.fix_and_apply_policy_to_parameter_space(colored_mdp, node1.selected_choices, policy21)
         policy_result = mdp.model_check_property(prop, alt=True)
         PolicyTreeNode.mdps_model_checked += 2
         if policy_result.sat:
@@ -245,9 +246,7 @@ class PolicyTreeNode(paynt.synthesizer.search_node.SearchNode):
         # neither fits
         return None
 
-    def merge_children_having_compatible_policies(
-        self, colored_mdp: paynt.mdp_family.colored_mdp.FamilyColoredMdp, prop: Property, policies: list[Policy | None]
-    ) -> None:
+    def merge_children_having_compatible_policies(self, colored_mdp: paynt.colored_mdp.ColoredMdp, prop: Property, policies: list[Policy | None]) -> None:
         if self.is_leaf:
             return
         i = 0
@@ -372,7 +371,7 @@ class PolicyTree:
                 node_queue += node.child_nodes
         return sat
 
-    def double_check(self, colored_mdp: paynt.mdp_family.colored_mdp.FamilyColoredMdp, prop: Property) -> None:
+    def double_check(self, colored_mdp: paynt.colored_mdp.ColoredMdp, prop: Property) -> None:
         leaves = self.collect_leaves()
         logger.info(f"double-checking {len(leaves)} parameter spaces...")
         for leaf in leaves:
@@ -461,7 +460,7 @@ class PolicyTree:
 
         return policy_old_to_new_map
 
-    def postprocess(self, colored_mdp: paynt.mdp_family.colored_mdp.FamilyColoredMdp, prop: Property) -> int:
+    def postprocess(self, colored_mdp: paynt.colored_mdp.ColoredMdp, prop: Property) -> int:
 
         postprocessing_timer = paynt.utils.timer.Timer()
         postprocessing_timer.start()
@@ -507,14 +506,14 @@ class PolicyTree:
         logger.debug(f"postprocessing took {time} s")
         return time
 
-    def extract_policies(self, colored_mdp: paynt.mdp_family.colored_mdp.FamilyColoredMdp) -> dict[str, list[tuple[dict[str, Any], str]]]:
+    def extract_policies(self, colored_mdp: paynt.colored_mdp.ColoredMdp) -> dict[str, list[tuple[dict[str, Any], str]]]:
         policies = {}
         for policy_index, policy in enumerate(self.policies):
             assert policy is not None
-            policies[f"p{policy_index}"] = colored_mdp.policy_to_state_valuation_actions(policy)
+            policies[f"p{policy_index}"] = paynt.mdp_family._utils.policy_to_state_valuation_actions(colored_mdp, policy)
         return policies
 
-    def extract_policy_tree(self, colored_mdp: paynt.mdp_family.colored_mdp.FamilyColoredMdp) -> graphviz.Digraph:
+    def extract_policy_tree(self, colored_mdp: paynt.colored_mdp.ColoredMdp) -> graphviz.Digraph:
         logging.getLogger("graphviz").setLevel(logging.WARNING)
         logging.getLogger("graphviz.sources").setLevel(logging.ERROR)
         graphviz_tree = graphviz.Digraph(comment="policy_tree")

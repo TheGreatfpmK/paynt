@@ -62,7 +62,9 @@ class SynthesizerOneByOne(paynt.synthesizer.synthesizer.Synthesizer):
             else:
                 policy = None
                 if result.sat:
-                    policy = self.colored_mdp.scheduler_to_policy(result.result.scheduler, model)  # type: ignore[attr-defined]
+                    from paynt.mdp_family import _utils as mdp_family_utils
+
+                    policy = mdp_family_utils.scheduler_to_policy(self.colored_mdp, result.result.scheduler, model)
                 evaluation = paynt.synthesizer.synthesizer.ParameterSpaceEvaluation(assignment, result.value, result.sat, policy)
             evaluations.append(evaluation)
             self.explore(assignment)
@@ -78,7 +80,9 @@ class SynthesizerOneByOne(paynt.synthesizer.synthesizer.Synthesizer):
             if policy is None:
                 policy = "UNSAT"
             else:
-                policy = self.colored_mdp.policy_to_state_valuation_actions(policy)  # type: ignore[attr-defined]
+                from paynt.mdp_family import _utils as mdp_family_utils
+
+                policy = mdp_family_utils.policy_to_state_valuation_actions(self.colored_mdp, policy)
             parameter_space_to_evaluation_parsed.append((str(parameter_space), policy))
         policies_string = json.dumps(parameter_space_to_evaluation_parsed, indent=2)
         policies_filename = export_filename_base + ".json"

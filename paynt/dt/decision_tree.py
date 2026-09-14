@@ -474,14 +474,19 @@ class DecisionTree:
         output_tree.root.to_graphviz(graphviz_tree, output_tree.variables, output_tree.action_labels, highlight_nodes)
         return graphviz_tree
 
-    def append_tree_as_subtree(self, new_subtree: DecisionTree, subtree_root_node_id: int, subtree_colored_mdp: Any) -> None:
+    def append_tree_as_subtree(self, new_subtree: DecisionTree, subtree_root_node_id: int, subtree_info: Any) -> None:
+        """
+        :param subtree_info the DtInfo (paynt.dt._utils.DtInfo) of the colored MDP the subtree was
+            synthesized against -- typed Any rather than DtInfo here to avoid this representation-only file
+            importing paynt.dt._utils, which itself imports this module for type hints
+        """
         matching_nodes = self.collect_nodes(lambda node: node.identifier == subtree_root_node_id)
         assert len(matching_nodes) == 1, f"subtree root node id {subtree_root_node_id} not found in decision tree"
         subtree_root_node = matching_nodes[0]
 
         all_current_nodes = self.collect_nodes()
         new_subtree.root.assign_identifiers(identifier=len(all_current_nodes) + 1)
-        new_subtree.root.fix_with_respect_to_colored_mdp(subtree_colored_mdp.action_labels, self.action_labels, subtree_colored_mdp.variables, self.variables)
+        new_subtree.root.fix_with_respect_to_colored_mdp(subtree_info.action_labels, self.action_labels, subtree_info.variables, self.variables)
 
         parent = subtree_root_node.parent
         assert parent is not None and parent.child_true is not None

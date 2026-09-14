@@ -55,7 +55,7 @@ def get_synthesizer(
 
     if feature_kind == "pomdp_family":
         # a family-of-POMDPs sketch isn't run through a Synthesizer at all (see e.g.
-        # PomdpFamilyColoredMdp.build_dtmc_sketch instead)
+        # paynt.mdp_family.pomdp._utils.build_dtmc_sketch instead)
         import logging
 
         logging.getLogger(__name__).info("nothing to do with the POMDP sketch, aborting...")

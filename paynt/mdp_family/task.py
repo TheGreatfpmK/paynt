@@ -4,9 +4,9 @@ from dataclasses import dataclass
 
 
 @dataclass(kw_only=True)
-class FamilyTask:
+class MdpFamilyTask:
     """
-    Feature-specific build knobs for family-of-models synthesis, owned by FamilyColoredMdpFactory (and
+    Feature-specific build knobs for family-of-models synthesis, owned by MdpFamilyColoredMdpFactory (and
     PomdpFamilyColoredMdpFactory) as factory.build_task -- deliberately not a subclass of
     paynt.task.SynthesisTask, since this field is read only by the factory that unfolds scheduler
     memory, never by the generic AR/CEGIS/Hybrid algorithms or PolicyTreeSynthesizer. A plain dataclass (see
@@ -14,6 +14,6 @@ class FamilyTask:
     _dataclass_task_kwargs for how Sketch.load_sketch copes with that.
     """
 
-    # implicit initial size for scheduler-memory unfolding, consumed by FamilyColoredMdpFactory (and
+    # implicit initial size for scheduler-memory unfolding, consumed by MdpFamilyColoredMdpFactory (and
     # PomdpFamilyColoredMdpFactory) at construction time
     memory_size: int = 1

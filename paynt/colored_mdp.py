@@ -13,6 +13,15 @@ scheduler/choice representations, choice values, expected visits) live in
 paynt.model.model.ModelIndex; the one splitting heuristic that does need the coloring
 (estimate_scheduler_difference) lives in paynt.utils.scoring instead, since it is search-algorithm support
 shared by multiple synthesizer classes, not part of the representation.
+
+This is the only concrete ColoredMdp class -- there is no per-feature subclass. `feature_kind` (set at
+construction, e.g. "dt"/"pomdp"/"posmg"/"family"/"pomdp_family"/"decpomdp") is what dispatch code and the
+3 genuinely feature-dependent branches below key off, instead of an isinstance check. Feature-specific
+state that isn't part of this class's own methods lives on a small plain dataclass attached as `self.feature_info`
+(e.g. paynt.pomdp._utils.PomdpInfo) -- typed Any here deliberately, so this module never needs to
+import any feature package. Feature-specific utility methods that used to live on a subclass are now free
+functions in that feature's own colored_mdp.py, taking `colored_mdp` explicitly (e.g.
+paynt.pomdp._utils.policy_size(colored_mdp, assignment)).
 """
 
 from __future__ import annotations
@@ -31,14 +40,17 @@ logger = logging.getLogger(__name__)
 
 class ColoredMdp:
 
-    # discriminator used by dispatch code to pick the right feature package without an isinstance check;
-    # concrete subclasses override this with their own feature name (e.g. "dt", "pomdp", "posmg", "family")
-    feature_kind = "generic"
-
     # label associated with un-labelled choices, shared by every coloring-construction implementation
     EMPTY_LABEL = "__no_label__"
 
-    def __init__(self, underlying_mdp: Any, parameter_space: paynt.parameter_space.parameter_space.ParameterSpace, coloring: Any, use_exact: bool = False):
+    def __init__(
+        self,
+        underlying_mdp: Any,
+        parameter_space: paynt.parameter_space.parameter_space.ParameterSpace,
+        coloring: Any,
+        use_exact: bool = False,
+        feature_kind: str = "generic",
+    ):
         # M: the underlying (uncolored) MDP, a stormpy sparse model
         self.underlying_mdp = underlying_mdp
         # V: the constrained parameter space
@@ -46,13 +58,15 @@ class ColoredMdp:
         # kappa: raw payntbind coloring object (Coloring or ColoringSmt); no Python wrapper exists for this
         self.coloring = coloring
         self.use_exact = use_exact
+        # discriminator used by dispatch code to pick the right feature package without an isinstance check
+        self.feature_kind = feature_kind
+        # feature-specific companion data (e.g. paynt.pomdp._utils.PomdpInfo), attached by the factory;
+        # None for "generic" and for features with no extra state (e.g. "decpomdp")
+        self.feature_info: Any = None
 
         # internal plumbing needed by build()/scheduler_selection() below, not part of the public contract
         self.subsystem_builder_options = paynt.model.model.SubmodelBuilder.default_builder_options()
         self.choice_destinations = paynt.model.model.ModelIndex.compute_choice_destinations(underlying_mdp, use_exact)
-
-    def export_result(self, dtmc: Any) -> None:
-        """to be overridden"""
 
     def build(
         self, parameter_space: paynt.parameter_space.parameter_space.ParameterSpace, parent_selected_choices: Any = None
@@ -76,20 +90,51 @@ class ColoredMdp:
         return mdp, choices
 
     def build_assignment(self, parameter_space: paynt.parameter_space.parameter_space.ParameterSpace) -> paynt.model.model.SubMdp:
-        """Compute the induced DTMC C[theta] for a full parameter assignment."""
+        """
+        Compute the induced model C[theta] for a full parameter assignment: a DTMC for every feature except
+        "family"/"pomdp_family", where fixing the environment does not also fix the agent's policy, so the
+        result can still be nondeterministic and must stay an MDP.
+        """
         assert parameter_space.size == 1, "expecting parameter space of size 1"
         choices = self.coloring.selectCompatibleChoices(parameter_space.native)
-        assert choices.number_of_set_bits() > 0
         model, state_map, choice_map = paynt.model.model.SubmodelBuilder.restrict(self.underlying_mdp, choices, self.subsystem_builder_options)
+        if self.feature_kind in ("family", "pomdp_family"):
+            return paynt.model.model.SubMdp(model, state_map, choice_map)
+        assert choices.number_of_set_bits() > 0
         dtmc = paynt.model.model.SubmodelBuilder.mdp_to_dtmc(model)
         return paynt.model.model.SubMdp(dtmc, state_map, choice_map)
 
     def scheduler_selection(self, mdp: Any, scheduler: Any) -> list[list[int]]:
-        """Get parameter options involved in the scheduler selection (the inverse of build(): choices -> V)."""
+        """
+        Get parameter options involved in the scheduler selection (the inverse of build(): choices -> V).
+        For "posmg", unreachable choices are kept rather than discarded (unlike every other feature) since
+        the induced model must still be verified as a game, not a plain MDP.
+        """
         assert scheduler.memoryless and scheduler.deterministic
-        state_to_choice = paynt.model.model.ModelIndex.scheduler_to_state_to_choice(self.underlying_mdp, self.choice_destinations, mdp, scheduler)
+        discard_unreachable_choices = self.feature_kind != "posmg"
+        state_to_choice = paynt.model.model.ModelIndex.scheduler_to_state_to_choice(
+            self.underlying_mdp, self.choice_destinations, mdp, scheduler, discard_unreachable_choices=discard_unreachable_choices
+        )
         choices = paynt.model.model.ModelIndex.state_to_choice_to_choices(self.underlying_mdp, state_to_choice)
         return self.coloring.collectHoleOptions(choices)
+
+    def build_from_choice_mask(self, choices: Any) -> paynt.model.model.SubMdp:
+        """Restrict to a choice mask without needing a parameter space. Only "dt" uses this today (dtnest's
+        subtree rebuilding), but the logic is generic -- it needs nothing feature-specific."""
+        model, state_map, choice_map = paynt.model.model.SubmodelBuilder.restrict(self.underlying_mdp, choices, self.subsystem_builder_options)
+        return paynt.model.model.SubMdp(model, state_map, choice_map)
+
+    def are_choices_consistent(self, choices: Any, parameter_space: paynt.parameter_space.parameter_space.ParameterSpace) -> tuple[bool, list[list[int]]]:
+        """Separate method for profiling purposes. Only "dt" uses this today, but the logic is generic --
+        it needs nothing feature-specific."""
+        consistent, parameter_selection = self.coloring.areChoicesConsistent(choices, parameter_space.native)
+        for parameter, options in enumerate(parameter_selection):
+            assert len(options) == len(set(options)), str(parameter_selection)
+            for option in options:
+                assert option in parameter_space.parameter_options(
+                    parameter
+                ), f"option {option} for parameter {parameter} ({parameter_space.parameter_name(parameter)}) is not in the parameter space"
+        return consistent, parameter_selection
 
     def scheduler_is_consistent(
         self, mdp: Any, node: paynt.synthesizer.search_node.SearchNode, result: Any, specification: Any
@@ -97,18 +142,26 @@ class ColoredMdp:
         """
         Get the parameter assignment induced by this scheduler and fill undefined
         parameters by some option from the parameter space of this mdp.
-        :param node the search node currently being verified -- unused by this base implementation, but part
-            of the signature since DtColoredMdp's override needs it (to record scheduler_choices) and callers
-            dispatch polymorphically without knowing which one they're calling
-        :param specification the specification currently being solved for -- unused by this base
-            implementation, but part of the signature since DtColoredMdp's override needs it and callers
-            dispatch polymorphically without knowing which one they're calling
+        :param node the search node currently being verified -- unused except for "dt", which records
+            scheduler_choices on it for the single-property scheduler-preservation shortcut
+        :param specification the specification currently being solved for -- unused except for "dt"
         :return parameter assignment
         :return whether the scheduler is consistent (i.e. corresponds to exactly one assignment)
         """
         if mdp.is_deterministic:
             selection = [[mdp.parameter_space.parameter_options(parameter)[0]] for parameter in range(mdp.parameter_space.num_parameters)]
             return selection, True
+
+        if self.feature_kind == "dt":
+            # "dt" uses ColoringSmt's own consistency check instead of the generic scheduler_selection below
+            scheduler = result.scheduler
+            assert scheduler.memoryless and scheduler.deterministic
+            state_to_choice = paynt.model.model.ModelIndex.scheduler_to_state_to_choice(self.underlying_mdp, self.choice_destinations, mdp, scheduler)
+            choices = paynt.model.model.ModelIndex.state_to_choice_to_choices(self.underlying_mdp, state_to_choice)
+            if specification.is_single_property:
+                node.scheduler_choices = choices  # type: ignore[attr-defined]
+            consistent, parameter_selection = self.are_choices_consistent(choices, mdp.parameter_space)
+            return parameter_selection, consistent
 
         # get qualitative scheduler selection, filter inconsistent assignments
         selection = self.scheduler_selection(mdp, result.scheduler)

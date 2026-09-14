@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 from .task import DtNestTask
 from ..decision_tree import DecisionTree, DecisionTreeNode
 from ..factory import DtColoredMdpFactory
 from ..synthesizer import DtSynthesizer
 from ..result import DtResult
+from .._utils import DtInfo, DONT_CARE_ACTION_LABEL
 import paynt.task
 import paynt.utils.timer
 import paynt.model.model
@@ -117,7 +118,8 @@ class DtNest(DtSynthesizer):
         nodes = helper_tree.collect_nodes(lambda node: node.get_depth() == desired_depth)
         if nodes is None or len(nodes) == 0:
             return []
-        helper_nodes = [self.colored_mdp.tree_helper[node.identifier] for node in nodes]
+        info = cast(DtInfo, self.colored_mdp.feature_info)
+        helper_nodes = [info.tree_helper[node.identifier] for node in nodes]
         helper_node_stats = []
         for helper_node in helper_nodes:
             if helper_node["id"] == 0 or helper_node["id"] in nodes_to_skip:
@@ -194,6 +196,7 @@ class DtNest(DtSynthesizer):
 
         # init
         self.counters_reset()
+        info = cast(DtInfo, self.colored_mdp.feature_info)
 
         epsilon_already_derived = False
         if user_threshold is not None:
@@ -215,7 +218,7 @@ class DtNest(DtSynthesizer):
                     f"the requested threshold {user_threshold} is already satisfied by the random/don't-care "
                     f"scheduler (value {random_result_value}); returning it directly without subtree search"
                 )
-                self.best_tree = create_uniform_random_tree(self.colored_mdp)
+                self.best_tree = create_uniform_random_tree(info)
                 self.best_tree_value = random_result_value
                 return
             assert derived_epsilon is not None
@@ -237,8 +240,8 @@ class DtNest(DtSynthesizer):
         self.synthesis_timer.start()
 
         # initialize from external tree
-        self.colored_mdp.tree_helper_tree = build_tree_helper_tree(self.colored_mdp)
-        tree_helper_tree = self.colored_mdp.tree_helper_tree
+        info.tree_helper_tree = build_tree_helper_tree(info)
+        tree_helper_tree = info.tree_helper_tree
         logger.info(f"initial external tree has depth {tree_helper_tree.get_depth()} and {len(tree_helper_tree.collect_nonterminals())} nodes")
 
         current_iter = 0
@@ -285,8 +288,9 @@ class DtNest(DtSynthesizer):
                 subtree_synthesizer = DtSynthesizer(subtree_colored_mdp_factory, subtree_task)
                 self.dtpaynt_calls += 1
 
-                if subtree_colored_mdp.state_is_relevant_bv.number_of_set_bits() == 0:
-                    random_tree = create_uniform_random_tree(subtree_colored_mdp)
+                subtree_info = cast(DtInfo, subtree_colored_mdp.feature_info)
+                if subtree_info.state_is_relevant_bv.number_of_set_bits() == 0:
+                    random_tree = create_uniform_random_tree(subtree_info)
                     subtree_synthesizer.best_tree = random_tree
                 else:
                     subtree_synthesizer.synthesize_tree_sequence(
@@ -297,16 +301,16 @@ class DtNest(DtSynthesizer):
                 if subtree_synthesizer.best_tree is not None:
                     logger.info(f"admissible subtree found from node {node['id']}")
                     self.dtpaynt_tree_found += 1
-                    relevant_state_valuations = [subtree_colored_mdp.relevant_state_valuations[state] for state in subtree_colored_mdp.state_is_relevant_bv]
+                    relevant_state_valuations = [subtree_info.relevant_state_valuations[state] for state in subtree_info.state_is_relevant_bv]
                     subtree_synthesizer.best_tree.simplify(relevant_state_valuations)
                     dtpaynt_subtree_helper_tree_copy = tree_helper_tree.copy()
-                    dtpaynt_subtree_helper_tree_copy.append_tree_as_subtree(subtree_synthesizer.best_tree, node["id"], subtree_colored_mdp)
+                    dtpaynt_subtree_helper_tree_copy.append_tree_as_subtree(subtree_synthesizer.best_tree, node["id"], subtree_info)
                     dtpaynt_subtree_helper_tree_copy.root.assign_identifiers(keep_old=True)
                     new_tree_depth = dtpaynt_subtree_helper_tree_copy.get_depth()
                     new_tree_nodes = len(dtpaynt_subtree_helper_tree_copy.collect_nonterminals())
                     logger.info(f"new tree has depth {new_tree_depth} and {new_tree_nodes} nodes")
 
-                    self.colored_mdp.tree_helper_tree = dtpaynt_subtree_helper_tree_copy
+                    info.tree_helper_tree = dtpaynt_subtree_helper_tree_copy
 
                     new_tree_helper_tree = None
                     recomputed_scheduler_tree_helper_tree = None
@@ -322,12 +326,10 @@ class DtNest(DtSynthesizer):
 
                         # Perturbation #1 - learn new tree based on the scheduler of the new updated tree
                         state_to_action = dt_to_state_to_actions(dtpaynt_subtree_helper_tree_copy, self.colored_mdp, reachable_states)
-                        new_learned_tree_helper = run_scikit_learn_tree(
-                            self.colored_mdp.relevant_state_valuations, state_to_action, self.colored_mdp.variables, self.colored_mdp.action_labels
-                        )
+                        new_learned_tree_helper = run_scikit_learn_tree(info.relevant_state_valuations, state_to_action, info.variables, info.action_labels)
                         self.dt_learning_calls += 1
 
-                        new_tree_helper_tree = build_tree_helper_tree(self.colored_mdp, new_learned_tree_helper)
+                        new_tree_helper_tree = build_tree_helper_tree(info, new_learned_tree_helper)
                         learned_tree_depth = new_tree_helper_tree.get_depth()
                         learned_tree_nodes = len(new_tree_helper_tree.collect_nonterminals())
                         logger.info(f"new learned tree (default) has depth {learned_tree_depth} and {learned_tree_nodes} nodes")
@@ -345,14 +347,14 @@ class DtNest(DtSynthesizer):
 
                             recomputed_state_to_action = state_to_choice_to_state_to_action(state_to_choice, self.colored_mdp)
                             recomputed_scheduler_tree_helper = run_scikit_learn_tree(
-                                self.colored_mdp.relevant_state_valuations,
+                                info.relevant_state_valuations,
                                 recomputed_state_to_action,
-                                self.colored_mdp.variables,
-                                self.colored_mdp.action_labels,
+                                info.variables,
+                                info.action_labels,
                             )
                             self.dt_learning_recomputed_calls += 1
 
-                            recomputed_scheduler_tree_helper_tree = build_tree_helper_tree(self.colored_mdp, recomputed_scheduler_tree_helper)
+                            recomputed_scheduler_tree_helper_tree = build_tree_helper_tree(info, recomputed_scheduler_tree_helper)
                             recomputed_tree_depth = recomputed_scheduler_tree_helper_tree.get_depth()
                             recomputed_tree_nodes = len(recomputed_scheduler_tree_helper_tree.collect_nonterminals())
                             logger.info(
@@ -366,13 +368,13 @@ class DtNest(DtSynthesizer):
                     if chosen_tree == "current":
                         logger.info("None of the new trees are smaller, continuing with current tree")
                         self.all_larger += 1
-                        self.colored_mdp.tree_helper_tree = tree_helper_tree
+                        info.tree_helper_tree = tree_helper_tree
 
                     elif chosen_tree == "dtpaynt":
                         logger.info("New dtPAYNT tree is smallest")
                         self.dtpaynt_successes_smaller += 1
                         tree_helper_tree = dtpaynt_subtree_helper_tree_copy
-                        self.colored_mdp.tree_helper_tree = tree_helper_tree
+                        info.tree_helper_tree = tree_helper_tree
                         node_queue = self.remap_node_queue_after_replacement(node_queue, tree_helper_tree)
                         new_nodes = self.create_tree_node_queue_heuristic(
                             tree_helper_tree,
@@ -388,8 +390,8 @@ class DtNest(DtSynthesizer):
                         new_dtlearn_tree_helper = dtlearn_trees[dtlearn_setting][0]
                         new_dtlearn_tree_helper_tree = dtlearn_trees[dtlearn_setting][1]
                         self.dt_learning_successes += 1
-                        self.colored_mdp.tree_helper = new_dtlearn_tree_helper
-                        self.colored_mdp.tree_helper_tree = new_dtlearn_tree_helper_tree
+                        info.tree_helper = new_dtlearn_tree_helper
+                        info.tree_helper_tree = new_dtlearn_tree_helper_tree
                         tree_helper_tree = new_dtlearn_tree_helper_tree
                         node_queue = self.create_tree_node_queue_heuristic(tree_helper_tree, use_states_for_node_priority=self.use_states_for_node_priority)
 
@@ -399,8 +401,8 @@ class DtNest(DtSynthesizer):
                         recomputed_scheduler_tree_helper = recomputed_dtlearn_trees[dtlearn_setting][0]
                         recomputed_scheduler_tree_helper_tree = recomputed_dtlearn_trees[dtlearn_setting][1]
                         self.dt_learning_recomputed_successes += 1
-                        self.colored_mdp.tree_helper = recomputed_scheduler_tree_helper
-                        self.colored_mdp.tree_helper_tree = recomputed_scheduler_tree_helper_tree
+                        info.tree_helper = recomputed_scheduler_tree_helper
+                        info.tree_helper_tree = recomputed_scheduler_tree_helper_tree
                         tree_helper_tree = recomputed_scheduler_tree_helper_tree
                         node_queue = self.create_tree_node_queue_heuristic(tree_helper_tree, use_states_for_node_priority=self.use_states_for_node_priority)
 
@@ -409,7 +411,7 @@ class DtNest(DtSynthesizer):
 
             current_depth -= 1
 
-        self.colored_mdp.tree_helper_tree = tree_helper_tree
+        info.tree_helper_tree = tree_helper_tree
 
         self.synthesis_timer.stop()
 
@@ -431,16 +433,17 @@ class DtNest(DtSynthesizer):
                 result.optimality_result.value >= eps_optimum_threshold
             ), f"optimum value {result.optimality_result.value} is not above threshold {eps_optimum_threshold}"
 
-        self.best_tree = self.colored_mdp.tree_helper_tree
+        self.best_tree = info.tree_helper_tree
         self.best_tree_value = result.optimality_result.value
 
-        final_tree_depth = self.colored_mdp.tree_helper_tree.get_depth()
-        final_tree_nodes = len(self.colored_mdp.tree_helper_tree.collect_nonterminals())
+        final_tree_depth = info.tree_helper_tree.get_depth()
+        final_tree_nodes = len(info.tree_helper_tree.collect_nonterminals())
         logger.info(f"final tree has value {result.optimality_result.value} with depth {final_tree_depth} and {final_tree_nodes} nodes")
 
     def run(self, optimum_threshold: Any = None) -> DtResult:
         # see initialize_settings's comment: DtNest always actually gets a DtNestTask
         build_task: DtNestTask = self.build_task  # type: ignore[assignment]
+        info = cast(DtInfo, self.colored_mdp.feature_info)
 
         paynt_mdp = paynt.model.model.SubMdp(
             self.colored_mdp.underlying_mdp, list(range(self.colored_mdp.underlying_mdp.nr_states)), list(range(self.colored_mdp.underlying_mdp.nr_choices))
@@ -487,22 +490,22 @@ class DtNest(DtSynthesizer):
         if build_task.initial_tree is None:
 
             state_to_action = state_to_choice_to_state_to_action(state_to_choice, self.colored_mdp)
-            initial_tree_helper = run_scikit_learn_tree(
-                self.colored_mdp.relevant_state_valuations, state_to_action, self.colored_mdp.variables, self.colored_mdp.action_labels
-            )
+            initial_tree_helper = run_scikit_learn_tree(info.relevant_state_valuations, state_to_action, info.variables, info.action_labels)
 
         else:
 
             # TODO add some nice export for trees, decide on the format we will support here
             raise NotImplementedError("the support for user provided initial tree is not implemented.")
 
-        self.colored_mdp.tree_helper = initial_tree_helper
+        info.tree_helper = initial_tree_helper
 
         opt_result_value = mc_result.value
         logger.info(f"the optimal scheduler has value: {opt_result_value}")
 
-        if self.colored_mdp.DONT_CARE_ACTION_LABEL in self.colored_mdp.action_labels:
-            random_choices = self.colored_mdp.get_random_choices()
+        if DONT_CARE_ACTION_LABEL in info.action_labels:
+            from .._utils import get_random_choices
+
+            random_choices = get_random_choices(self.colored_mdp)
             submdp_random = self.colored_mdp.build_from_choice_mask(random_choices)
             mc_result_random = submdp_random.model_check_property(self.task.get_property())
             random_result_value = mc_result_random.value
@@ -511,31 +514,31 @@ class DtNest(DtSynthesizer):
 
         self.best_tree = self.best_tree_value = None
 
-        assert self.colored_mdp.tree_helper is not None, "tree helper not set, cannot run dtNest"
+        assert info.tree_helper is not None, "tree helper not set, cannot run dtNest"
 
         self.synthesize_subtrees(opt_result_value, random_result_value, user_threshold, user_threshold_minimizing)
 
         logger.info(f"the optimal scheduler has value: {opt_result_value}")
-        if self.colored_mdp.DONT_CARE_ACTION_LABEL in self.colored_mdp.action_labels:
+        if DONT_CARE_ACTION_LABEL in info.action_labels:
             logger.info(f"the random scheduler has value: {random_result_value}")
         if self.best_tree is None:
             logger.info("no admissible tree found")
         else:
-            relevant_state_valuations = [self.colored_mdp.relevant_state_valuations[state] for state in self.colored_mdp.state_is_relevant_bv]
+            relevant_state_valuations = [info.relevant_state_valuations[state] for state in info.state_is_relevant_bv]
             self.best_tree.simplify(relevant_state_valuations)
             depth = self.best_tree.get_depth()
             num_nodes = len(self.best_tree.collect_nonterminals())
             logger.info(f"synthesized tree of depth {depth} with {num_nodes} decision nodes")
             if self.task.specification.has_optimality:
                 logger.info(f"the synthesized tree has value {self.best_tree_value}")
-                if self.colored_mdp.DONT_CARE_ACTION_LABEL in self.colored_mdp.action_labels:
+                if DONT_CARE_ACTION_LABEL in info.action_labels:
                     logger.info(
                         f"the synthesized tree has relative value: {self.compute_normalized_value(self.best_tree_value, opt_result_value, random_result_value)}"
                     )
             logger.info("printing the synthesized tree below:")
 
             # integration logs
-            if self.colored_mdp.tree_helper is not None:
+            if info.tree_helper is not None:
                 logger.info(f"dt learning calls: {self.dt_learning_calls}")
                 logger.info(f"dt learning successes: {self.dt_learning_successes}")
                 logger.info(f"dt learning recomputed calls: {self.dt_learning_recomputed_calls}")

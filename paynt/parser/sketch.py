@@ -39,7 +39,7 @@ def _dataclass_task_kwargs(cls: type, task_kwargs: dict[str, Any]) -> dict[str, 
     """
     load_sketch doesn't know which feature a sketch needs until it has parsed it, so task_kwargs carries
     every feature's CLI options at once; each feature task (DtTask, DtNestTask, PomdpTask, PosmgTask,
-    FamilyTask) is a plain dataclass with no **kwargs catch-all of its own to swallow the rest (unlike
+    MdpFamilyTask) is a plain dataclass with no **kwargs catch-all of its own to swallow the rest (unlike
     SynthesisTask.from_specification, which still has one, since SynthesisTask isn't a dataclass) -- this
     keeps only the keys the target dataclass actually declares as real constructor (init=True) fields.
     """
@@ -170,10 +170,10 @@ class Sketch:
                 colored_mdp = paynt.colored_mdp.ColoredMdp(explicit_model, parameter_space, coloring, use_exact=use_exact)
                 colored_mdp_factory = paynt.colored_mdp.IdentityColoredMdpFactory(colored_mdp, task)
             elif prism.model_type == stormpy.storage.PrismModelType.MDP:
-                build_task = paynt.mdp_family.task.FamilyTask(**_dataclass_task_kwargs(paynt.mdp_family.task.FamilyTask, task_kwargs))
-                colored_mdp_factory = paynt.mdp_family.FamilyColoredMdpFactory(explicit_model, parameter_space, coloring, build_task, use_exact=use_exact)
+                build_task = paynt.mdp_family.task.MdpFamilyTask(**_dataclass_task_kwargs(paynt.mdp_family.task.MdpFamilyTask, task_kwargs))
+                colored_mdp_factory = paynt.mdp_family.MdpFamilyColoredMdpFactory(explicit_model, parameter_space, coloring, build_task, use_exact=use_exact)
             elif prism.model_type == stormpy.storage.PrismModelType.POMDP:
-                build_task = paynt.mdp_family.task.FamilyTask(**_dataclass_task_kwargs(paynt.mdp_family.task.FamilyTask, task_kwargs))
+                build_task = paynt.mdp_family.task.MdpFamilyTask(**_dataclass_task_kwargs(paynt.mdp_family.task.MdpFamilyTask, task_kwargs))
                 colored_mdp_factory = paynt.mdp_family.PomdpFamilyColoredMdpFactory(
                     explicit_model, parameter_space, coloring, build_task, obs_evaluator, use_exact=use_exact
                 )

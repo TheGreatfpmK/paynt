@@ -1,4 +1,6 @@
+import paynt.colored_mdp
 import paynt.dt
+import paynt.dt._utils
 import paynt.synthesizer.search_node
 
 
@@ -7,8 +9,9 @@ class TestDtColoredMdpFactory:
     def test_load_sketch_produces_a_dt_colored_mdp(self, dt_colored_mdp):
         """An MDP-with-parameters sketch that doesn't have PRISM-declared parameters (no jani_unfolder) and
         isn't partially observable resolves through DtColoredMdpFactory."""
-        assert isinstance(dt_colored_mdp, paynt.dt.DtColoredMdp)
+        assert type(dt_colored_mdp) is paynt.colored_mdp.ColoredMdp
         assert dt_colored_mdp.feature_kind == "dt"
+        assert isinstance(dt_colored_mdp.feature_info, paynt.dt._utils.DtInfo)
 
     def test_factory_builds_an_initial_depth_zero_tree(self, dt_colored_mdp, dt_colored_mdp_factory):
         """Regression test for the construction-order fix: DtColoredMdpFactory must produce a usable
@@ -16,14 +19,14 @@ class TestDtColoredMdpFactory:
         DtColoredMdpFactory which had no coloring/parameter_space until reset_tree was called externally."""
         assert isinstance(dt_colored_mdp_factory, paynt.dt.DtColoredMdpFactory)
         assert dt_colored_mdp_factory.colored_mdp is dt_colored_mdp
-        assert dt_colored_mdp.decision_tree.get_depth() == 0
+        assert dt_colored_mdp.feature_info.decision_tree.get_depth() == 0
 
     def test_reset_tree_produces_a_fresh_colored_mdp(self, dt_colored_mdp, dt_colored_mdp_factory):
         reset = dt_colored_mdp_factory.reset_tree(2)
-        assert isinstance(reset, paynt.dt.DtColoredMdp)
-        assert reset.decision_tree.get_depth() == 2
+        assert reset.feature_kind == "dt"
+        assert reset.feature_info.decision_tree.get_depth() == 2
         # the identity data (computed once at construction) must carry over unchanged across reset_tree
-        assert reset.action_labels is dt_colored_mdp.action_labels
+        assert reset.feature_info.action_labels is dt_colored_mdp.feature_info.action_labels
 
     def test_build_produces_an_mdp(self, dt_colored_mdp):
         node = paynt.synthesizer.search_node.SearchNode(dt_colored_mdp.parameter_space.copy())
@@ -35,4 +38,4 @@ class TestDtColoredMdpFactory:
         DtColoredMdpFactory from just an mdp, with no task yet, and attach one later."""
         factory = paynt.dt.DtColoredMdpFactory(dt_colored_mdp.underlying_mdp)
         assert factory.build_task is None
-        assert factory.colored_mdp.decision_tree.get_depth() == 0
+        assert factory.colored_mdp.feature_info.decision_tree.get_depth() == 0
