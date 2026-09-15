@@ -662,7 +662,7 @@ namespace synthesis {
         // debug: MADP info
         // std::cerr << madp_decpomdp->SoftPrint() << std::endl;
         std::unique_ptr<DecPomdp> decpomdp = std::make_unique<DecPomdp>(madp_decpomdp);
-        free(madp_decpomdp);
+        delete madp_decpomdp;
         return decpomdp;
     }
 
