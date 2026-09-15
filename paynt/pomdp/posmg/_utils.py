@@ -1,7 +1,7 @@
 """
 Internal support for the POSMG feature: the PosmgInfo companion dataclass (attached as
 ColoredMdp.feature_info for feature_kind "posmg") and functions that interpret it. Not part of the public
-API -- a POSMG sketch is used through paynt.posmg.PosmgSynthesizer/paynt.api, never by constructing or
+API -- a POSMG sketch is used through paynt.pomdp.posmg.PosmgSynthesizer/paynt.api, never by constructing or
 reading a PosmgInfo directly.
 """
 
@@ -13,6 +13,11 @@ from typing import Any
 import stormpy
 
 import paynt.model.model
+import paynt.parameter_space.parameter_space
+
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(kw_only=True)
@@ -20,6 +25,16 @@ class PosmgInfo:
     # needed by create_smg_from_mdp to recover each state's player index -- the coloring/parameter_space
     # alone don't carry this
     posmg_manager: Any
+
+
+def assignment_to_fsc(info: PosmgInfo, assignment: paynt.parameter_space.parameter_space.ParameterSpace) -> None:
+    """
+    Stub: FSC extraction for the optimizing player from a synthesized assignment is not yet implemented for
+    POSMG -- see the JAIR-refactor plan's "Result-class steps (d)/(e)" note (POSMG's result shape was never
+    decided). Same future-facing calling convention as paynt.pomdp._utils.assignment_to_fsc.
+    """
+    logger.info("POSMG FSC extraction from a synthesized assignment is not yet implemented.")
+    return
 
 
 def create_smg_from_mdp(info: PosmgInfo, mdp: paynt.model.model.SubMdp) -> paynt.model.model.Smg:

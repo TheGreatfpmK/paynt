@@ -11,10 +11,10 @@ import paynt.colored_mdp
 import paynt.parameter_space.parameter_space
 import paynt.mdp_family
 import paynt.mdp_family.task
-import paynt.posmg
-import paynt.posmg.task
 import paynt.pomdp
 import paynt.pomdp.task
+import paynt.pomdp.posmg
+import paynt.pomdp.posmg.task
 import paynt.specification.property
 import paynt.task
 
@@ -183,8 +183,8 @@ class Sketch:
                 build_task = paynt.pomdp.task.PomdpTask(**_dataclass_task_kwargs(paynt.pomdp.task.PomdpTask, task_kwargs))
                 colored_mdp_factory = paynt.pomdp.decpomdp.DecPomdpColoredMdpFactory(decpomdp_manager, build_task, use_exact=use_exact)
             elif isinstance(explicit_model, payntbind.synthesis.Posmg):
-                build_task = paynt.posmg.task.PosmgTask(**_dataclass_task_kwargs(paynt.posmg.task.PosmgTask, task_kwargs))
-                colored_mdp_factory = paynt.posmg.PosmgColoredMdpFactory(explicit_model, build_task, specification, use_exact=use_exact)
+                build_task = paynt.pomdp.posmg.task.PosmgTask(**_dataclass_task_kwargs(paynt.pomdp.posmg.task.PosmgTask, task_kwargs))
+                colored_mdp_factory = paynt.pomdp.posmg.PosmgColoredMdpFactory(explicit_model, build_task, specification, use_exact=use_exact)
             elif not explicit_model.is_partially_observable:
                 # always use the more capable DtNestTask (a strict superset of DtTask) since at
                 # this point we don't yet know whether the caller intends to run dtnest or plain AR on this

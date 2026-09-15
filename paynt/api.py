@@ -77,7 +77,7 @@ def get_synthesizer(
     if feature_kind == "decpomdp" and fsc_synthesis:
         import paynt.pomdp
 
-        return paynt.pomdp.decpomdp.DecPomdpSynthesizer(colored_mdp_factory, task)
+        return paynt.pomdp.decpomdp.DecPomdpSynthesizer(colored_mdp_factory, task, method)
 
     if feature_kind == "family":
         if method == "onebyone":
@@ -87,8 +87,8 @@ def get_synthesizer(
         return paynt.mdp_family.PolicyTreeSynthesizer(colored_mdp, task)
 
     if feature_kind == "posmg" and fsc_synthesis:
-        import paynt.posmg
+        import paynt.pomdp
 
-        return paynt.posmg.PosmgSynthesizer(colored_mdp_factory, task)
+        return paynt.pomdp.posmg.PosmgSynthesizer(colored_mdp_factory, task, method)
 
     return paynt.synthesizer.synthesizer.Synthesizer.for_method(colored_mdp, task, method)

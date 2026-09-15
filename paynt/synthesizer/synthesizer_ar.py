@@ -139,11 +139,11 @@ class SynthesizerAR(paynt.synthesizer.synthesizer.Synthesizer):
 
         model: paynt.model.model.Mdp
         if self.colored_mdp.feature_kind == "posmg":
-            # local, not `import paynt.posmg._utils`: that form binds the name `paynt` itself in this
+            # local, not `import paynt.pomdp.posmg._utils`: that form binds the name `paynt` itself in this
             # function's local scope (Python's static scoping applies to the whole function body regardless
             # of control flow), which would break every other bare `paynt.x` reference below whenever this
             # branch isn't taken
-            from paynt.posmg import _utils as posmg_utils
+            from paynt.pomdp.posmg import _utils as posmg_utils
 
             model = posmg_utils.create_smg_from_mdp(self.colored_mdp.feature_info, mdp)
         else:

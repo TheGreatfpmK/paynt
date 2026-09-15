@@ -1,6 +1,6 @@
 import pytest
 
-import paynt.posmg
+import paynt.pomdp.posmg
 
 
 class TestPosmgSynthesis:
@@ -15,7 +15,7 @@ class TestPosmgSynthesis:
         Synthesis is deterministic, so the synthesized assignment at each memory size is checked too, not
         just the value it achieves.
         """
-        synthesizer = paynt.posmg.PosmgSynthesizer(posmg_test_game_colored_mdp_factory, posmg_test_game_task)
+        synthesizer = paynt.pomdp.posmg.PosmgSynthesizer(posmg_test_game_colored_mdp_factory, posmg_test_game_task)
 
         assignment_k1 = synthesizer.synthesize(synthesizer.colored_mdp.parameter_space, print_stats=False)
         optimum_k1 = synthesizer.task.specification.optimality.optimum

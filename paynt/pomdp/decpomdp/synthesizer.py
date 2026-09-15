@@ -1,71 +1,25 @@
 """
 Driver for FSC synthesis over a Dec-POMDP: repeatedly re-unfolds every agent's imperfect-information
-strategy at increasing memory sizes and runs SynthesizerAR (the shared AR engine) against each unfolding,
-keeping the best assignment found so far across memory sizes.
+strategy at increasing memory sizes. See paynt.pomdp.synthesizer_iterative_memory.IterativeMemorySynthesizer
+for the shared driver shape.
 """
 
 from __future__ import annotations
 
-from typing import Any
-
-import paynt.pomdp.decpomdp.factory
-import paynt.task
-import paynt.parameter_space.parameter_space
-import paynt.synthesizer.synthesizer_ar
-import paynt.utils.timer
+# `from paynt.pomdp import synthesizer_iterative_memory`, not `import paynt.pomdp.synthesizer_iterative_memory`:
+# this module is loaded from paynt/pomdp/__init__.py's own first line (`from . import decpomdp`), before
+# paynt.pomdp has finished initializing -- a bare dotted-chain reference (paynt.pomdp.synthesizer_iterative_memory.X)
+# would need `pomdp` to already be a resolved attribute of `paynt`, which it isn't yet at this point, and fails
+# with "cannot access submodule 'pomdp' of module 'paynt' (most likely due to a circular import)". The `from`
+# form resolves the submodule directly via sys.modules instead, sidestepping that.
+from paynt.pomdp import synthesizer_iterative_memory
+import paynt.pomdp.decpomdp._utils
 import paynt.result
 
-import logging
 
-logger = logging.getLogger(__name__)
+class DecPomdpSynthesizer(synthesizer_iterative_memory.IterativeMemorySynthesizer):
 
-
-class DecPomdpSynthesizer:
-
-    def __init__(self, colored_mdp_factory: paynt.pomdp.decpomdp.factory.DecPomdpColoredMdpFactory, task: paynt.task.SynthesisTask):
-        self.colored_mdp_factory = colored_mdp_factory
-        self.colored_mdp = colored_mdp_factory.colored_mdp
-        self.task = task
-        # TODO add support for more engines
-        self.synthesizer = paynt.synthesizer.synthesizer_ar.SynthesizerAR
-        self.total_iters = 0
-        # best assignment/value found so far across memory-size iterations -- strategy_iterative constructs a
-        # fresh inner synthesizer per iteration and discards it, so this is the only place these survive once
-        # a later, larger-memory iteration doesn't improve on an earlier one
-        self.best_assignment: paynt.parameter_space.parameter_space.ParameterSpace | None = None
-        self.best_assignment_value: Any = None
-
-    def synthesize(
-        self, parameter_space: paynt.parameter_space.parameter_space.ParameterSpace, print_stats: bool = True
-    ) -> paynt.parameter_space.parameter_space.ParameterSpace | None:
-        synthesizer = self.synthesizer(self.colored_mdp, self.task)
-        assignment = synthesizer.synthesize(parameter_space, keep_optimum=True, print_stats=print_stats)
-        if assignment is not None:
-            # keep_optimum=True means this only fires when the assignment genuinely improves on
-            # self.task.specification.optimality's current (cross-iteration) optimum
-            self.best_assignment = assignment
-            self.best_assignment_value = synthesizer.best_assignment_value
-        assert synthesizer.stat is not None
-        if synthesizer.stat.iterations_mdp is not None:
-            self.total_iters += synthesizer.stat.iterations_mdp
-        return assignment
-
-    def strategy_iterative(self) -> None:
-        """Unfolds imperfect (multi-state) observations for every agent at increasing memory sizes."""
-        mem_size = self.colored_mdp_factory.build_task.memory_size
-        while True:
-            if paynt.utils.timer.GlobalTimer.time_limit_reached():
-                break
-            logger.info(f"Synthesizing optimal k={mem_size} controller ...")
-
-            assert self.colored_mdp_factory.current_memory_size is not None
-            if mem_size > self.colored_mdp_factory.current_memory_size:
-                self.colored_mdp = self.colored_mdp_factory.set_imperfect_memory_size(mem_size)
-
-            self.synthesize(self.colored_mdp.parameter_space)
-
-            mem_size += 1
-
-    def run(self, optimum_threshold: Any = None) -> paynt.result.Result:
-        self.strategy_iterative()
-        return paynt.result.Result(success=self.best_assignment is not None, value=self.best_assignment_value, assignment=self.best_assignment)
+    def build_result(self) -> paynt.result.Result:
+        if self.best_assignment is not None:
+            paynt.pomdp.decpomdp._utils.assignment_to_fscs(self.colored_mdp.feature_info, self.best_assignment)
+        return super().build_result()

@@ -14,8 +14,8 @@ from typing import Any
 import payntbind
 
 import paynt.colored_mdp
-import paynt.posmg.task
-from paynt.posmg._utils import PosmgInfo
+import paynt.pomdp.posmg.task
+from paynt.pomdp.posmg._utils import PosmgInfo
 import paynt.parameter_space.parameter_space
 
 import logging
@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 class PosmgColoredMdpFactory:
 
-    def __init__(self, posmg: Any, build_task: paynt.posmg.task.PosmgTask, specification: Any, use_exact: bool = False):
+    def __init__(self, posmg: Any, build_task: paynt.pomdp.posmg.task.PosmgTask, specification: Any, use_exact: bool = False):
         self.posmg = posmg
         self.build_task = build_task
         self.use_exact = use_exact

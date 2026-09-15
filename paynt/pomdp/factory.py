@@ -1,6 +1,6 @@
 """
 Constructs a ColoredMdp (feature_kind "pomdp") by unfolding the agent's imperfect-information strategy into an FSC template
-of a given memory size. Like paynt.posmg's factory, this supports re-unfolding at a larger memory size
+of a given memory size. Like paynt.pomdp.posmg's factory, this supports re-unfolding at a larger memory size
 after construction (PomdpSynthesizer/SayntSynthesizer increase it step by step), so the set_*_memory_size
 methods are public entry points, not just __init__-time setup: each produces a fresh ColoredMdp rather
 than mutating the previous one in place, and the caller reassigns.
