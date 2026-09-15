@@ -26,7 +26,7 @@ def family_task():
 
 @pytest.fixture
 def family_colored_mdp(family_colored_mdp_factory):
-    return family_colored_mdp_factory.colored_mdp
+    return family_colored_mdp_factory.build()
 
 
 @pytest.fixture
@@ -50,4 +50,4 @@ def pomdp_family_task():
 
 @pytest.fixture
 def pomdp_family_colored_mdp(pomdp_family_colored_mdp_factory):
-    return pomdp_family_colored_mdp_factory.colored_mdp
+    return pomdp_family_colored_mdp_factory.build()

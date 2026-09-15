@@ -34,6 +34,8 @@ class DtColoredMdpFactory:
     hypothetical.
     """
 
+    feature_kind = "dt"
+
     # label for action executing a random action selection
     DONT_CARE_ACTION_LABEL = DONT_CARE_ACTION_LABEL
     # if true, irrelevant states will not be considered for tree mapping
@@ -96,15 +98,17 @@ class DtColoredMdpFactory:
         self.relevant_state_valuations = state_valuations
         logger.debug(f"found the following {len(self.variables)} variables: {[str(v) for v in self.variables]}")
 
-        # build an initial (depth-0) tree so this factory always produces a usable colored_mdp, matching
-        # every other colored-MDP factory -- 0 is also the CLI's own default --tree-depth
-        self.colored_mdp = self.reset_tree(0)
+    def build(self) -> paynt.colored_mdp.ColoredMdp:
+        """Produce a ColoredMdp at build_task's own default tree depth. Not called automatically -- the
+        caller (e.g. DtSynthesizer, paynt.api.get_synthesizer) requests it explicitly."""
+        assert self.build_task is not None
+        return self.reset_tree(self.build_task.tree_depth)
 
     def reset_tree(self, depth: int, enable_harmonization: bool = True) -> paynt.colored_mdp.ColoredMdp:
         """
         Rebuild the decision tree template, the parameter space and the coloring, producing a fresh
-        ColoredMdp -- callers reassign their reference (e.g. self.colored_mdp = factory.reset_tree(k)) rather
-        than relying on in-place mutation.
+        ColoredMdp. The factory itself holds no reference to the result -- the caller (e.g. self.colored_mdp
+        = factory.reset_tree(k)) is responsible for tracking it.
         """
         logger.debug(f"building tree of depth {depth}")
 
@@ -170,5 +174,4 @@ class DtColoredMdpFactory:
             is_decision_parameter=is_decision_parameter,
             is_variable_parameter=is_variable_parameter,
         )
-        self.colored_mdp = colored_mdp
         return colored_mdp

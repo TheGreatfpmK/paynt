@@ -11,6 +11,11 @@ import paynt.task
 
 class TestPomdpFamilyColoredMdpFactory:
 
+    def test_factory_does_not_build_automatically(self, pomdp_family_colored_mdp_factory):
+        """Guardrail for the "factories don't eagerly build" redesign: a freshly-constructed factory holds
+        no colored_mdp of its own -- build() must be called explicitly to get one."""
+        assert not hasattr(pomdp_family_colored_mdp_factory, "colored_mdp")
+
     def test_load_sketch_produces_a_pomdp_family_colored_mdp(self, pomdp_family_colored_mdp):
         assert type(pomdp_family_colored_mdp) is paynt.colored_mdp.ColoredMdp
         assert pomdp_family_colored_mdp.feature_kind == "pomdp_family"

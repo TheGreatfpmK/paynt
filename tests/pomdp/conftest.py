@@ -23,7 +23,7 @@ def pomdp_task():
 
 @pytest.fixture
 def pomdp_colored_mdp(pomdp_colored_mdp_factory):
-    return pomdp_colored_mdp_factory.colored_mdp
+    return pomdp_colored_mdp_factory.build()
 
 
 @pytest.fixture
@@ -49,7 +49,7 @@ def decpomdp_task():
 
 @pytest.fixture
 def decpomdp_colored_mdp(decpomdp_colored_mdp_factory):
-    return decpomdp_colored_mdp_factory.colored_mdp
+    return decpomdp_colored_mdp_factory.build()
 
 
 @pytest.fixture
@@ -65,7 +65,7 @@ def posmg_colored_mdp_factory():
 
 @pytest.fixture
 def posmg_colored_mdp(posmg_colored_mdp_factory):
-    return posmg_colored_mdp_factory.colored_mdp
+    return posmg_colored_mdp_factory.build()
 
 
 @pytest.fixture

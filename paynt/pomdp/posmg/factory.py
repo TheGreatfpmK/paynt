@@ -1,10 +1,11 @@
 """
 Constructs a ColoredMdp (feature_kind "posmg") by unfolding the optimizing player's imperfect-information
-strategy into an FSC template of a given memory size. Unlike the family/ factories, this must support
-re-unfolding at a larger memory size after construction (PosmgSynthesizer.strategy_iterative increases it
-step by step), so set_imperfect_memory_size is a public entry point, not just __init__-time setup: it
-produces a fresh ColoredMdp each time rather than mutating the previous one in place, and the caller
-reassigns.
+strategy into an FSC template of a given memory size. The factory itself never builds automatically --
+__init__ does only the static, memory-size-independent setup; build()/set_imperfect_memory_size(k) are the
+public entry points a caller uses to actually get a ColoredMdp, called explicitly whenever one is needed
+(including the first one). Each call produces a fresh ColoredMdp rather than mutating a previous one in
+place, and the factory holds no reference to what it returns -- the caller is responsible for tracking it
+(PosmgSynthesizer.strategy_iterative re-unfolds at a larger memory size step by step, exactly this way).
 """
 
 from __future__ import annotations
@@ -24,6 +25,8 @@ logger = logging.getLogger(__name__)
 
 
 class PosmgColoredMdpFactory:
+
+    feature_kind = "posmg"
 
     def __init__(self, posmg: Any, build_task: paynt.pomdp.posmg.task.PosmgTask, specification: Any, use_exact: bool = False):
         self.posmg = posmg
@@ -85,10 +88,13 @@ class PosmgColoredMdpFactory:
                 obs = state_obs[state]
                 self.opt_player_observation_states[obs] += 1
 
-        # number of memory states allocated to each optimizing player observation, and the current unfolding
+        # number of memory states allocated to each optimizing player observation
         self.opt_player_observation_memory_size: dict[int, int] | None = None
-        self.current_memory_size: int | None = None
-        self.colored_mdp = self.set_imperfect_memory_size(build_task.memory_size)
+
+    def build(self) -> paynt.colored_mdp.ColoredMdp:
+        """Produce a ColoredMdp at build_task's own default memory size. Not called automatically -- the
+        caller (e.g. IterativeMemorySynthesizer, paynt.api.get_synthesizer) requests it explicitly."""
+        return self.set_imperfect_memory_size(self.build_task.memory_size)
 
     def set_manager_memory_vector(self) -> None:
         assert self.opt_player_observation_memory_size is not None
@@ -97,15 +103,13 @@ class PosmgColoredMdpFactory:
 
     def set_imperfect_memory_size(self, memory_size: int) -> paynt.colored_mdp.ColoredMdp:
         """(Re-)unfold the optimizing player's FSC template at the given memory size, producing a fresh
-        ColoredMdp -- callers reassign their reference (e.g. self.colored_mdp =
-        factory.set_imperfect_memory_size(k)) rather than relying on in-place mutation."""
+        ColoredMdp. The factory itself holds no reference to the result -- the caller (e.g. self.colored_mdp =
+        factory.set_imperfect_memory_size(k)) is responsible for tracking it."""
         self.opt_player_observation_memory_size = {
             obs: (memory_size if obs_states > 1 else 1) for obs, obs_states in self.opt_player_observation_states.items()
         }
         self.set_manager_memory_vector()
-        self.current_memory_size = memory_size
-        self.colored_mdp = self._unfold_memory()
-        return self.colored_mdp
+        return self._unfold_memory()
 
     def create_parameter_name(self, player: int, value: int, mem: int, is_action_parameter: bool) -> str:
         category = "A" if is_action_parameter else "M"

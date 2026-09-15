@@ -183,6 +183,14 @@ class IdentityColoredMdpFactory:
     can treat every feature uniformly as a (colored_mdp_factory, task) pair without special-casing this one.
     """
 
+    feature_kind = "generic"
+
     def __init__(self, colored_mdp: ColoredMdp, task: paynt.task.SynthesisTask):
         self.colored_mdp = colored_mdp
         self.task = task
+
+    def build(self) -> ColoredMdp:
+        """Nothing to build -- the ColoredMdp already exists. Exists purely for interface uniformity with the
+        other 6 colored-MDP factories, so callers like paynt.api.get_synthesizer can call .build() on
+        whichever factory they're holding without special-casing this one."""
+        return self.colored_mdp

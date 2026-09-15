@@ -20,6 +20,8 @@ logger = logging.getLogger(__name__)
 
 class PomdpFamilyColoredMdpFactory(MdpFamilyColoredMdpFactory):
 
+    feature_kind = "pomdp_family"
+
     def __init__(
         self,
         underlying_mdp: Any,
@@ -43,7 +45,7 @@ class PomdpFamilyColoredMdpFactory(MdpFamilyColoredMdpFactory):
         self.obs_evaluator.state_to_obs_class = new_obs_classes_map
         return unfolded_mdp, parameter_space, new_coloring
 
-    def _construct_colored_mdp(self) -> paynt.colored_mdp.ColoredMdp:
+    def build(self) -> paynt.colored_mdp.ColoredMdp:
         # identify actions available at each observation
         observation_to_actions: list[list[int] | None] = [None] * self.obs_evaluator.num_obs_classes
         state_to_observation = self.obs_evaluator.state_to_obs_class

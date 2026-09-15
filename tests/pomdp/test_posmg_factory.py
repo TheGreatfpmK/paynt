@@ -6,6 +6,13 @@ import paynt.synthesizer.search_node
 
 class TestPosmgColoredMdpFactory:
 
+    def test_factory_does_not_build_automatically(self, posmg_colored_mdp_factory):
+        """Guardrail for the "factories don't eagerly build" redesign: a freshly-constructed factory holds
+        no colored_mdp/memory-size state of its own -- build()/set_imperfect_memory_size() must be called
+        explicitly to get one."""
+        assert not hasattr(posmg_colored_mdp_factory, "colored_mdp")
+        assert not hasattr(posmg_colored_mdp_factory, "current_memory_size")
+
     def test_load_sketch_produces_a_posmg_colored_mdp(self, posmg_colored_mdp):
         assert type(posmg_colored_mdp) is paynt.colored_mdp.ColoredMdp
         assert posmg_colored_mdp.feature_kind == "posmg"
@@ -25,4 +32,3 @@ class TestPosmgColoredMdpFactory:
     def test_set_imperfect_memory_size_produces_a_fresh_colored_mdp(self, posmg_colored_mdp_factory):
         reunfolded = posmg_colored_mdp_factory.set_imperfect_memory_size(2)
         assert reunfolded.feature_kind == "posmg"
-        assert posmg_colored_mdp_factory.current_memory_size == 2

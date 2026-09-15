@@ -24,6 +24,8 @@ logger = logging.getLogger(__name__)
 
 class MdpFamilyColoredMdpFactory:
 
+    feature_kind = "family"
+
     def __init__(
         self,
         underlying_mdp: Any,
@@ -50,11 +52,10 @@ class MdpFamilyColoredMdpFactory:
         self.state_action_choices = MdpFamilyColoredMdpFactory.map_state_action_to_choices(underlying_mdp, self.num_actions, self.choice_to_action)
         self.state_to_actions = MdpFamilyColoredMdpFactory.map_state_to_available_actions(self.state_action_choices)
 
-        self.colored_mdp = self._construct_colored_mdp()
-
-    def _construct_colored_mdp(self) -> paynt.colored_mdp.ColoredMdp:
+    def build(self) -> paynt.colored_mdp.ColoredMdp:
         """Overridable so subclasses (e.g. PomdpFamilyColoredMdpFactory) can produce their own Info object
-        while reusing all of the construction above."""
+        while reusing all of the construction above. Not called automatically -- the caller (e.g.
+        paynt.api.get_synthesizer) requests a ColoredMdp explicitly."""
         colored_mdp = paynt.colored_mdp.ColoredMdp(self.underlying_mdp, self.parameter_space, self.coloring, self.use_exact, feature_kind="family")
         colored_mdp.feature_info = paynt.mdp_family._utils.MdpFamilyInfo(
             num_actions=self.num_actions,

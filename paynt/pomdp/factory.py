@@ -1,9 +1,11 @@
 """
 Constructs a ColoredMdp (feature_kind "pomdp") by unfolding the agent's imperfect-information strategy into an FSC template
-of a given memory size. Like paynt.pomdp.posmg's factory, this supports re-unfolding at a larger memory size
-after construction (PomdpSynthesizer/SayntSynthesizer increase it step by step), so the set_*_memory_size
-methods are public entry points, not just __init__-time setup: each produces a fresh ColoredMdp rather
-than mutating the previous one in place, and the caller reassigns.
+of a given memory size. The factory itself never builds automatically -- __init__ does only the static,
+memory-size-independent setup; build()/set_*_memory_size methods are the public entry points a caller uses
+to actually get a ColoredMdp, called explicitly whenever one is needed (including the first one). Each call
+produces a fresh ColoredMdp rather than mutating a previous one in place, and the factory holds no reference
+to what it returns -- the caller is responsible for tracking it (PomdpSynthesizer/SayntSynthesizer re-unfold
+at a larger memory size step by step, exactly this way).
 """
 
 from __future__ import annotations
@@ -27,6 +29,8 @@ logger = logging.getLogger(__name__)
 
 
 class PomdpColoredMdpFactory:
+
+    feature_kind = "pomdp"
 
     def __init__(self, pomdp: Any, build_task: paynt.pomdp.task.PomdpTask, decpomdp_manager: Any = None, use_exact: bool = False):
         self.build_task = build_task
@@ -102,13 +106,13 @@ class PomdpColoredMdpFactory:
             else:
                 self.pomdp_manager = payntbind.synthesis.PomdpManagerAposteriori(self.pomdp)
 
-        # number of memory states allocated to each observation, and the current unfolding
+        # number of memory states allocated to each observation
         self.observation_memory_size: list[int] | None = None
-        self.current_memory_size: int | None = None
 
-        # do initial unfolding
-        self.colored_mdp = self.set_imperfect_memory_size(build_task.memory_size)
-        self.current_memory_size = build_task.memory_size
+    def build(self) -> paynt.colored_mdp.ColoredMdp:
+        """Produce a ColoredMdp at build_task's own default memory size. Not called automatically -- the
+        caller (e.g. IterativeMemorySynthesizer, paynt.api.get_synthesizer) requests it explicitly."""
+        return self.set_imperfect_memory_size(self.build_task.memory_size)
 
     @property
     def observations(self) -> int:
@@ -150,24 +154,19 @@ class PomdpColoredMdpFactory:
     def set_global_memory_size(self, memory_size: int) -> paynt.colored_mdp.ColoredMdp:
         self.observation_memory_size = [memory_size] * self.observations
         self.set_manager_memory_vector()
-        self.current_memory_size = memory_size
-        self.colored_mdp = self._unfold_memory()
-        return self.colored_mdp
+        return self._unfold_memory()
 
     def set_imperfect_memory_size(self, memory_size: int) -> paynt.colored_mdp.ColoredMdp:
         """Set given memory size only to imperfect observations."""
         self.observation_memory_size = [memory_size if self.observation_states[obs] > 1 else 1 for obs in range(self.observations)]
         self.set_manager_memory_vector()
-        self.current_memory_size = memory_size
-        self.colored_mdp = self._unfold_memory()
-        return self.colored_mdp
+        return self._unfold_memory()
 
     def increase_memory_size(self, obs: int) -> paynt.colored_mdp.ColoredMdp:
         assert self.observation_memory_size is not None
         self.observation_memory_size[obs] += 1
         self.set_manager_memory_vector()
-        self.colored_mdp = self._unfold_memory()
-        return self.colored_mdp
+        return self._unfold_memory()
 
     def set_memory_from_dict(self, obs_memory_dict: dict[int, int]) -> paynt.colored_mdp.ColoredMdp:
         memory_list = []
@@ -176,8 +175,7 @@ class PomdpColoredMdpFactory:
 
         self.observation_memory_size = memory_list
         self.set_manager_memory_vector()
-        self.colored_mdp = self._unfold_memory()
-        return self.colored_mdp
+        return self._unfold_memory()
 
     def set_memory_from_result_new(
         self, obs_memory_dict: dict[int, int], obs_memory_dict_cutoff: dict[int, int], memory_limit: int
@@ -197,8 +195,7 @@ class PomdpColoredMdpFactory:
 
         self.observation_memory_size = memory_list
         self.set_manager_memory_vector()
-        self.colored_mdp = self._unfold_memory()
-        return self.colored_mdp
+        return self._unfold_memory()
 
     def create_coloring(
         self, underlying_mdp: Any

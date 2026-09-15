@@ -13,13 +13,20 @@ class TestDtColoredMdpFactory:
         assert dt_colored_mdp.feature_kind == "dt"
         assert isinstance(dt_colored_mdp.feature_info, paynt.dt._utils.DtInfo)
 
-    def test_factory_builds_an_initial_depth_zero_tree(self, dt_colored_mdp, dt_colored_mdp_factory):
-        """Regression test for the construction-order fix: DtColoredMdpFactory must produce a usable
-        colored_mdp immediately (matching every other specialist factory), unlike the pre-refactor
-        DtColoredMdpFactory which had no coloring/parameter_space until reset_tree was called externally."""
+    def test_factory_does_not_build_automatically(self, dt_colored_mdp_factory):
+        """Guardrail for the "factories don't eagerly build" redesign: a freshly-constructed factory holds
+        no colored_mdp/memory-size state of its own -- reset_tree()/build() must be called explicitly to
+        get one, matching every other specialist factory."""
         assert isinstance(dt_colored_mdp_factory, paynt.dt.DtColoredMdpFactory)
-        assert dt_colored_mdp_factory.colored_mdp is dt_colored_mdp
-        assert dt_colored_mdp.feature_info.decision_tree.get_depth() == 0
+        assert not hasattr(dt_colored_mdp_factory, "colored_mdp")
+
+    def test_build_produces_a_tree_at_build_tasks_configured_depth(self, dt_colored_mdp_factory):
+        """build() must honor build_task.tree_depth, not silently default to 0 -- dt-orchard's fixture goes
+        through DtNestTask (Sketch.load_sketch doesn't yet know whether the caller wants dtnest), whose own
+        default tree_depth is 7, not 0."""
+        assert dt_colored_mdp_factory.build_task is not None
+        colored_mdp = dt_colored_mdp_factory.build()
+        assert colored_mdp.feature_info.decision_tree.get_depth() == dt_colored_mdp_factory.build_task.tree_depth
 
     def test_reset_tree_produces_a_fresh_colored_mdp(self, dt_colored_mdp, dt_colored_mdp_factory):
         reset = dt_colored_mdp_factory.reset_tree(2)
@@ -38,4 +45,4 @@ class TestDtColoredMdpFactory:
         DtColoredMdpFactory from just an mdp, with no task yet, and attach one later."""
         factory = paynt.dt.DtColoredMdpFactory(dt_colored_mdp.underlying_mdp)
         assert factory.build_task is None
-        assert factory.colored_mdp.feature_info.decision_tree.get_depth() == 0
+        assert factory.reset_tree(0).feature_info.decision_tree.get_depth() == 0

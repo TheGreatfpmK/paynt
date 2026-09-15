@@ -73,9 +73,13 @@ class DtSynthesizer:
     own inner AR engine.
     """
 
-    def __init__(self, colored_mdp_factory: paynt.dt.factory.DtColoredMdpFactory, task: paynt.task.SynthesisTask):
+    def __init__(
+        self,
+        colored_mdp_factory: paynt.dt.factory.DtColoredMdpFactory,
+        task: paynt.task.SynthesisTask,
+        initial_depth: int | None = None,
+    ):
         self.colored_mdp_factory = colored_mdp_factory
-        self.colored_mdp = colored_mdp_factory.colored_mdp
         self.task = task
         # build_task is Optional at the type level (see DtColoredMdpFactory's own docstring: a factory can be
         # constructed before its DtTask is known), but DtSynthesizer always needs one already attached
@@ -84,6 +88,14 @@ class DtSynthesizer:
         # through colored_mdp_factory.build_task on every use
         assert colored_mdp_factory.build_task is not None
         self.build_task: paynt.dt.task.DtTask = colored_mdp_factory.build_task
+        # the factory itself never builds automatically -- request the initial tree explicitly. Defaults to
+        # build_task's own depth; callers that only need this for cheap, depth-invariant inspection (e.g.
+        # DtNest's subtree recursion reading feature_info.state_is_relevant_bv/action_labels, which are set
+        # once in DtColoredMdpFactory.__init__ and identical across every reset_tree call regardless of
+        # depth) pass initial_depth=0 explicitly to avoid needlessly building at a larger, more expensive
+        # depth -- whatever gets built here is fully discarded and rebuilt from depth 0 anyway the moment
+        # synthesize_tree/synthesize_tree_sequence actually run.
+        self.colored_mdp = colored_mdp_factory.reset_tree(initial_depth if initial_depth is not None else self.build_task.tree_depth)
         self.best_tree: paynt.dt.decision_tree.DecisionTree | None = None
         self.best_tree_value: Any = None
 

@@ -1,10 +1,12 @@
 """
 Constructs a ColoredMdp (feature_kind "decpomdp") by unfolding every agent's imperfect-information strategy
-into its own FSC template of a given memory size. Like paynt.pomdp's factory, this supports re-unfolding at
-a larger memory size after construction (DecPomdpSynthesizer increases it step by step), so the
-set_*_memory_size methods are public entry points, not just __init__-time setup: each produces a fresh
-ColoredMdp rather than mutating the previous one in place, and the caller reassigns. Dec-POMDP carries no
-extra state beyond the base ColoredMdp -- unlike every other feature, there is no companion Info dataclass.
+into its own FSC template of a given memory size. The factory itself never builds automatically -- __init__
+does only the static, memory-size-independent setup; build()/set_*_memory_size methods are the public entry
+points a caller uses to actually get a ColoredMdp, called explicitly whenever one is needed (including the
+first one). Each call produces a fresh ColoredMdp rather than mutating a previous one in place, and the
+factory holds no reference to what it returns -- the caller is responsible for tracking it
+(DecPomdpSynthesizer re-unfolds at a larger memory size step by step, exactly this way). Dec-POMDP carries
+no extra state beyond the base ColoredMdp -- unlike every other feature, there is no companion Info dataclass.
 """
 
 from __future__ import annotations
@@ -23,6 +25,8 @@ logger = logging.getLogger(__name__)
 
 
 class DecPomdpColoredMdpFactory:
+
+    feature_kind = "decpomdp"
 
     def __init__(self, decpomdp_manager: Any, build_task: paynt.pomdp.task.PomdpTask, use_exact: bool = False):
         assert decpomdp_manager.num_agents > 1
@@ -54,10 +58,13 @@ class DecPomdpColoredMdpFactory:
                 agent_obs = self.joint_observations[joint_observation][agent]
                 self.agent_observation_states[agent][agent_obs] += 1
 
-        # for each agent and each observation, the size of the memory allocated to it, and the current unfolding
+        # for each agent and each observation, the size of the memory allocated to it
         self.agent_observation_memory_size: list[list[int]] = [[] for _ in range(self.nr_agents)]
-        self.current_memory_size: int | None = None
-        self.colored_mdp = self.set_imperfect_memory_size(build_task.memory_size)
+
+    def build(self) -> paynt.colored_mdp.ColoredMdp:
+        """Produce a ColoredMdp at build_task's own default memory size. Not called automatically -- the
+        caller (e.g. IterativeMemorySynthesizer, paynt.api.get_synthesizer) requests it explicitly."""
+        return self.set_imperfect_memory_size(self.build_task.memory_size)
 
     def create_parameter_name(self, agent: int, obs: int, mem: int, is_action_parameter: bool) -> str:
         category = "A" if is_action_parameter else "M"
@@ -71,15 +78,13 @@ class DecPomdpColoredMdpFactory:
 
     def set_imperfect_memory_size(self, memory_size: int) -> paynt.colored_mdp.ColoredMdp:
         """(Re-)unfold every agent's FSC template at the given memory size (imperfect observations only),
-        producing a fresh ColoredMdp -- callers reassign their reference (e.g. self.colored_mdp =
-        factory.set_imperfect_memory_size(k)) rather than relying on in-place mutation."""
+        producing a fresh ColoredMdp. The factory itself holds no reference to the result -- the caller (e.g.
+        self.colored_mdp = factory.set_imperfect_memory_size(k)) is responsible for tracking it."""
         for agent in range(self.nr_agents):
             agent_memory = [memory_size if self.agent_observation_states[agent][obs] > 1 else 1 for obs in range(self.nr_agent_observations[agent])]
             self.agent_observation_memory_size[agent] = agent_memory
         self.set_manager_memory_vector()
-        self.current_memory_size = memory_size
-        self.colored_mdp = self._unfold_memory()
-        return self.colored_mdp
+        return self._unfold_memory()
 
     def set_agent_imperfect_memory_size(self, agent: int, memory_size: int) -> paynt.colored_mdp.ColoredMdp:
         """Like set_imperfect_memory_size, but re-unfolds only the given agent's imperfect observations."""
@@ -87,8 +92,7 @@ class DecPomdpColoredMdpFactory:
         agent_memory = [memory_size if self.agent_observation_states[agent][obs] > 1 else 1 for obs in range(self.nr_agent_observations[agent])]
         self.agent_observation_memory_size[agent] = agent_memory
         self.set_manager_memory_vector()
-        self.colored_mdp = self._unfold_memory()
-        return self.colored_mdp
+        return self._unfold_memory()
 
     def create_coloring(self, underlying_mdp: Any) -> tuple[paynt.parameter_space.parameter_space.ParameterSpace, list[list[tuple[int, int]]]]:
         pm = self.decpomdp_manager

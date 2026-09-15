@@ -29,4 +29,4 @@ def dt_task():
 
 @pytest.fixture
 def dt_colored_mdp(dt_colored_mdp_factory):
-    return dt_colored_mdp_factory.colored_mdp
+    return dt_colored_mdp_factory.build()

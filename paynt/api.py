@@ -28,9 +28,9 @@ def get_synthesizer(
     dtnest: bool = False,
 ) -> Any:
     """
-    The one canonical synthesis dispatcher: reads colored_mdp_factory.colored_mdp.feature_kind and routes to
-    the right synthesizer, so callers (paynt.cli, library users) never need to isinstance-check or import a
-    specific feature package themselves.
+    The one canonical synthesis dispatcher: reads colored_mdp_factory.feature_kind (a class attribute, so no
+    ColoredMdp needs to be built just to dispatch) and routes to the right synthesizer, so callers
+    (paynt.cli, library users) never need to isinstance-check or import a specific feature package themselves.
 
     :param colored_mdp_factory the factory that produced the ColoredMdp to synthesize -- required (not just
         the bare ColoredMdp) so that FSC/tree-unfolding synthesizers (DT, POMDP, POSMG, Dec-POMDP, SAYNT) can
@@ -50,8 +50,7 @@ def get_synthesizer(
     """
     import paynt.synthesizer.synthesizer
 
-    colored_mdp = colored_mdp_factory.colored_mdp
-    feature_kind = colored_mdp.feature_kind
+    feature_kind = colored_mdp_factory.feature_kind
 
     if feature_kind == "pomdp_family":
         # a family-of-POMDPs sketch isn't run through a Synthesizer at all (see e.g.
@@ -81,14 +80,14 @@ def get_synthesizer(
 
     if feature_kind == "family":
         if method == "onebyone":
-            return paynt.synthesizer.synthesizer.Synthesizer.for_method(colored_mdp, task, method)
+            return paynt.synthesizer.synthesizer.Synthesizer.for_method(colored_mdp_factory.build(), task, method)
         import paynt.mdp_family
 
-        return paynt.mdp_family.PolicyTreeSynthesizer(colored_mdp, task)
+        return paynt.mdp_family.PolicyTreeSynthesizer(colored_mdp_factory.build(), task)
 
     if feature_kind == "posmg" and fsc_synthesis:
         import paynt.pomdp
 
         return paynt.pomdp.posmg.PosmgSynthesizer(colored_mdp_factory, task, method)
 
-    return paynt.synthesizer.synthesizer.Synthesizer.for_method(colored_mdp, task, method)
+    return paynt.synthesizer.synthesizer.Synthesizer.for_method(colored_mdp_factory.build(), task, method)

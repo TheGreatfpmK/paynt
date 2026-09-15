@@ -3,7 +3,9 @@ Shared driver shape for FSC synthesis features that repeatedly re-unfold at incr
 an AR-family engine (AR or Hybrid) against each unfolding, keeping the best assignment found so far across
 memory sizes. Used as-is by DecPomdpSynthesizer; PosmgSynthesizer overrides stat_iterations_field;
 PomdpSynthesizer additionally overrides __init__/synthesize/build_result to track which specific
-memory-size unfolding produced the best assignment (needed for FSC extraction).
+memory-size unfolding produced the best assignment (needed for FSC extraction). The factory itself never
+builds automatically and holds no memory-size state -- this class owns current_memory_size and requests the
+first ColoredMdp explicitly in __init__, exactly like every later re-unfold in strategy_iterative.
 """
 
 from __future__ import annotations
@@ -30,7 +32,9 @@ class IterativeMemorySynthesizer:
 
     def __init__(self, colored_mdp_factory: Any, task: paynt.task.SynthesisTask, method: str = "ar") -> None:
         self.colored_mdp_factory = colored_mdp_factory
-        self.colored_mdp = colored_mdp_factory.colored_mdp
+        # the factory itself holds no memory-size/colored_mdp state -- this is the one place that tracks it
+        self.current_memory_size: int = colored_mdp_factory.build_task.memory_size
+        self.colored_mdp = colored_mdp_factory.build()
         self.task = task
         # TODO add support for cegis/onebyone
         if method == "ar":
@@ -69,9 +73,9 @@ class IterativeMemorySynthesizer:
                 break
             logger.info(f"Synthesizing optimal k={mem_size} controller ...")
 
-            assert self.colored_mdp_factory.current_memory_size is not None
-            if mem_size > self.colored_mdp_factory.current_memory_size:
+            if mem_size > self.current_memory_size:
                 self.colored_mdp = self.colored_mdp_factory.set_imperfect_memory_size(mem_size)
+                self.current_memory_size = mem_size
 
             self.synthesize(self.colored_mdp.parameter_space)
 

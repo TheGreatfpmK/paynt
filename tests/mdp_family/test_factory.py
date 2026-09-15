@@ -6,6 +6,11 @@ import paynt.synthesizer.search_node
 
 class TestFamilyColoredMdpFactory:
 
+    def test_factory_does_not_build_automatically(self, family_colored_mdp_factory):
+        """Guardrail for the "factories don't eagerly build" redesign: a freshly-constructed factory holds
+        no colored_mdp of its own -- build() must be called explicitly to get one."""
+        assert not hasattr(family_colored_mdp_factory, "colored_mdp")
+
     def test_load_sketch_produces_a_family_colored_mdp(self, family_colored_mdp):
         assert type(family_colored_mdp) is paynt.colored_mdp.ColoredMdp
         assert family_colored_mdp.feature_kind == "family"

@@ -282,13 +282,16 @@ class DtNest(DtSynthesizer):
                 subtree_spec = self.task.specification.copy()
                 subtree_task = paynt.task.SynthesisTask.from_specification(subtree_spec, use_exact=self.colored_mdp.use_exact)
                 subtree_colored_mdp_factory = DtColoredMdpFactory(submdp.model, self.colored_mdp_factory.build_task)
-                subtree_colored_mdp = subtree_colored_mdp_factory.colored_mdp
                 assert subtree_task.specification.optimality is not None
                 subtree_task.specification.optimality.update_optimum(eps_optimum_threshold)
-                subtree_synthesizer = DtSynthesizer(subtree_colored_mdp_factory, subtree_task)
+                # initial_depth=0: this construction's own tree is only ever used to inspect depth-invariant
+                # feature_info below (state_is_relevant_bv/action_labels, fixed once in the factory's own
+                # __init__) -- building at a larger depth here would be needlessly expensive and, in the
+                # synthesize_tree_sequence branch below, immediately discarded and rebuilt from depth 0 anyway
+                subtree_synthesizer = DtSynthesizer(subtree_colored_mdp_factory, subtree_task, initial_depth=0)
                 self.dtpaynt_calls += 1
 
-                subtree_info = cast(DtInfo, subtree_colored_mdp.feature_info)
+                subtree_info = cast(DtInfo, subtree_synthesizer.colored_mdp.feature_info)
                 if subtree_info.state_is_relevant_bv.number_of_set_bits() == 0:
                     random_tree = create_uniform_random_tree(subtree_info)
                     subtree_synthesizer.best_tree = random_tree
