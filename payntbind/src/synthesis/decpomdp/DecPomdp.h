@@ -87,8 +87,6 @@ namespace synthesis {
 
         double discount_factor;
 
-        void applyDiscountFactorTransformation();
-
         void set_constraint_bound(double bound) {
             this->constraint_bound = bound;
         };
@@ -97,13 +95,6 @@ namespace synthesis {
         std::string init_label = "init";
         /** Label for the states in the initial distribution. */
         std::string no_obs_label = "__no_obs__";
-
-        /** Whether discounting transformation took place. */
-        bool discounted = false;
-        /** Index of the sink state. */
-        uint64_t discount_sink_state;
-        /** Label associated with the sink. */
-        std::string discount_sink_label = "discount_sink";
 
         /** For each agent and each observation contains the number of allocated memory states (initially 1) */
         std::vector<std::vector<uint64_t>> agent_observation_memory_size;
@@ -201,12 +192,6 @@ namespace synthesis {
 
         uint64_t freshJointAction(std::string action_label);
         uint64_t freshJointObservation(std::string observation_label);
-        /**
-         * Add new state having fresh observation with its self-loop denoted
-         * by a fresh joint action with zero reward.
-         * @return index of the created state
-         */
-        uint64_t freshSink(std::string label);
 
         storm::models::sparse::StateLabeling constructStateLabeling();
         storm::models::sparse::ChoiceLabeling constructChoiceLabeling();

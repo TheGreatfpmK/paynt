@@ -23,10 +23,6 @@ void bindings_decpomdp(py::module& m) {
         .def_property_readonly("discount_factor", [](synthesis::DecPomdp& decpomdp) {return decpomdp.discount_factor;})
 
         .def("set_constraint", &synthesis::DecPomdp::set_constraint_bound, py::arg("bound"))
-        .def_property_readonly("discounted", [](synthesis::DecPomdp& decpomdp) {return decpomdp.discounted;})
-        
-        .def("apply_discount_factor_transformation", &synthesis::DecPomdp::applyDiscountFactorTransformation)
-        .def_property_readonly("discount_sink_label", [](synthesis::DecPomdp& decpomdp) {return decpomdp.discount_sink_label;})
 
         .def_property_readonly("row_joint_action", [](synthesis::DecPomdp& decpomdp) {return decpomdp.row_joint_action;}, "row_joint_action")
         .def_property_readonly("state_joint_observation", [](synthesis::DecPomdp& decpomdp) {return decpomdp.state_joint_observation;},"state_joint_observation")

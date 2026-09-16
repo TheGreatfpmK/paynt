@@ -10,9 +10,11 @@ from paynt.specification.property import Property, OptimalityProperty, Specifica
 class PropertyResult:
     def __init__(self, prop: Property, result: Any, value: Any):
         self.result = result
-        self.value = value
-        self.sat = prop.satisfies_threshold(value)
-        self.improves_optimum: bool | None = None if not isinstance(prop, OptimalityProperty) else prop.improves_optimum(value)
+        # a no-op (factor 1.0) for every property except a Cassandra-derived discounted-reward one -- see
+        # Property.discount_correction_factor
+        self.value = value * prop.discount_correction_factor
+        self.sat = prop.satisfies_threshold(self.value)
+        self.improves_optimum: bool | None = None if not isinstance(prop, OptimalityProperty) else prop.improves_optimum(self.value)
 
     def __str__(self) -> str:
         return str(self.value)

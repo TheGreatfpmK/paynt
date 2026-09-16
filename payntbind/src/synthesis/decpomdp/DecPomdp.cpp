@@ -95,30 +95,6 @@ namespace synthesis {
         return joint_observation;
     }
 
-    uint64_t DecPomdp::freshSink(std::string label) {
-        
-        uint64_t joint_observation = this->freshJointObservation(label);
-        MadpState madp_new_state = std::make_pair(0,joint_observation);
-        uint64_t new_state = this->mapMadpState(madp_new_state);
-
-        uint64_t sink_action = this->freshJointAction(label);
-        this->row_joint_action[new_state] = std::vector<uint64_t>(1, sink_action);
-        this->row_reward[new_state] = std::vector<double>(1, 0);
-        this->transition_matrix[new_state] = std::vector<StormRow>(1, StormRow(1, std::make_pair(new_state,1)));
-
-        // resize needed for the added sink state
-        for (uint64_t agent = 0; agent < this->num_agents; agent++) {
-            this->agent_observation_memory_size[agent].resize(this->agent_num_observations(agent), 1);
-            this->agent_prototype_row_index[agent].push_back(0);
-        }
-        this->prototype_duplicates.resize(this->num_states());
-        this->max_successor_memory_size.resize(this->num_joint_observations());
-
-        return new_state;
-    }
-
-
-
     DecPomdp::DecPomdp(DecPOMDPDiscrete *model) {
         // agents
         this->num_agents = model->GetNrAgents();
@@ -363,12 +339,6 @@ namespace synthesis {
         init_flags.set(this->initial_state);
         labeling.addLabel(this->init_label, std::move(init_flags));
 
-        if(this->discounted) {
-            storm::storage::BitVector discount_sink_flags(this->num_states(), false);
-            discount_sink_flags.set(this->discount_sink_state);
-            labeling.addLabel(this->discount_sink_label, std::move(discount_sink_flags));
-        }
-        
         return labeling;
     }
 
@@ -379,14 +349,6 @@ namespace synthesis {
         storm::storage::BitVector init_flags(this->num_quotient_states, false);
         init_flags.set(this->prototype_duplicates[this->initial_state].at(agent_default_memories));
         labeling.addLabel("init", std::move(init_flags));
-
-        if(this->discounted and this->discount_factor != 1) {
-            storm::storage::BitVector discount_sink_flags(this->num_quotient_states, false);
-            for (const auto &state_map : this->prototype_duplicates[this->discount_sink_state]) {
-                discount_sink_flags.set(state_map.second);
-            }
-            labeling.addLabel(this->discount_sink_label, std::move(discount_sink_flags));
-        }
 
         return labeling;
     }
@@ -541,8 +503,8 @@ namespace synthesis {
         for(uint64_t state = 0; state < this->num_states(); state++) {
             for(uint64_t row = 0; row < this->transition_matrix[state].size(); row++) {
                 auto reward = this->row_reward[state][row];
-                // no matter what the bound is there should not be any cost in the initial state or the discount state
-                if (reward < this->constraint_bound && (state != this->initial_state && state != this->discount_sink_state)) {
+                // no matter what the bound is there should not be any cost in the initial state
+                if (reward < this->constraint_bound && state != this->initial_state) {
                     action_rewards.push_back(1);
                 } else {
                     action_rewards.push_back(0);
@@ -667,29 +629,6 @@ namespace synthesis {
     }
 
     
-    void DecPomdp::applyDiscountFactorTransformation() {
-
-        if(this->discounted || this->discount_factor == 1) {
-            return;
-        }
-        this->discount_sink_state = this->freshSink(this->discount_sink_label);
-        for(uint64_t state = 0; state < this->num_states(); state++) {
-            if(state == this->initial_state || state == this->discount_sink_state) {
-                // no discounting in the initial state because it selects the actual initial state
-                continue;
-            }
-            for(StormRow &row: this->transition_matrix[state]) {
-                for(auto &entry: row) {
-                    entry.second *= this->discount_factor;
-                }
-                row.push_back(std::make_pair(this->discount_sink_state,1-this->discount_factor));
-            }
-        }
-        this->discounted = true;
-        this->computeAvailableActions();
-        this->countSuccessors();
-    }
-
     void DecPomdp::computeJointObservationMemorySize() {
         this->joint_observation_memory_size.clear();
         this->joint_observation_memory_size.resize(this->num_joint_observations());

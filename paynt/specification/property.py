@@ -58,6 +58,13 @@ def construct_reward_property(reward_name: str, minimizing: bool, target_label: 
     return OptimalityProperty(formula, 0)
 
 
+def construct_discounted_reward_property(reward_name: str, minimizing: bool, discount_factor: float) -> OptimalityProperty:
+    direction = "min" if minimizing else "max"
+    formula_str = 'R{"' + reward_name + '"}' + f"{direction}=? [Cdiscount={discount_factor}]"
+    formula = stormpy.parse_properties_without_context(formula_str)[0]
+    return OptimalityProperty(formula, 0)
+
+
 def construct_specification(stormpy_properties: list[Any], relative_error: float = 0, use_exact: bool = False) -> Specification:
     """
     The canonical way to build a Specification from a list of raw stormpy properties. This is the one path
@@ -127,6 +134,8 @@ class Property:
         self.game_formula_alt: Any = None
 
         self.use_exact = use_exact
+        # see discount_correction_factor; set only by paynt.parser.sketch's Cassandra branch
+        self.discount_factor_correction: float | None = None
 
         # use comparison type to deduce optimizing direction
         comparison_type = rf.comparison_type
@@ -182,9 +191,32 @@ class Property:
 
     @property
     def is_discounted_reward(self) -> bool:
-        # TODO add discounted reward as a type to Stormpy formula
-        # return self.formula.is_reward_operator and self.formula.subformula.is_discounted_total_reward_formula
-        return self.formula.is_reward_operator and "discount" in str(self.formula.subformula)
+        return self.formula.is_reward_operator and self.formula.subformula.is_discounted_total_reward_formula
+
+    def extract_discount_factor_from_formula(self) -> float:
+        assert self.is_discounted_reward
+        return self.formula.subformula.discount_factor_double
+
+    @property
+    def discount_correction_factor(self) -> float:
+        """
+        Cassandra-derived (Dec-)POMDP models always add a synthetic, zero-reward "pick the true initial
+        state" bookkeeping state before the real process begins (see DecPomdp.cpp's initial-state
+        construction, which sets this state's own reward to 0 unconditionally). Cdiscount discounts
+        uniformly starting from that literal initial state, so checking a discounted-reward property against
+        such a model silently applies one extra factor of the property's own discount value that the real
+        process never experiences. discount_factor_correction (set only by paynt.parser.sketch's Cassandra
+        branch, for every property -- constraint or optimality alike -- checked against such a model,
+        whether the formula was auto-inferred from the model or came from a user-provided properties file)
+        marks properties that need this divided back out and records the exact value to divide by. This is
+        deliberately a separate field from the property's own discount factor (readable, for any discounted-
+        reward property regardless of origin, via extract_discount_factor_from_formula) -- a property can be
+        genuinely discounted without needing this correction (e.g. a native PRISM/DRN Cdiscount property has
+        no synthetic initial state to compensate for), so None here means "no correction", not "unknown".
+        """
+        if self.discount_factor_correction is None:
+            return 1.0
+        return 1.0 / self.discount_factor_correction
 
     @property
     def maximizing(self) -> bool:
@@ -210,7 +242,9 @@ class Property:
         return stormpy.Property("", self.property.raw_formula.clone())
 
     def copy(self) -> Property:
-        return Property(self.property_copy())
+        new_property = Property(self.property_copy())
+        new_property.discount_factor_correction = self.discount_factor_correction
+        return new_property
 
     def result_valid(self, value: Any) -> bool:
         return not self.reward or value != math.inf
@@ -234,7 +268,9 @@ class Property:
             stormpy.ComparisonType.GEQ: stormpy.ComparisonType.LESS,
         }[negated_formula.comparison_type]
         stormpy_property_negated = stormpy.Property("", negated_formula)
-        return Property(stormpy_property_negated)
+        negated_property = Property(stormpy_property_negated)
+        negated_property.discount_factor_correction = self.discount_factor_correction
+        return negated_property
 
     def get_target_label(self) -> str:
         target = self.formula.subformula.subformula
@@ -282,6 +318,8 @@ class OptimalityProperty(Property):
         self.game_formula_alt: Any = None
 
         self.use_exact = use_exact
+        # see Property.discount_correction_factor; set only by paynt.parser.sketch's Cassandra branch
+        self.discount_factor_correction: float | None = None
 
         # use comparison type to deduce optimizing direction
         if rf.optimality_type == stormpy.OptimizationDirection.Minimize:
@@ -309,7 +347,9 @@ class OptimalityProperty(Property):
         return f"{str(self.formula)} {eps}"
 
     def copy(self) -> OptimalityProperty:
-        return OptimalityProperty(self.property_copy(), self.epsilon, self.use_exact)
+        new_property = OptimalityProperty(self.property_copy(), self.epsilon, self.use_exact)
+        new_property.discount_factor_correction = self.discount_factor_correction
+        return new_property
 
     def reset(self) -> None:
         self.optimum = None
@@ -367,7 +407,9 @@ class OptimalityProperty(Property):
         }[negated_formula.optimality_type]
         negated_formula.set_optimality_type(negate_optimality_type)
         stormpy_property_negated = stormpy.Property("", negated_formula)
-        return OptimalityProperty(stormpy_property_negated, self.epsilon)
+        negated_property = OptimalityProperty(stormpy_property_negated, self.epsilon)
+        negated_property.discount_factor_correction = self.discount_factor_correction
+        return negated_property
 
 
 class Specification:

@@ -118,15 +118,28 @@ class Sketch:
                     decpomdp_manager.set_constraint(constraint_bound)
                 if decpomdp_manager is None:
                     raise SyntaxError
-                logger.info("applying discount factor transformation...")
-                decpomdp_manager.apply_discount_factor_transformation()
                 explicit_model = decpomdp_manager.construct_pomdp()
-                if constraint_bound is not None:
-                    specification = PrismParser.parse_specification(properties_path, relative_error)
+                if constraint_bound is not None or os.path.isfile(properties_path):
+                    # a properties file, when it exists, takes precedence over the model's own discount
+                    # factor (e.g. it may specify its own Cdiscount=X) -- constraint_bound always needs one,
+                    # since there's no model-inferable default for a constraint's own threshold
+                    specification = PrismParser.parse_specification(properties_path, relative_error, use_exact=use_exact)
+                    # every Cassandra-derived model has a synthetic, zero-reward initial state (see
+                    # DecPomdp.cpp) that silently eats one extra discount factor under Cdiscount -- correct
+                    # for it on every discounted-reward property (constraint or optimality alike). The
+                    # properties file's own formula, not decpomdp_manager.discount_factor, is the source of
+                    # truth here precisely because a user-provided formula can specify its own, different
+                    # discount value (see the precedence rule above) -- so extract it from the formula.
+                    for prop in specification.all_properties():
+                        if prop.is_discounted_reward:
+                            prop.discount_factor_correction = prop.extract_discount_factor_from_formula()
                 else:
-                    optimality = paynt.specification.property.construct_reward_property(
-                        decpomdp_manager.reward_model_name, decpomdp_manager.reward_minimizing, decpomdp_manager.discount_sink_label
+                    optimality = paynt.specification.property.construct_discounted_reward_property(
+                        decpomdp_manager.reward_model_name, decpomdp_manager.reward_minimizing, decpomdp_manager.discount_factor
                     )
+                    # same correction as above, but the discount value is already known here directly --
+                    # no need to parse it back out of the formula this function just built.
+                    optimality.discount_factor_correction = decpomdp_manager.discount_factor
                     specification = paynt.specification.property.Specification([optimality])
                 filetype = "cassandra"
             except SyntaxError:
