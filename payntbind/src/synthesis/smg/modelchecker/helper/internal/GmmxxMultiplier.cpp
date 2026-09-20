@@ -5,6 +5,7 @@
 #include "GmmxxMultiplier.h"
 
 #include <boost/optional.hpp>
+#include <storm/adapters/RationalFunctionAdapter.h>
 #include <storm/exceptions/NotSupportedException.h>
 #include <storm/utility/macros.h>
 
