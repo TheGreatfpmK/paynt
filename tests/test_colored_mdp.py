@@ -13,7 +13,6 @@ def colored_mdp():
 
 
 class TestColoredMdp:
-
     def test_representation_only_surface(self, colored_mdp):
         """
         ColoredMdp is a realization of colored MDP = (M, V, kappa) (Definition 2, arXiv:2511.08078): it must

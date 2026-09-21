@@ -17,8 +17,8 @@ logger = logging.getLogger(__name__)
 
 
 class CombinationColoring:
-    """
-    Dictionary of colors associated with different parameter combinations.
+    """Dictionary of colors associated with different parameter combinations.
+
     Note: color 0 is reserved for general parameter-free objects.
     """
 

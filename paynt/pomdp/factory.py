@@ -1,12 +1,4 @@
-"""
-Constructs a ColoredMdp (feature_kind "pomdp") by unfolding the agent's imperfect-information strategy into an FSC template
-of a given memory size. The factory itself never builds automatically -- __init__ does only the static,
-memory-size-independent setup; build()/set_*_memory_size methods are the public entry points a caller uses
-to actually get a ColoredMdp, called explicitly whenever one is needed (including the first one). Each call
-produces a fresh ColoredMdp rather than mutating a previous one in place, and the factory holds no reference
-to what it returns -- the caller is responsible for tracking it (PomdpSynthesizer/SayntSynthesizer re-unfold
-at a larger memory size step by step, exactly this way).
-"""
+"""Constructs a ColoredMdp (feature_kind "pomdp") by unfolding the model against an FSC template of a given memory size."""
 
 from __future__ import annotations
 
@@ -29,7 +21,6 @@ logger = logging.getLogger(__name__)
 
 
 class PomdpColoredMdpFactory:
-
     feature_kind = "pomdp"
 
     def __init__(self, pomdp: Any, build_task: paynt.pomdp.task.PomdpTask, decpomdp_manager: Any = None, use_exact: bool = False):
@@ -110,8 +101,7 @@ class PomdpColoredMdpFactory:
         self.observation_memory_size: list[int] | None = None
 
     def build(self) -> paynt.colored_mdp.ColoredMdp:
-        """Produce a ColoredMdp at build_task's own default memory size. Not called automatically -- the
-        caller (e.g. IterativeMemorySynthesizer, paynt.api.get_synthesizer) requests it explicitly."""
+        """Produce a ColoredMdp at build_task's own default memory size."""
         return self.set_imperfect_memory_size(self.build_task.memory_size)
 
     @property
@@ -210,7 +200,6 @@ class PomdpColoredMdpFactory:
         observation_memory_parameters = []
 
         for obs in range(self.observations):
-
             # action parameters
             parameter_indices = []
             num_actions = self.actions_at_observation[obs]

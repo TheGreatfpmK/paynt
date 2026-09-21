@@ -1,12 +1,5 @@
-"""
-Shared driver shape for FSC synthesis features that repeatedly re-unfold at increasing memory sizes and run
-an AR-family engine (AR or Hybrid) against each unfolding, keeping the best assignment found so far across
-memory sizes. Used as-is by DecPomdpSynthesizer; PosmgSynthesizer overrides stat_iterations_field;
-PomdpSynthesizer additionally overrides __init__/synthesize/build_result to track which specific
-memory-size unfolding produced the best assignment (needed for FSC extraction). The factory itself never
-builds automatically and holds no memory-size state -- this class owns current_memory_size and requests the
-first ColoredMdp explicitly in __init__, exactly like every later re-unfold in strategy_iterative.
-"""
+"""Shared outer loop logic for FSC synthesis features that repeatedly re-unfold at increasing memory sizes and run an AR-family engine (AR or Hybrid) against
+each unfolding, keeping the best assignment found so far across memory sizes."""
 
 from __future__ import annotations
 
@@ -25,9 +18,6 @@ logger = logging.getLogger(__name__)
 
 
 class IterativeMemorySynthesizer:
-
-    # overridden by PosmgSynthesizer: its induced model is verified as a game (see
-    # SynthesizerAR.check_specification's "posmg" branch), so Statistic accumulates iterations_game instead
     stat_iterations_field = "iterations_mdp"
 
     def __init__(self, colored_mdp_factory: Any, task: paynt.task.SynthesisTask, method: str = "ar") -> None:

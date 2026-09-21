@@ -52,7 +52,6 @@ def _run_dtnest(
 
 
 class DtNest(DtSynthesizer):
-
     def __init__(self, *args: Any):
         super().__init__(*args)
         self.best_tree: DecisionTree | None = None
@@ -158,18 +157,9 @@ class DtNest(DtSynthesizer):
 
     @staticmethod
     def remap_node_queue_after_replacement(node_queue: list[dict[str, Any]], new_tree: DecisionTree) -> list[dict[str, Any]]:
-        """
-        After a subtree replacement, every surviving node_queue entry's "id" (an identifier in the OLD tree)
-        must be translated to its counterpart in new_tree (whose nodes carry old_identifier == their
-        identifier in the OLD tree, set by DecisionTreeNode.assign_identifiers(keep_old=True) right after
-        the replacement). A queued entry can have no counterpart at all: node_queue is a long-lived worklist
-        that keeps accumulating entries across many replacements, so a still-queued node can end up
-        (structurally, not just by id) nested inside a later replacement's target without ever being popped
-        itself -- e.g. it was enqueued while the target's own subtree was still small, and the target grew
-        to enclose it via an intervening nested replacement before its own turn came up. Its subtree no
-        longer exists in new_tree, so there's nothing left to process for it -- it is dropped here rather
-        than raising.
-        """
+        """After a subtree replacement, every surviving node_queue entry's "id" (an identifier in the OLD tree) must be translated to its counterpart in
+        new_tree (nodes there carry old_identifier == their OLD-tree identifier, set by DecisionTreeNode.assign_identifiers(keep_old=True) right after the
+        replacement)."""
         remapped_node_queue = []
         for node in node_queue:
 
@@ -180,7 +170,7 @@ class DtNest(DtSynthesizer):
             if len(nodes) == 0:
                 logger.info(f"node {node['id']} was made obsolete by this replacement, dropping it from the queue")
                 continue
-            assert len(nodes) == 1, f'expected at most one node with old_identifier equal to {node["id"]}, found {len(nodes)}'
+            assert len(nodes) == 1, f"expected at most one node with old_identifier equal to {node['id']}, found {len(nodes)}"
             new_node = nodes[0]
             node["id"] = new_node.identifier
             remapped_node_queue.append(node)
@@ -207,8 +197,7 @@ class DtNest(DtSynthesizer):
             classification, derived_epsilon = classify_constraint_threshold(opt_result_value, random_result_value, user_threshold, user_threshold_minimizing)
             if classification == "unsat":
                 logger.warning(
-                    f"the requested threshold {user_threshold} is not achievable -- the best possible value "
-                    f"is {opt_result_value}; no admissible tree exists"
+                    f"the requested threshold {user_threshold} is not achievable -- the best possible value is {opt_result_value}; no admissible tree exists"
                 )
                 self.best_tree = None
                 self.best_tree_value = None
@@ -248,7 +237,6 @@ class DtNest(DtSynthesizer):
         current_depth = self.subtree_depth
 
         while (self.depth_fine_tuning and current_depth > 1) or (current_depth == self.subtree_depth):
-
             if self.synthesis_timer.time_limit_reached():
                 logger.info("timeout reached")
                 break
@@ -261,7 +249,6 @@ class DtNest(DtSynthesizer):
             )
 
             while len(node_queue) > 0 and current_iter < self.max_iter:
-
                 if self.synthesis_timer.time_limit_reached():
                     logger.info("timeout reached")
                     break
@@ -321,7 +308,6 @@ class DtNest(DtSynthesizer):
                     recomputed_dtlearn_trees = {}
 
                     if self.allow_perturbations:
-
                         submdp_for_tree = get_submdp_from_unfixed_states(self.colored_mdp, node_states)
                         reachable_states = stormpy.BitVector(self.colored_mdp.underlying_mdp.nr_states, False)
                         for state in range(submdp_for_tree.model.nr_states):
@@ -340,7 +326,6 @@ class DtNest(DtSynthesizer):
 
                         #  Perturbations #2 - recompute scheduler for states outside of the new subtree and learn new tree based on that scheduler
                         if self.recompute_scheduler:
-
                             submpd_dtlearn_of_subtree = get_submdp_from_unfixed_states(self.colored_mdp, ~node_states)
                             oos_result = submpd_dtlearn_of_subtree.check_specification(self.task.specification)
                             new_scheduler = oos_result.optimality_result.result.scheduler
@@ -428,13 +413,13 @@ class DtNest(DtSynthesizer):
 
         # TODO find out why this would not hold????
         if opt_result_value < eps_optimum_threshold:
-            assert (
-                result.optimality_result.value <= eps_optimum_threshold
-            ), f"optimum value {result.optimality_result.value} is not below threshold {eps_optimum_threshold}"
+            assert result.optimality_result.value <= eps_optimum_threshold, (
+                f"optimum value {result.optimality_result.value} is not below threshold {eps_optimum_threshold}"
+            )
         else:
-            assert (
-                result.optimality_result.value >= eps_optimum_threshold
-            ), f"optimum value {result.optimality_result.value} is not above threshold {eps_optimum_threshold}"
+            assert result.optimality_result.value >= eps_optimum_threshold, (
+                f"optimum value {result.optimality_result.value} is not above threshold {eps_optimum_threshold}"
+            )
 
         self.best_tree = info.tree_helper_tree
         self.best_tree_value = result.optimality_result.value
@@ -491,12 +476,10 @@ class DtNest(DtSynthesizer):
         )
 
         if build_task.initial_tree is None:
-
             state_to_action = state_to_choice_to_state_to_action(state_to_choice, self.colored_mdp)
             initial_tree_helper = run_scikit_learn_tree(info.relevant_state_valuations, state_to_action, info.variables, info.action_labels)
 
         else:
-
             # TODO add some nice export for trees, decide on the format we will support here
             raise NotImplementedError("the support for user provided initial tree is not implemented.")
 

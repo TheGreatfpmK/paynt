@@ -10,8 +10,8 @@ from helpers.helper import get_sketch_paths
 
 @pytest.fixture
 def colored_mdp_parameter_space_prop_result():
-    """A plain, non-specialized ColoredMdp -- see tests/model/test_model_index.py's fixture
-    docstring for why this no longer goes through paynt.quotient.quotient.Quotient (deleted)."""
+    """A plain, non-specialized ColoredMdp -- see tests/model/test_model_index.py's fixture docstring for why this no longer goes through
+    paynt.quotient.quotient.Quotient (deleted)."""
     sketch_path, props_path = get_sketch_paths("archive/jair24-synthesis/maze")
     colored_mdp_factory, task = paynt.parser.sketch.Sketch.load_sketch(sketch_path, props_path)
     colored_mdp = colored_mdp_factory.colored_mdp
@@ -23,7 +23,6 @@ def colored_mdp_parameter_space_prop_result():
 
 
 class TestSchedulerScoring:
-
     def test_estimate_scheduler_difference_returns_a_nonnegative_score_per_inconsistent_parameter(self, colored_mdp_parameter_space_prop_result):
         """
         estimate_scheduler_difference is a thin wrapper around a native payntbind call, so (unlike
@@ -72,16 +71,17 @@ class TestIncompatibilityScoring:
         assert paynt.utils.scoring.compute_incompatibility_levels(candidates) == {0: [0, 1, 3]}
 
     def test_a_parameter_with_zero_options_in_some_candidate_contributes_no_opinion_there(self):
-        """ "dt" does not pad an irrelevant parameter to one arbitrary option -- a candidate whose
-        selection has an empty option list for some parameter must not crash and must not count as a vote."""
+        """Unlike every other feature, "dt" does not pad an irrelevant parameter to one arbitrary option -- a candidate whose selection has an empty option list
+        for some parameter must not crash and must not count as a vote."""
         candidates = [[[0], []], [[1], []], [[0], []]]
         assert paynt.utils.scoring.compute_incompatibility_levels(candidates) == {0: [0, 1]}
 
     def test_an_inconsistent_own_candidate_is_the_callers_responsibility_to_exclude(self):
-        """compute_incompatibility_levels itself does not filter out locally-inconsistent selections (options
-        of length > 1 for some parameter) -- callers (split_parameter_space / split_undecided_space) are
-        responsible for only passing selections that are already fully consistent. Documented here since it's
-        a real, easy-to-get-wrong contract, not asserted defensively in the function itself (hot path)."""
+        """compute_incompatibility_levels itself does not filter out locally-inconsistent selections (options of length > 1 for some parameter) -- callers
+        (split_parameter_space / split_undecided_space) are responsible for only passing selections that are already fully consistent.
+
+        Documented here since it's a real, easy-to-get-wrong contract, not asserted defensively in the function itself (hot path).
+        """
         candidates = [[[0, 1]], [[2]]]
         # parameter 0's values across candidates are effectively {0, 1, 2} once fully expanded, but this
         # function only ever looks at singleton selections (len(options) == 1) when voting -- the first,

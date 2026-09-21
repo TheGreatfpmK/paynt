@@ -18,10 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 class StageControl:
-    """
-    AR-CEGIS adaptivity: switch between ar/cegis, allocate more time to
-    the more efficient method
-    """
+    """AR-CEGIS adaptivity: switch between ar/cegis, allocate more time to the more efficient method."""
 
     # whether only AR is performed
     only_ar = False
@@ -59,10 +56,7 @@ class StageControl:
         self.pruned_cegis += pruned / self.parameter_space_size
 
     def cegis_has_time(self) -> bool:
-        """
-        :return True if cegis still has some time
-        """
-
+        """:return: True if cegis still has some time."""
         # whether only AR is performed
         if StageControl.only_ar:
             return False
@@ -94,7 +88,6 @@ class StageControl:
 
 
 class SynthesizerHybrid(paynt.synthesizer.synthesizer_ar.SynthesizerAR, paynt.synthesizer.synthesizer_cegis.SynthesizerCEGIS):
-
     @property
     def method_name(self) -> str:
         return "hybrid"
@@ -146,7 +139,6 @@ class SynthesizerHybrid(paynt.synthesizer.synthesizer_ar.SynthesizerAR, paynt.sy
             # explore parameter space assignments
             parameter_space_explored = False
             while True:
-
                 if not self.stage_control.cegis_has_time() or self.resource_limit_reached():
                     break  # CEGIS timeout (or a global resource limit was reached)
 

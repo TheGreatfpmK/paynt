@@ -2,7 +2,6 @@ import paynt.result
 
 
 class TestResult:
-
     def test_stores_success_and_value(self):
         result = paynt.result.Result(True, 3.14)
         assert result.success is True

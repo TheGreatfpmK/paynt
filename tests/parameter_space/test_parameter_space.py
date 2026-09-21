@@ -2,7 +2,6 @@ import paynt.parameter_space.parameter_space
 
 
 class TestParameterSpaceRepresentationOnlySurface:
-
     def test_fresh_parameter_space_carries_no_search_state(self):
         """
         ParameterSpace is the pure value V of the colored MDP C = (M, V, kappa) (Definition 2,
@@ -32,8 +31,7 @@ class TestParameterSpaceRepresentationOnlySurface:
         assert not leaked, f"ParameterSpace should not expose: {leaked}"
 
     def test_copy_also_carries_no_search_state(self):
-        """.copy() must not resurrect any search field either -- it only ever copies native/
-        parameter_to_name/parameter_to_option_labels."""
+        """.copy() must not resurrect any search field either -- it only ever copies native/ parameter_to_name/parameter_to_option_labels."""
         parameter_space = paynt.parameter_space.parameter_space.ParameterSpace()
         parameter_space.add_parameter("x", ["a", "b"])
         copy = parameter_space.copy()

@@ -1,6 +1,4 @@
-"""
-dtnest-synthesis CLI options, composed into paynt.cli.paynt_run via add_options([...]).
-"""
+"""Dtnest-synthesis CLI options, composed into paynt.cli.paynt_run via add_options([...])."""
 
 import rich_click as click
 

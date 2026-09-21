@@ -1,10 +1,5 @@
-"""
-Representation of a policy tree: a tree over parameter subspaces of a family, where each leaf is either
-unsatisfiable or associated with a policy that satisfies every member of its subspace. Built by
-paynt.mdp_family.policy_tree_synthesizer.PolicyTreeSynthesizer, but the tree itself carries no search logic --
-just tree-shape operations (postprocessing/merging, stats, export) a caller can use directly, the same way a
-paynt.dt.decision_tree.DecisionTree is used once returned from a decision-tree synthesis result.
-"""
+"""Representation of a policy tree: a tree over parameter subspaces of a family, where each leaf is either unsatisfiable or associated with a policy that
+satisfies every member of its subspace."""
 
 from __future__ import annotations
 
@@ -44,9 +39,9 @@ def policies_are_compatible(policy1: Policy, policy2: Policy) -> bool:
 
 
 def merge_policies(policy1: Policy, policy2: Policy) -> Policy | None:
-    """
-    Attempt to merge multiple policies into one.
-    :returns one policy or None if some policies were incompatible
+    """Attempt to merge multiple policies into one.
+
+    :returns: one policy or None if some policies were incompatible
     """
     if not policies_are_compatible(policy1, policy2):
         return None
@@ -74,10 +69,11 @@ def merge_policies_exclusively(policy1: Policy, policy2: Policy) -> tuple[list[i
 def double_check_policy(
     colored_mdp: paynt.colored_mdp.ColoredMdp, node: paynt.synthesizer.search_node.SearchNode, prop: Property, policy: list[int | None]
 ) -> None:
-    """Re-verify (at tighter precision) that policy is actually SAT for node's parameter space -- used by
-    PolicyTreeNode.double_check, itself only run when PolicyTreeSynthesizer.double_check_policy_tree_leaves
-    is enabled. Takes colored_mdp/node explicitly (not a Synthesizer instance) since it needs no search
-    state, just the representation and a policy to check."""
+    """Re-verify (at tighter precision) that policy is actually SAT for node's parameter space -- used by PolicyTreeNode.double_check, itself only run when
+    PolicyTreeSynthesizer.double_check_policy_tree_leaves is enabled.
+
+    Takes colored_mdp/node explicitly (not a Synthesizer instance) since it needs no search state, just the representation and a policy to check.
+    """
     _, mdp = paynt.mdp_family._utils.fix_and_apply_policy_to_parameter_space(colored_mdp, node.selected_choices, policy)
     if node.parameter_space.size == 1:
         paynt.mdp_family._utils.assert_mdp_is_deterministic(colored_mdp, mdp, node.parameter_space)
@@ -92,7 +88,6 @@ def double_check_policy(
 
 
 class PolicyTreeNode(paynt.synthesizer.search_node.SearchNode):
-
     # bumped by make_policies_compatible; reset (and read) only by PolicyTree.postprocess
     mdps_model_checked: int = 0
 
@@ -135,14 +130,7 @@ class PolicyTreeNode(paynt.synthesizer.search_node.SearchNode):
         parameter_subspaces: list[paynt.parameter_space.parameter_space.ParameterSpace],
         candidate_policies: list[list[int | None] | None] | None = None,
     ) -> None:
-        """
-        Wrap each of parameter_subspaces (already-split ParameterSpace values) as a child PolicyTreeNode.
-        Named distinctly from the inherited SearchNode.split (which computes the parameter_space split
-        itself and hands back nodes carrying ParentInfo) since this method has a different signature and
-        role: it just attaches pre-computed subspaces as tree children, matching this class's simple flat
-        parent/child_nodes bookkeeping rather than SearchNode's generic ParentInfo handoff, which policy-tree
-        synthesis doesn't use.
-        """
+        """Wrap each of parameter_subspaces (already-split ParameterSpace values) as a child PolicyTreeNode."""
         self.splitter = splitter
         self.suboptions = suboptions
         self.child_nodes = []
@@ -319,7 +307,6 @@ class PolicyTreeNode(paynt.synthesizer.search_node.SearchNode):
 
 
 class PolicyTree:
-
     def __init__(self, parameter_space: paynt.parameter_space.parameter_space.ParameterSpace):
         self.root = PolicyTreeNode(parameter_space)
         self.policies: list[Policy | None] = []

@@ -24,9 +24,9 @@ APPROX_ZERO = 0.000001
 
 def safe_division(dividend: float, divisor: float) -> float:
     """Safe division of dividend by operand
-    :param number dividend: upper operand of the division
-    :param number divisor: lower operand of the division, may be zero
-    :returns safe value after division of approximated zero
+    :param dividend: upper operand of the division
+    :param divisor: lower operand of the division, may be zero
+    :returns: safe value after division of approximated zero
     """
     try:
         return dividend / divisor
@@ -66,12 +66,9 @@ class Statistic:
 
         # MDP family (policy-tree synthesis): num_nodes/num_nodes_merged/num_leaves/num_leaves_merged/
         # postprocessing_time are set directly on a Statistic instance by
-        # paynt.mdp_family.policy_tree_synthesizer.PolicyTreeSynthesizer.evaluate_all, not by this constructor --
-        # declared here (rather than left as an undeclared dynamic attribute) purely so their type is known.
-        # Kept as Any (not "int | None"): print_mdp_family_table_entries, the only reader, is a debug-only
-        # utility that assumes (and always has assumed, pre-existing to this backfill) these are already
-        # populated by the time it's called -- an Optional type would just force artificial asserts around
-        # every arithmetic use below for a precondition nothing enforces at the type level anyway.
+        # paynt.mdp_family.policy_tree_synthesizer.PolicyTreeSynthesizer.evaluate_all, not by this
+        # constructor. Kept as Any rather than "int | None": the only reader (print_mdp_family_table_entries,
+        # debug-only) always assumes these are already populated by the time it's called.
         self.num_mdps_total: Any = None
         self.num_mdps_sat: Any = None
         self.num_nodes: Any = None
@@ -266,7 +263,7 @@ class Statistic:
             result = self.get_summary_evaluation()
 
         sep = "--------------------\n"
-        return f"{sep}" f"Synthesis summary:\n" f"{specification}\n{timing}\n{design_space}\n{explored}\n" f"{iterations}\n{result}\n" f"{sep}"
+        return f"{sep}Synthesis summary:\n{specification}\n{timing}\n{design_space}\n{explored}\n{iterations}\n{result}\n{sep}"
 
     def print(self) -> None:
         logger.info(f"\n{self.get_summary()}")

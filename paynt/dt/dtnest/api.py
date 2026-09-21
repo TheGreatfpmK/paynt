@@ -16,9 +16,10 @@ def synthesize(
     allow_perturbations: bool = True,
     recompute_scheduler_perturbation: bool = True,
 ) -> DtResult:
-    """API function to solve a given SynthesisTask/DtNestTask pair against a DtColoredMdpFactory using
-    the dtnest synthesizer. Returns paynt_result."""
+    """API function to solve a given SynthesisTask/DtNestTask pair against a DtColoredMdpFactory using the dtnest synthesizer.
 
+    Returns paynt_result.
+    """
     cmdp_factory_dt.build_task = build_task
 
     return _run_dtnest(

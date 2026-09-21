@@ -1,6 +1,4 @@
-"""
-SAYNT (Storm-guided POMDP synthesis) CLI options, composed into paynt.cli.paynt_run via add_options([...]).
-"""
+"""SAYNT (Storm-guided POMDP synthesis) CLI options, composed into paynt.cli.paynt_run via add_options([...])."""
 
 import rich_click as click
 
@@ -42,14 +40,14 @@ options = [
         is_flag=True,
         default=False,
         panel=_PANEL,
-        help=("only explore the main parameter subspace suggested by Storm in each iteration. Can only be used " "together with --storm-pomdp flag"),
+        help=("only explore the main parameter subspace suggested by Storm in each iteration. Can only be used together with --storm-pomdp flag"),
     ),
     click.option(
         "--use-storm-cutoffs",
         is_flag=True,
         default=False,
         panel=_PANEL,
-        help=("use storm randomized scheduler cutoffs are used during the prioritization of families. Can only " "be used together with --storm-pomdp flag"),
+        help=("use storm randomized scheduler cutoffs are used during the prioritization of families. Can only be used together with --storm-pomdp flag"),
     ),
     click.option(
         "--unfold-strategy-storm",

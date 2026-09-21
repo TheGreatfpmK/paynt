@@ -17,7 +17,6 @@ logger = logging.getLogger(__name__)
 
 # Abstraction Refinement + Storm splitting
 class SynthesizerARStorm(paynt.synthesizer.synthesizer_ar.SynthesizerAR):
-
     # parameter space exploration order: True = DFS, False = BFS
     exploration_order_dfs = True
 
@@ -44,9 +43,8 @@ class SynthesizerARStorm(paynt.synthesizer.synthesizer_ar.SynthesizerAR):
     def storm_split(
         self, nodes: list[paynt.synthesizer.search_node.SearchNode]
     ) -> tuple[list[paynt.synthesizer.search_node.SearchNode], list[paynt.parameter_space.parameter_space.ParameterSpace]]:
-        """
-        :param nodes the current active worklist (search nodes)
-        :returns (main_nodes, parameter_subspaces) -- main_nodes are search nodes (the new active worklist,
+        """:param nodes: the current active worklist (search nodes)
+        :returns: (main_nodes, parameter_subspaces) -- main_nodes are search nodes (the new active worklist,
             used immediately by the caller), parameter_subspaces are plain ParameterSpace values (stored into
             self.parameter_subspaces_buffer, matching the plain-value contract SayntSynthesizer itself uses
             when writing that buffer -- wrapped into nodes only once actually consumed, in synthesize_one)
@@ -93,7 +91,7 @@ class SynthesizerARStorm(paynt.synthesizer.synthesizer_ar.SynthesizerAR):
             if self.saynt_timer is not None:
                 elapsed = round(self.saynt_timer.read(), 1)
                 print(
-                    f"-----------PAYNT----------- \n" f"Value = {node.analysis_result.improving_value} | Time elapsed = {elapsed}s | FSC size = {fsc_size}\n",
+                    f"-----------PAYNT----------- \nValue = {node.analysis_result.improving_value} | Time elapsed = {elapsed}s | FSC size = {fsc_size}\n",
                     flush=True,
                 )
             else:
@@ -107,7 +105,6 @@ class SynthesizerARStorm(paynt.synthesizer.synthesizer_ar.SynthesizerAR):
         # reference to an undefined name "res" below (fixed to what was clearly intended), but left disabled
         # since nothing currently exercises it to verify the fix against.
         if self.task.specification.optimality.optimum and node.analysis_result.can_improve and self.storm_pruning:
-
             parameter_space_pomdp = paynt.pomdp._utils.get_parameter_space_pomdp(self.colored_mdp.feature_info, node.mdp)
 
             storm_res = StormPOMDPControl.storm_pomdp_analysis(parameter_space_pomdp, self.task.specification.stormpy_formulae())
@@ -144,7 +141,6 @@ class SynthesizerARStorm(paynt.synthesizer.synthesizer_ar.SynthesizerAR):
         nodes = [node]
 
         while nodes:
-
             # check whether PAYNT should be paused
             if self.s_queue is not None:
                 # if the queue is non empty, pause for PAYNT was requested

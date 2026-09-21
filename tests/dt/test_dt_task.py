@@ -11,9 +11,8 @@ def _reward_properties():
 
 
 class TestDtTask:
-    """DtTask carries only DT's build-time settings (tree_depth, ...) -- no specification/timeout/
-    use_exact, which now live on the separate, non-inheriting paynt.task.SynthesisTask instead
-    (see TestDtNestTask/test_task.py for that side)."""
+    """DtTask carries only DT's build-time settings (tree_depth, ...) -- no specification/timeout/ use_exact, which now live on the separate, non-inheriting
+    paynt.task.SynthesisTask instead (see TestDtNestTask/test_task.py for that side)."""
 
     def test_tree_depth_is_stored(self):
         build_task = paynt.dt.task.DtTask(tree_depth=3)
@@ -26,12 +25,11 @@ class TestDtTask:
         assert build_task.has_scheduler_to_map
 
     def test_use_exact_is_no_longer_hardcoded_to_false(self):
-        """
-        Regression test: the pre-split DtTask.__init__ used to hardcode Property.initialize(False)
-        regardless of the caller's use_exact, silently ignoring it. Since DtTask no longer touches
-        specification construction at all (that's now exclusively SynthesisTask's job -- see
-        paynt.task.SynthesisTask.__init__), there is no longer a DT-specific code path where this
-        bug could be reintroduced; kept here as a direct pin on the pairing DT actually uses.
+        """Regression test: the pre-split DtTask.__init__ used to hardcode Property.initialize(False) regardless of the caller's use_exact, silently ignoring
+        it.
+
+        Since DtTask no longer touches specification construction at all (that's now exclusively SynthesisTask's job -- see paynt.task.SynthesisTask.__init__),
+        there is no longer a DT-specific code path where this bug could be reintroduced; kept here as a direct pin on the pairing DT actually uses.
         """
         with pytest.raises(ValueError):
             paynt.task.SynthesisTask(_reward_properties(), use_exact=True)
@@ -40,7 +38,6 @@ class TestDtTask:
 
 
 class TestDtNestTask:
-
     def test_is_a_dt_build_task(self):
         build_task = paynt.dt.dtnest.task.DtNestTask(error_threshold=0.05, tree_depth=5)
         assert isinstance(build_task, paynt.dt.task.DtTask)

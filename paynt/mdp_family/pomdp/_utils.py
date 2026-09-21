@@ -1,9 +1,5 @@
-"""
-Internal support for the "pomdp_family" feature: the PomdpFamilyInfo companion dataclass (attached as
-ColoredMdp.feature_info for feature_kind "pomdp_family") and functions that interpret it. Adds
-observation-awareness on top of the plain "family" feature (build_assignment's family-vs-pomdp_family
-branch lives on the base paynt.colored_mdp.ColoredMdp). Not part of the public API.
-"""
+"""Internal support for the "pomdp_family" feature: the PomdpFamilyInfo companion dataclass (attached as ColoredMdp.feature_info for feature_kind
+"pomdp_family") and functions that interpret it."""
 
 from __future__ import annotations
 
@@ -24,9 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 class SubPomdp:
-    """
-    Simple container for a (sub-)POMDP created from the underlying model.
-    """
+    """Simple container for a (sub-)POMDP created from the underlying model."""
 
     def __init__(self, model: Any, underlying_mdp_state_map: list[int], underlying_mdp_choice_map: list[int]):
         # the Stormpy POMDP
@@ -65,9 +59,7 @@ def build_pomdp(colored_mdp: paynt.colored_mdp.ColoredMdp, parameter_space: payn
 
 
 def build_dtmc_sketch(colored_mdp: paynt.colored_mdp.ColoredMdp, fsc: paynt.pomdp.fsc.Fsc | paynt.pomdp.fsc.FscFactored) -> paynt.colored_mdp.ColoredMdp:
-    """
-    Construct the family of DTMCs representing the execution of the given FSC in different environments.
-    """
+    """Construct the family of DTMCs representing the execution of the given FSC in different environments."""
     info = cast(PomdpFamilyInfo, colored_mdp.feature_info)
 
     # create the product

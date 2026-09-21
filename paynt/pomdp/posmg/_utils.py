@@ -1,9 +1,5 @@
-"""
-Internal support for the POSMG feature: the PosmgInfo companion dataclass (attached as
-ColoredMdp.feature_info for feature_kind "posmg") and functions that interpret it. Not part of the public
-API -- a POSMG sketch is used through paynt.pomdp.posmg.PosmgSynthesizer/paynt.api, never by constructing or
-reading a PosmgInfo directly.
-"""
+"""Internal support for the POSMG feature: the PosmgInfo companion dataclass (attached as ColoredMdp.feature_info for feature_kind "posmg") and functions that
+interpret it."""
 
 from __future__ import annotations
 
@@ -29,6 +25,7 @@ class PosmgInfo:
 
 def assignment_to_fsc(info: PosmgInfo, assignment: paynt.parameter_space.parameter_space.ParameterSpace) -> None:
     """
+    TODO
     Stub: FSC extraction for the optimizing player from a synthesized assignment is not yet implemented for
     POSMG -- see the JAIR-refactor plan's "Result-class steps (d)/(e)" note (POSMG's result shape was never
     decided). Same future-facing calling convention as paynt.pomdp._utils.assignment_to_fsc.
@@ -38,8 +35,7 @@ def assignment_to_fsc(info: PosmgInfo, assignment: paynt.parameter_space.paramet
 
 
 def create_smg_from_mdp(info: PosmgInfo, mdp: paynt.model.model.SubMdp) -> paynt.model.model.Smg:
-    """Re-attach game (player-indication) structure to a restricted sub-MDP so it can be verified as a
-    game rather than as a plain MDP."""
+    """Re-attach game (player-indication) structure to a restricted sub-MDP so it can be verified as a game rather than as a plain MDP."""
     underlying_player_indications = info.posmg_manager.get_state_player_indications()
 
     transition_matrix = mdp.model.transition_matrix

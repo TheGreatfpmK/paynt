@@ -12,7 +12,6 @@ logger = logging.getLogger(__name__)
 
 
 class SynthesizerOneByOne(paynt.synthesizer.synthesizer.Synthesizer):
-
     @property
     def method_name(self) -> str:
         return "1-by-1"

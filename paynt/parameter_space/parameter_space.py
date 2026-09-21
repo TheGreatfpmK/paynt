@@ -15,10 +15,8 @@ logger = logging.getLogger(__name__)
 
 class ParameterSpace:
     """
-    A pure value: the parameter-domain data (V of the colored MDP C = (M, V, kappa)) -- which parameters
-    exist, their names/option labels, and (via native) which options are currently assumed for each. Carries
-    no notion of search progress or lifetime -- that lives on paynt.synthesizer.search_node.SearchNode, which
-    wraps a ParameterSpace alongside a built MDP, model-checking results, and other search-time bookkeeping.
+    The parameter-domain data (V of the colored MDP C = (M, V, kappa)) -- which parameters
+    exist, their names/option labels, and (via native) which options are currently assumed for each.
     """
 
     def __init__(self, other: ParameterSpace | None = None):
@@ -87,8 +85,8 @@ class ParameterSpace:
         return ParameterSpace(self)
 
     def assume_parameter_options_copy(self, parameter: int, options: list[int]) -> ParameterSpace:
-        """
-        Create a copy and assume suboptions for a given parameter.
+        """Create a copy and assume suboptions for a given parameter.
+
         @note this does not check whether @options are actually suboptions of this parameter.
         """
         parameter_subspace = self.copy()
@@ -96,8 +94,8 @@ class ParameterSpace:
         return parameter_subspace
 
     def assume_options_copy(self, parameter_options: list[list[int]]) -> ParameterSpace:
-        """
-        Create a copy and assume suboptions for each parameter.
+        """Create a copy and assume suboptions for each parameter.
+
         @note this does not check whether suboptions are actually suboptions of any given parameter.
         """
         parameter_subspace = self.copy()
@@ -141,9 +139,7 @@ class ParameterSpace:
         return self.assume_options_copy(parameter_options)
 
     def all_combinations(self) -> Iterator[tuple[int, ...]]:
-        """
-        :returns iteratable Cartesian product of parameter options
-        """
+        """:returns: iteratable Cartesian product of parameter options."""
         all_options = []
         for parameter in range(self.num_parameters):
             options = self.parameter_options(parameter)

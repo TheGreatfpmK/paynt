@@ -1,7 +1,7 @@
-"""
-Decision-tree-synthesis CLI options, composed into paynt.cli.paynt_run via add_options([...]).
-Kept as a plain list of decorators (not applied here) so importing this module at CLI-startup stays cheap
-regardless of whether the loaded sketch actually turns out to be DT-shaped.
+"""Decision-tree-synthesis CLI options, composed into paynt.cli.paynt_run via add_options([...]).
+
+Kept as a plain list of decorators (not applied here) so importing this module at CLI-startup stays cheap regardless of whether the loaded sketch actually turns
+out to be DT-shaped.
 """
 
 import rich_click as click

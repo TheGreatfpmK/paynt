@@ -35,8 +35,10 @@ def _choose_solver_for_dt_task(build_task: paynt.dt.task.DtTask) -> str:
 def _run_dt_map_scheduler(
     cmdp_factory_dt: paynt.dt.factory.DtColoredMdpFactory, task: paynt.task.SynthesisTask, scheduler: Any, tree_depth: int
 ) -> paynt.dt.result.DtResult:
-    """Helper function to map a scheduler to a decision tree using the DTMap algorithm. Returns a tuple (success, decision_tree)."""
+    """Helper function to map a scheduler to a decision tree using the DTMap algorithm.
 
+    Returns a tuple (success, decision_tree).
+    """
     state_to_choice = payntbind.synthesis.schedulerToStateToGlobalChoice(
         scheduler, cmdp_factory_dt.underlying_mdp, list(range(cmdp_factory_dt.underlying_mdp.nr_choices))
     )
@@ -69,8 +71,7 @@ class DtSynthesizer:
     Outer driver: repeatedly re-unfolds the decision tree at different depths (DtColoredMdpFactory.reset_tree
     tries a fresh depth/coloring each time, unlike the FSC-unfolding factories' memory-size growth) and runs
     SynthesizerARDt -- a fresh inner AR engine constructed for each depth -- against each unfolding, keeping
-    the best tree found so far across depths. Mirrors the PomdpSynthesizer/SayntSynthesizer split from their
-    own inner AR engine.
+    the best tree found so far across depths.
     """
 
     def __init__(
@@ -81,20 +82,15 @@ class DtSynthesizer:
     ):
         self.colored_mdp_factory = colored_mdp_factory
         self.task = task
-        # build_task is Optional at the type level (see DtColoredMdpFactory's own docstring: a factory can be
-        # constructed before its DtTask is known), but DtSynthesizer always needs one already attached
-        # by construction time -- run()/synthesize_tree_sequence's default-max_depth branch reads DT-specific
-        # fields (tree_depth/tree_enumeration/scheduler_path) constantly, so this is cached rather than read
-        # through colored_mdp_factory.build_task on every use
+        # build_task is Optional at the type level (a factory can be constructed before its DtTask is known),
+        # but DtSynthesizer always needs one already attached by construction time; cached here since
+        # run()/synthesize_tree_sequence read DT-specific fields constantly.
         assert colored_mdp_factory.build_task is not None
         self.build_task: paynt.dt.task.DtTask = colored_mdp_factory.build_task
-        # the factory itself never builds automatically -- request the initial tree explicitly. Defaults to
-        # build_task's own depth; callers that only need this for cheap, depth-invariant inspection (e.g.
-        # DtNest's subtree recursion reading feature_info.state_is_relevant_bv/action_labels, which are set
-        # once in DtColoredMdpFactory.__init__ and identical across every reset_tree call regardless of
-        # depth) pass initial_depth=0 explicitly to avoid needlessly building at a larger, more expensive
-        # depth -- whatever gets built here is fully discarded and rebuilt from depth 0 anyway the moment
-        # synthesize_tree/synthesize_tree_sequence actually run.
+        # the factory never builds automatically -- request the initial tree explicitly. Defaults to
+        # build_task's own depth; callers only needing cheap, depth-invariant inspection (e.g. DtNest's
+        # subtree recursion) pass initial_depth=0 to avoid building at a larger, more expensive depth than
+        # necessary -- whatever gets built here is discarded and rebuilt from depth 0 once synthesis runs.
         self.colored_mdp = colored_mdp_factory.reset_tree(initial_depth if initial_depth is not None else self.build_task.tree_depth)
         self.best_tree: paynt.dt.decision_tree.DecisionTree | None = None
         self.best_tree_value: Any = None

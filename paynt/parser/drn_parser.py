@@ -14,7 +14,6 @@ logger = logging.getLogger(__name__)
 
 
 class DrnParser:
-
     COMMENT_PREFIX = "//"
     TYPE_PREFIX = "@type: "
     STATE_PREFIX = "state "

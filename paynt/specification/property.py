@@ -66,12 +66,7 @@ def construct_discounted_reward_property(reward_name: str, minimizing: bool, dis
 
 
 def construct_specification(stormpy_properties: list[Any], relative_error: float = 0, use_exact: bool = False) -> Specification:
-    """
-    The canonical way to build a Specification from a list of raw stormpy properties. This is the one path
-    every parser (and paynt.task.SynthesisTask) should funnel through, replacing several previously-duplicated,
-    independently-hand-rolled construction sites that could drift out of sync (e.g. one of them used to
-    silently drop use_exact).
-    """
+    """The canonical way to build a Specification from a list of raw stormpy properties."""
     Property.initialize(use_exact)
     properties = [construct_property(p, relative_error, use_exact) for p in stormpy_properties]
     return Specification(properties)
@@ -170,9 +165,7 @@ class Property:
 
     @staticmethod
     def alt_formula(formula: Any) -> Any:
-        """
-        :return formula with the opposite optimality type
-        """
+        """:return: formula with the opposite optimality type."""
         formula_alt = formula.clone()
         optimality_type = formula.optimality_type
         if optimality_type == stormpy.OptimizationDirection.Minimize:
@@ -199,20 +192,11 @@ class Property:
 
     @property
     def discount_correction_factor(self) -> float:
-        """
-        Cassandra-derived (Dec-)POMDP models always add a synthetic, zero-reward "pick the true initial
-        state" bookkeeping state before the real process begins (see DecPomdp.cpp's initial-state
-        construction, which sets this state's own reward to 0 unconditionally). Cdiscount discounts
-        uniformly starting from that literal initial state, so checking a discounted-reward property against
-        such a model silently applies one extra factor of the property's own discount value that the real
-        process never experiences. discount_factor_correction (set only by paynt.parser.sketch's Cassandra
-        branch, for every property -- constraint or optimality alike -- checked against such a model,
-        whether the formula was auto-inferred from the model or came from a user-provided properties file)
-        marks properties that need this divided back out and records the exact value to divide by. This is
-        deliberately a separate field from the property's own discount factor (readable, for any discounted-
-        reward property regardless of origin, via extract_discount_factor_from_formula) -- a property can be
-        genuinely discounted without needing this correction (e.g. a native PRISM/DRN Cdiscount property has
-        no synthetic initial state to compensate for), so None here means "no correction", not "unknown".
+        """Cassandra-derived models add a synthetic, zero-reward initial state (see DecPomdp.cpp), so Cdiscount double-counts one discount step through it;
+        discount_factor_correction (set only by paynt.parser.sketch's Cassandra branch) holds the value to divide back out.
+
+        None means "no correction needed", not "unknown" -- a property can be discounted without this ever applying as this only applies for cases where the
+        model comes from a Cassandra format.
         """
         if self.discount_factor_correction is None:
             return 1.0
@@ -302,10 +286,7 @@ class Property:
 
 
 class OptimalityProperty(Property):
-    """
-    Optimality property can remember current optimal value and adapt the
-    corresponding threshold wrt epsilon.
-    """
+    """Optimality property can remember current optimal value and adapt the corresponding threshold wrt epsilon."""
 
     def __init__(self, prop: Any, epsilon: float = 0, use_exact: bool = False):
         self.property = prop
@@ -413,7 +394,6 @@ class OptimalityProperty(Property):
 
 
 class Specification:
-
     def __init__(self, properties: list[Property]):
         self.constraints: list[Property] = []
         self.optimality: OptimalityProperty | None = None
@@ -495,12 +475,10 @@ class Specification:
         return Specification(properties_negated)
 
     def rewrap(self, new_properties: list[Any], use_exact: bool = False) -> Specification:
-        """
-        Rebuild a Specification from new raw stormpy properties (e.g. after PRISM->JANI translation changed
-        their atoms), preserving each property's paynt-level type (Property vs OptimalityProperty) and
-        epsilon. Used by JaniUnfolder, which -- unlike every other caller -- already holds paynt-typed
-        properties and only needs to re-wrap them around new formulas, not construct them from scratch.
-        :param new_properties raw stormpy properties, same order and length as self.all_properties()
+        """Rebuild a Specification from new raw stormpy properties (e.g. after PRISM->JANI translation changed their atoms), preserving each property's paynt-
+        level type (Property vs OptimalityProperty) and epsilon.
+
+        :param new_properties: raw stormpy properties, same order and length as self.all_properties()
         """
         old_properties = self.all_properties()
         assert len(new_properties) == len(old_properties)

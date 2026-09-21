@@ -18,14 +18,10 @@ class DtSearchNode(paynt.synthesizer.search_node.SearchNode):
 
 
 class SynthesizerARDt(paynt.synthesizer.synthesizer_ar.SynthesizerAR):
-    """
-    AR specialized for decision-tree synthesis: splits by parameter kind (action/decision/variable) rather
-    than by scored inconsistency variance, and adds harmonization (retrying an inconsistent scheduler
-    selection against both directions of one parameter before giving up) plus a "scheduler preserved across
-    split" shortcut specific to how ColoredMdp.scheduler_is_consistent's "dt" branch reports single-property results.
-    This is the inner search engine; the outer DtSynthesizer (paynt.dt.synthesizer) constructs a fresh
-    instance of this class for every tree depth it tries, mirroring the SynthesizerARStorm/SayntSynthesizer
-    split.
+    """AR specialized for decision-tree synthesis: splits by parameter kind (action/decision/variable) rather than by scored inconsistency variance, and adds
+    harmonization.
+
+    This is the inner search engine; the outer DtSynthesizer (paynt.dt.synthesizer) constructs a fresh instance of this class for every tree depth it tries.
     """
 
     search_node_type = DtSearchNode
@@ -59,13 +55,11 @@ class SynthesizerARDt(paynt.synthesizer.synthesizer_ar.SynthesizerAR):
             self.update_optimum(node)
 
     def harmonize_inconsistent_scheduler(self, node):
-        """
-        Try forcing the harmonizing parameter (the first one still locally inconsistent in some undecided
-        property's own scheduler) to each of its two inconsistent options in turn, hoping one of the two
-        concrete assignments happens to satisfy the whole spec outright. A pure-L(h) node -- every remaining
-        property's own scheduler is already locally consistent, but they disagree with each other -- has
-        nothing here to harmonize against, so this is a no-op in that case: harmonization is a speed-up
-        attempt, not something split_undecided_space depends on succeeding.
+        """Try forcing the harmonizing parameter (the first one still locally inconsistent in some undecided property's own scheduler) to each of its two
+        inconsistent options in turn, hoping one of the two concrete assignments happens to satisfy the whole spec outright.
+
+        A pure-L(h) node -- every remaining property's own scheduler is already locally consistent, but they disagree with each other -- has nothing here to
+        harmonize against, so this is a no-op in that case: harmonization is a speed-up attempt, not something split_undecided_space depends on succeeding.
         """
         self.num_harmonizations += 1
         result = next((r for r in node.analysis_result.undecided_results() if any(len(options) > 1 for options in r.primary_selection)), None)
@@ -123,9 +117,6 @@ class SynthesizerARDt(paynt.synthesizer.synthesizer_ar.SynthesizerAR):
         return spec_result
 
     def scheduler_scores(self, selection):
-        """Decision-tree splitting heuristic: classify inconsistent parameters by kind (action/decision/
-        variable) and pick one deterministically, rather than scoring by choice-value variance -- a
-        genuinely different algorithm from the shared AR default, not a performance variant of it."""
         info = self.colored_mdp.feature_info
         inconsistent_assignments = {parameter: options for parameter, options in enumerate(selection) if len(options) > 1}
         assert len(inconsistent_assignments) > 0, f"obtained selection with no inconsistencies: {selection}"
@@ -182,19 +173,13 @@ class SynthesizerARDt(paynt.synthesizer.synthesizer_ar.SynthesizerAR):
         info = self.colored_mdp.feature_info
         if info.is_action_parameter[splitter] or info.is_decision_parameter[splitter]:
             assert len(used_options) > 1
-            core_suboptions, other_suboptions = mdp.parameter_space.suboptions_enumerate(splitter, used_options)
+            core_suboptions, other_suboptions = node.parameter_space.suboptions_enumerate(splitter, used_options)
         else:
-            # Variable-kind parameters encode an ordered threshold comparison (e.g. "yellow <= k") -- unlike
-            # action/decision parameters (arbitrary discrete choices), only a CONTIGUOUS sub-range of their
-            # domain is a valid tree-branch predicate. suboptions_enumerate's singleton-per-value-plus-residual
-            # shape produces a non-contiguous bucket (e.g. "value in {0,2,4}") the underlying coloring cannot
-            # represent -- confirmed via a real crash (AssertionError: option not in the parameter space,
-            # surfaced by dtnest on dt-orchard) when this branch was unified with the action/decision one
-            # above. Generalizes the old exactly-2-options contiguous cut to N-ary L(h) disagreement instead:
-            # sort the disagreeing values by their position in the parameter's full ordered domain and cut
-            # just before each one except the first -- for exactly 2 values this reduces to precisely the old
-            # cut (cutting once, at the second value's position), and the whole domain is always covered, with
-            # no residual bucket.
+            # Variable-kind parameters encode an ordered threshold comparison (e.g. "yellow <= k"), so only a
+            # contiguous sub-range of the domain is a valid tree-branch predicate -- unlike action/decision
+            # parameters (arbitrary discrete choices), which suboptions_enumerate handles above. Cut the
+            # domain just before each disagreeing value's position; for exactly 2 values this is the same
+            # single cut as before, and the whole domain is always covered with no residual bucket.
             splitter_options = node.parameter_space.parameter_options(splitter)
             cut_positions = sorted(splitter_options.index(option) for option in used_options)[1:]
             boundaries = [0] + cut_positions + [len(splitter_options)]

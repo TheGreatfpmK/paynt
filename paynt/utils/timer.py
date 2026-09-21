@@ -10,7 +10,6 @@ logger = logging.getLogger(__name__)
 
 
 class Timer:
-
     def __init__(self, time_limit_seconds: float | None = None):
         self.running = False
         self.last_timestamp: float | None = None
@@ -49,7 +48,6 @@ class Timer:
 
 
 class GlobalTimer:
-
     global_timer: Timer | None = None
 
     @classmethod
@@ -70,7 +68,6 @@ class GlobalTimer:
 
 
 class GlobalMemoryLimit:
-
     memory_limit_mb: float | None = None
 
     @classmethod

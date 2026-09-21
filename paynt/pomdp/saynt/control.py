@@ -28,7 +28,6 @@ belmc: Any = None
 
 # class implementing the main components of the Storm integration for FSC synthesis for POMDPs
 class StormPOMDPControl:
-
     def __init__(self):
         self.latest_storm_result: Any = None  # holds object representing the latest Storm result
         self.storm_bounds: float | None = None  # under-approximation value from Storm
@@ -170,7 +169,7 @@ class StormPOMDPControl:
         self.belief_controller_size = self.get_belief_controller_size(result, self.paynt_fsc_size)
 
         print("-----------Storm-----------")
-        print(f"Value = {value} | Time elapsed = {round(storm_timer.read(),1)}s | FSC size = {self.belief_controller_size}", flush=True)
+        print(f"Value = {value} | Time elapsed = {round(storm_timer.read(), 1)}s | FSC size = {self.belief_controller_size}", flush=True)
         if self.get_result is not None:
             # TODO not important for the paper but it would be nice to have correct FSC here as well
             if self.storm_options == "overapp":
@@ -249,8 +248,11 @@ class StormPOMDPControl:
             value = result.upper_bound if self.specification.optimality.minimizing else result.lower_bound
             size = self.get_belief_controller_size(result, self.paynt_fsc_size)
 
-            print(f"-----------Storm----------- \
-              \nValue = {value} | Time elapsed = {round(self.saynt_timer.read(),1)}s | FSC size = {size}\n", flush=True)
+            print(
+                f"-----------Storm----------- \
+              \nValue = {value} | Time elapsed = {round(self.saynt_timer.read(), 1)}s | FSC size = {size}\n",
+                flush=True,
+            )
 
             self.store_storm_result(result)
             self.parse_results(self.colored_mdp)
@@ -294,8 +296,11 @@ class StormPOMDPControl:
         value = result.upper_bound if self.specification.optimality.minimizing else result.lower_bound
         size = self.get_belief_controller_size(result, self.paynt_fsc_size)
 
-        print(f"-----------Storm----------- \
-              \nValue = {value} | Time elapsed = {round(self.saynt_timer.read(),1)}s | FSC size = {size}\n", flush=True)
+        print(
+            f"-----------Storm----------- \
+              \nValue = {value} | Time elapsed = {round(self.saynt_timer.read(), 1)}s | FSC size = {size}\n",
+            flush=True,
+        )
 
         self.store_storm_result(result)
         self.parse_results(self.colored_mdp)
@@ -459,7 +464,6 @@ class StormPOMDPControl:
                         scheduler = self.latest_storm_result.cutoff_schedulers[int(scheduler_index)]
 
                         for state in range(colored_mdp.feature_info.pomdp.nr_states):
-
                             choice_string = str(scheduler.get_choice(state).get_choice())
                             actions = self.parse_choice_string(choice_string)
 
@@ -538,7 +542,6 @@ class StormPOMDPControl:
         # go through each observation of interest
         for obs in range(paynt.pomdp._utils.observations(self.colored_mdp.feature_info)):
             for parameter in self.colored_mdp.feature_info.observation_action_parameters[obs]:
-
                 if obs in result_dict.keys():
                     selected_actions = [action for action in parameter_space.parameter_options(parameter) if action in result_dict[obs]]
                 else:
@@ -571,12 +574,10 @@ class StormPOMDPControl:
         restricted_parameters_list: list[int] = []
 
         for observ in result_dict.keys():
-
             act_obs_parameters = self.colored_mdp.feature_info.observation_action_parameters[observ]
             restricted_parameters_list.extend(act_obs_parameters)
 
         for parameter in restricted_parameters_list:
-
             observation_action_parameters = self.colored_mdp.feature_info.observation_action_parameters
             for obs_parameters, index in zip(observation_action_parameters, range(len(observation_action_parameters)), strict=False):
                 if parameter in obs_parameters:
@@ -699,9 +700,9 @@ class StormPOMDPControl:
                 belief_mc_nodes_map.append(fsc_node)
                 fsc_node += 1
 
-        assert fsc_nodes - 1 == len(
-            [x for x in belief_mc_nodes_map if x is not None]
-        ), f"{fsc_nodes-1} != {len([x for x in belief_mc_nodes_map if x is not None])}"
+        assert fsc_nodes - 1 == len([x for x in belief_mc_nodes_map if x is not None]), (
+            f"{fsc_nodes - 1} != {len([x for x in belief_mc_nodes_map if x is not None])}"
+        )
 
         if uses_fsc:
             # Storm only labels cutoff states 'finite_mem' when it was given paynt_export to cut off to,

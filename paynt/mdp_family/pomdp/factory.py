@@ -1,7 +1,5 @@
-"""
-Constructs a ColoredMdp (feature_kind "pomdp_family"): like MdpFamilyColoredMdpFactory, but tracks observation classes so that
-policy decisions can be tied together across environment variants that look the same to the agent.
-"""
+"""Constructs a ColoredMdp (feature_kind "pomdp_family"): like MdpFamilyColoredMdpFactory, but tracks observation classes so that policy decisions can be tied
+together across environment variants that look the same to the agent."""
 
 from __future__ import annotations
 
@@ -19,7 +17,6 @@ logger = logging.getLogger(__name__)
 
 
 class PomdpFamilyColoredMdpFactory(MdpFamilyColoredMdpFactory):
-
     feature_kind = "pomdp_family"
 
     def __init__(

@@ -13,7 +13,6 @@ logger = logging.getLogger(__name__)
 
 
 class DtVariable:
-
     def __init__(self, name: str, domain: set[int]):
         self.name = name
         # conversion of boolean variables to integers
@@ -37,9 +36,7 @@ class DtVariable:
 
     @property
     def parameter_domain(self) -> list[int]:
-        """
-        Parameter domain does not include the maximum value.
-        """
+        """Parameter domain does not include the maximum value."""
         return self.domain[:-1]
 
     def __str__(self) -> str:
@@ -126,9 +123,9 @@ class DecisionTreeNode:
         return 1 + sum([child.get_number_of_descendants() for child in self.child_nodes])
 
     def assign_identifiers(self, identifier: int = 0, keep_old: bool = False) -> int:
-        """
-        Recursively assigns unique identifiers to each child node with pre-order traversal.
-            If keep_old is True, the old identifier is stored in the old_identifier attribute before being overwritten.
+        """Recursively assigns unique identifiers to each child node with pre-order traversal.
+
+        If keep_old is True, the old identifier is stored in the old_identifier attribute before being overwritten.
         """
         if keep_old:
             self.old_identifier = self.identifier
@@ -177,10 +174,8 @@ class DecisionTreeNode:
         self.child_false.apply_hint(parameter_subspace, tree_hint.child_false)
 
     def simplify(self, variables: list[DtVariable], state_valuations: list[list[int]]) -> None:
-        """
-        Recursively simplifies the decision tree by removing nodes that have only one child due to the given
-        state valuations, and by merging terminal nodes with the same action.
-        """
+        """Recursively simplifies the decision tree by removing nodes that have only one child due to the given state valuations, and by merging terminal nodes
+        with the same action."""
         if self.is_terminal:
             return
 
@@ -332,7 +327,6 @@ class DecisionTreeNode:
 
 
 class DecisionTree:
-
     def __init__(self, action_labels: list[str], variables: list[DtVariable]):
         self.action_labels = action_labels
         self.variables = variables
@@ -381,16 +375,17 @@ class DecisionTree:
         nodes = self.collect_nodes()
         for node_id, node in enumerate(nodes):
             assert node.identifier is not None
-            assert (
-                node.is_terminal == tree_helper[node.identifier]["leaf"]
-            ), f"node {node_id} is terminal: {node.is_terminal}, expected: {tree_helper[node_id]['leaf']}"
-            assert (
-                node.identifier == tree_helper[node.identifier]["id"]
-            ), f"node {node_id} has identifier {node.identifier}, expected: {tree_helper[node_id]['id']}"
+            assert node.is_terminal == tree_helper[node.identifier]["leaf"], (
+                f"node {node_id} is terminal: {node.is_terminal}, expected: {tree_helper[node_id]['leaf']}"
+            )
+            assert node.identifier == tree_helper[node.identifier]["id"], (
+                f"node {node_id} has identifier {node.identifier}, expected: {tree_helper[node_id]['id']}"
+            )
 
     def collect_nodes(self, node_condition: Callable[[DecisionTreeNode], bool] | None = None) -> list[DecisionTreeNode]:
-        """
-        Returns a list of nodes in the tree that satisfy the given node_condition. If node_condition is None, returns all nodes in the tree.
+        """Returns a list of nodes in the tree that satisfy the given node_condition.
+
+        If node_condition is None, returns all nodes in the tree.
         """
         if node_condition is None:
 
@@ -475,11 +470,8 @@ class DecisionTree:
         return graphviz_tree
 
     def append_tree_as_subtree(self, new_subtree: DecisionTree, subtree_root_node_id: int, subtree_info: Any) -> None:
-        """
-        :param subtree_info the DtInfo (paynt.dt._utils.DtInfo) of the colored MDP the subtree was
-            synthesized against -- typed Any rather than DtInfo here to avoid this representation-only file
-            importing paynt.dt._utils, which itself imports this module for type hints
-        """
+        """:param subtree_info: the DtInfo (paynt.dt._utils.DtInfo) of the colored MDP the subtree was synthesized against -- typed Any rather than DtInfo here
+        to avoid this representation-only file importing paynt.dt._utils, which itself imports this module for type hints."""
         matching_nodes = self.collect_nodes(lambda node: node.identifier == subtree_root_node_id)
         assert len(matching_nodes) == 1, f"subtree root node id {subtree_root_node_id} not found in decision tree"
         subtree_root_node = matching_nodes[0]

@@ -13,7 +13,6 @@ logger = logging.getLogger(__name__)
 
 
 class ConflictGeneratorMdp(paynt.synthesizer.conflict_generator.dtmc.ConflictGeneratorDtmc):
-
     def initialize(self) -> None:
         state_to_parameters_bv = self.colored_mdp.coloring.getStateToHoles().copy()
         state_to_parameters = []

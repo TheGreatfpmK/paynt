@@ -8,7 +8,6 @@ import paynt.specification.property
 
 
 class ModelBuilder:
-
     @classmethod
     def default_builder_options(cls, specification: paynt.specification.property.Specification | None = None) -> Any:
         # builder options

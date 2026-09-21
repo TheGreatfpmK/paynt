@@ -1,10 +1,3 @@
-"""
-Factory producing a ColoredMdp (feature_kind "family") from an already-built (underlying_mdp, parameter_space, coloring) triple
--- unlike the POMDP/POSMG/Dec-POMDP factories, this one does not construct the parameter space/coloring from
-scratch (the parser already builds those for any PRISM-with-parameters sketch); its only extra job is
-optionally unfolding scheduler memory on top of what it was given.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -23,7 +16,6 @@ logger = logging.getLogger(__name__)
 
 
 class MdpFamilyColoredMdpFactory:
-
     feature_kind = "family"
 
     def __init__(
@@ -53,9 +45,10 @@ class MdpFamilyColoredMdpFactory:
         self.state_to_actions = MdpFamilyColoredMdpFactory.map_state_to_available_actions(self.state_action_choices)
 
     def build(self) -> paynt.colored_mdp.ColoredMdp:
-        """Overridable so subclasses (e.g. PomdpFamilyColoredMdpFactory) can produce their own Info object
-        while reusing all of the construction above. Not called automatically -- the caller (e.g.
-        paynt.api.get_synthesizer) requests a ColoredMdp explicitly."""
+        """Overridable so subclasses (e.g. PomdpFamilyColoredMdpFactory) can produce their own Info object while reusing all of the construction above.
+
+        Not called automatically -- the caller (e.g. paynt.api.get_synthesizer) requests a ColoredMdp explicitly.
+        """
         colored_mdp = paynt.colored_mdp.ColoredMdp(self.underlying_mdp, self.parameter_space, self.coloring, self.use_exact, feature_kind="family")
         colored_mdp.feature_info = paynt.mdp_family._utils.MdpFamilyInfo(
             num_actions=self.num_actions,
@@ -69,11 +62,10 @@ class MdpFamilyColoredMdpFactory:
     def unfold_scheduler_memory(
         self, underlying_mdp: Any, parameter_space: paynt.parameter_space.parameter_space.ParameterSpace, coloring: Any
     ) -> tuple[Any, paynt.parameter_space.parameter_space.ParameterSpace, Any]:
-        """
-        Unfold the scheduler memory of the underlying MDP to the initial_memory_size.
-        :returns a new underlying MDP with unfolded scheduler memory
-        """
+        """Unfold the scheduler memory of the underlying MDP to the initial_memory_size.
 
+        :returns: a new underlying MDP with unfolded scheduler memory
+        """
         logger.info(f"unfolding scheduler memory of {self.build_task.memory_size} into the model.")
 
         # unfold the scheduler memory into the model

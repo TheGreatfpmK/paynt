@@ -6,27 +6,7 @@ from typing import Any
 
 @dataclass(kw_only=True)
 class DtTask:
-    """
-    Feature-specific build knobs for decision-tree synthesis, owned by DtColoredMdpFactory
-    (factory.build_task) -- deliberately not a subclass of paynt.task.SynthesisTask, since these
-    fields are read only by the factory that builds a DtColoredMdp, never by the generic AR/CEGIS/Hybrid
-    algorithms (those read a separate, plain SynthesisTask instead; see paynt.dt.synthesizer.DtSynthesizer,
-    which holds both).
-
-    A plain dataclass (pure field assignment, no computed values) -- unlike SynthesisTask, which still needs
-    a hand-written __init__ to construct its Specification. kw_only=True is not just a style choice: DtTask
-    is a base class (see DtNestTask below), and dataclass inheritance always places a subclass's own new
-    fields after every inherited one in the generated __init__'s positional order -- silently different from
-    what a hand-written subclass __init__ might have declared. Since every real call site already constructs
-    these with keyword arguments, kw_only=True makes that the only way, turning what would otherwise be a
-    silent "wrong field gets the value" risk into a loud TypeError instead.
-
-    Sketch.load_sketch funnels one shared kwargs dict (every feature's CLI options at once, since it doesn't
-    know the sketch's feature until it has parsed it) into whichever feature task ends up being constructed;
-    unlike the pre-dataclass version, this class has no **kwargs catch-all of its own to swallow the
-    irrelevant keys -- being a plain dataclass is exactly what buys it a real, auto-generated __init__
-    instead of hand-written boilerplate. See sketch.py's _dataclass_task_kwargs instead.
-    """
+    """Feature-specific build knobs for decision-tree synthesis, owned by DtColoredMdpFactory (factory.build_task)."""
 
     tree_depth: int = 0
     tree_enumeration: bool = False

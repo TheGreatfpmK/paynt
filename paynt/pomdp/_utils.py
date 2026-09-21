@@ -1,12 +1,6 @@
-"""
-Internal support for the POMDP feature: the PomdpInfo companion dataclass (attached as
-ColoredMdp.feature_info for feature_kind "pomdp") and functions that interpret it -- export/policy/FSC/
-Q-value/belief logic that reads a synthesized assignment back in terms of the original POMDP
-(observations, memory nodes, beliefs). Not part of the public API -- a POMDP sketch is used through
-paynt.pomdp.PomdpSynthesizer/paynt.api, and a PomdpResult already carries the FSC a caller needs. "pomdp"
-has zero polymorphic-dispatch overrides on the base ColoredMdp -- it behaves exactly like the generic case
-for build/build_assignment/scheduler_selection/scheduler_is_consistent.
-"""
+"""Internal support for the POMDP feature: the PomdpInfo companion dataclass (attached as ColoredMdp.feature_info for feature_kind "pomdp") and functions that
+interpret it -- export/policy/FSC/ Q-value/belief logic that reads a synthesized assignment back in terms of the original POMDP (observations, memory nodes,
+beliefs)."""
 
 from __future__ import annotations
 
@@ -94,9 +88,7 @@ def extract_policy(
 
 
 def policy_size(colored_mdp: paynt.colored_mdp.ColoredMdp, assignment: paynt.parameter_space.parameter_space.ParameterSpace) -> int:
-    """
-    Compute how many natural numbers are needed to encode the mu-FSC under the current memory model mu.
-    """
+    """Compute how many natural numbers are needed to encode the mu-FSC under the current memory model mu."""
     info = cast(PomdpInfo, colored_mdp.feature_info)
     # going through the induced DTMC, too lazy to parse parameter names
     dtmc = colored_mdp.build_assignment(assignment)
@@ -143,8 +135,9 @@ def policy_size(colored_mdp: paynt.colored_mdp.ColoredMdp, assignment: paynt.par
 
 
 def get_parameter_space_pomdp(info: PomdpInfo, mdp: Any) -> Any:
-    """
-    Constructs POMDP from a sub-MDP which contains maps to the original underlying (PO)MDP. Used for computing POMDP abstraction bounds.
+    """Constructs POMDP from a sub-MDP which contains maps to the original underlying (PO)MDP.
+
+    Used for computing POMDP abstraction bounds.
     """
     no_obs = info.pomdp.nr_observations
     tm = mdp.model.transition_matrix
@@ -295,7 +288,6 @@ def get_induced_dtmc_from_fsc(info: PomdpInfo, fsc: FscFactored) -> Any:
                 current_reward[reward_name] += reward_model.state_action_rewards[choice_index] * action_prob
 
             for selected_update, update_prob in selected_updates.items():
-
                 for entry in info.pomdp.transition_matrix.get_row(choice_index):
                     next_state = entry.column
                     next_state_memory_pair = (next_state, selected_update)
@@ -340,12 +332,11 @@ def compute_qvalues(
     assignment: paynt.parameter_space.parameter_space.ParameterSpace,
     specification: paynt.specification.property.Specification,
 ) -> list[list[Any]]:
-    """
-    Given an MDP obtained after applying an FSC to a POMDP, compute for each state s, (reachable) memory node n
-    the Q-value Q(s,n).
-    :param assignment parameter assignment encoding an FSC; it is assumed the assignment is the one obtained
+    """Given an MDP obtained after applying an FSC to a POMDP, compute for each state s, (reachable) memory node n the Q-value Q(s,n).
+
+    :param assignment: parameter assignment encoding an FSC; it is assumed the assignment is the one obtained
         for the current unfolding
-    :param specification the specification to compute Q-values under; must contain exactly one property
+    :param specification: the specification to compute Q-values under; must contain exactly one property
     :note Q(s,n) may be None if (s,n) exists in the unfolded POMDP but is not reachable in the induced DTMC
     """
     # TODO: move to a util file once SAYNT is reworked -- this doesn't need to live here

@@ -26,16 +26,13 @@ def colored_mdp_parameter_space_prop_result():
 
 
 class TestModelIndexScoring:
-
     def test_choice_values_matches_its_documented_formula(self, colored_mdp_parameter_space_prop_result):
-        """
-        Independent correctness check: hand-computes rew(c) + sum_s'[P(s,c,s')*mc(s')] directly from the raw
-        transition matrix and reward model (the formula choice_values documents), for every choice, and
-        compares against ModelIndex.choice_values's actual output. This used to compare against
-        paynt.quotient.quotient.Quotient.choice_values instead (the method choice_values was extracted
-        from) as an oracle, but that class no longer exists -- and re-deriving the formula independently is
-        arguably the better test anyway, since a duplicate-implementation comparison can't catch a bug both
-        sides share.
+        """Independent correctness check: hand-computes rew(c) + sum_s'[P(s,c,s')*mc(s')] directly from the raw transition matrix and reward model (the formula
+        choice_values documents), for every choice, and compares against ModelIndex.choice_values's actual output.
+
+        This used to compare against paynt.quotient.quotient.Quotient.choice_values instead (the method choice_values was extracted from) as an oracle, but that
+        class no longer exists -- and re-deriving the formula independently is arguably the better test anyway, since a duplicate-implementation comparison
+        can't catch a bug both sides share.
         """
         colored_mdp, node, prop, result = colored_mdp_parameter_space_prop_result
         state_values = result.result.get_values()
@@ -67,11 +64,12 @@ class TestModelIndexScoring:
         assert visits[initial_state] >= 1
 
     def test_compute_expected_visits_respects_disable_flag(self, colored_mdp_parameter_space_prop_result):
-        """Regression test: the original Quotient.compute_expected_visits returned a vector sized to the
-        full underlying MDP's state count on this early-return path, which is wrong whenever `mdp` is a
-        restricted sub-MDP with fewer states. ModelIndex sizes the vector to `mdp` itself instead.
-        disable_expected_visits is a plain parameter (not a class attribute) precisely so two syntheses in
-        the same process can't leak this setting into each other -- see paynt.task.SynthesisTask."""
+        """Regression test: the original Quotient.compute_expected_visits returned a vector sized to the full underlying MDP's state count on this early-return
+        path, which is wrong whenever `mdp` is a restricted sub-MDP with fewer states.
+
+        ModelIndex sizes the vector to `mdp` itself instead. disable_expected_visits is a plain parameter (not a class attribute) precisely so two syntheses in
+        the same process can't leak this setting into each other -- see paynt.task.SynthesisTask.
+        """
         _, node, prop, result = colored_mdp_parameter_space_prop_result
         local_choices = result.result.scheduler.compute_action_support(node.mdp.model.nondeterministic_choice_indices)
         visits = paynt.model.model.ModelIndex.compute_expected_visits(node.mdp.model, prop, local_choices, disable_expected_visits=True)

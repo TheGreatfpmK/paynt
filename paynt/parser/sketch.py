@@ -36,19 +36,14 @@ logger = logging.getLogger(__name__)
 
 
 def _dataclass_task_kwargs(cls: type, task_kwargs: dict[str, Any]) -> dict[str, Any]:
-    """
-    load_sketch doesn't know which feature a sketch needs until it has parsed it, so task_kwargs carries
-    every feature's CLI options at once; each feature task (DtTask, DtNestTask, PomdpTask, PosmgTask,
-    MdpFamilyTask) is a plain dataclass with no **kwargs catch-all of its own to swallow the rest (unlike
-    SynthesisTask.from_specification, which still has one, since SynthesisTask isn't a dataclass) -- this
-    keeps only the keys the target dataclass actually declares as real constructor (init=True) fields.
-    """
+    """load_sketch doesn't know which feature a sketch needs until it has parsed it, so task_kwargs carries every feature's CLI options at once; each feature
+    specific task is a plain dataclass with no **kwargs catch-all of its own -- this keeps only the keys the target dataclass actually declares as real
+    constructor (init=True) fields."""
     field_names = {f.name for f in dataclasses.fields(cls) if f.init}
     return {key: value for key, value in task_kwargs.items() if key in field_names}
 
 
 class Sketch:
-
     @classmethod
     def load_sketch(
         cls,
@@ -126,10 +121,8 @@ class Sketch:
                     specification = PrismParser.parse_specification(properties_path, relative_error, use_exact=use_exact)
                     # every Cassandra-derived model has a synthetic, zero-reward initial state (see
                     # DecPomdp.cpp) that silently eats one extra discount factor under Cdiscount -- correct
-                    # for it on every discounted-reward property (constraint or optimality alike). The
-                    # properties file's own formula, not decpomdp_manager.discount_factor, is the source of
-                    # truth here precisely because a user-provided formula can specify its own, different
-                    # discount value (see the precedence rule above) -- so extract it from the formula.
+                    # for it on every discounted-reward property, reading the value from the formula itself
+                    # (not decpomdp_manager.discount_factor) since the user's own file may override it.
                     for prop in specification.all_properties():
                         if prop.is_discounted_reward:
                             prop.discount_factor_correction = prop.extract_discount_factor_from_formula()

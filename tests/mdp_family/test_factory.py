@@ -5,10 +5,9 @@ import paynt.synthesizer.search_node
 
 
 class TestFamilyColoredMdpFactory:
-
     def test_factory_does_not_build_automatically(self, family_colored_mdp_factory):
-        """Guardrail for the "factories don't eagerly build" redesign: a freshly-constructed factory holds
-        no colored_mdp of its own -- build() must be called explicitly to get one."""
+        """Guardrail for the "factories don't eagerly build" redesign: a freshly-constructed factory holds no colored_mdp of its own -- build() must be called
+        explicitly to get one."""
         assert not hasattr(family_colored_mdp_factory, "colored_mdp")
 
     def test_load_sketch_produces_a_family_colored_mdp(self, family_colored_mdp):
@@ -22,12 +21,9 @@ class TestFamilyColoredMdpFactory:
         assert node.mdp.states > 0
 
     def test_build_assignment_does_not_force_a_dtmc(self, family_colored_mdp):
-        """
-        Regression test: ColoredMdp.build_assignment's "family"/"pomdp_family" branch specifically because
-        fixing every parameter (picking one family member) does not fix the agent's policy -- the resulting
-        model can still be nondeterministic, so it must not be converted to a DTMC the way it is for every
-        other feature_kind.
-        """
+        """Regression test: ColoredMdp.build_assignment's "family"/"pomdp_family" branch specifically because fixing every parameter (picking one family member)
+        does not fix the agent's policy -- the resulting model can still be nondeterministic, so it must not be converted to a DTMC the way it is for every
+        other feature_kind."""
         assignment = family_colored_mdp.parameter_space.pick_any()
         mdp = family_colored_mdp.build_assignment(assignment)
         assert mdp.states > 0

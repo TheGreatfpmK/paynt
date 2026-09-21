@@ -13,7 +13,6 @@ def _reward_properties():
 
 
 class TestSynthesisTask:
-
     def test_specification_is_constructed_from_properties(self):
         task = paynt.task.SynthesisTask(_reachability_properties())
         assert task.specification.num_properties == 1
@@ -35,8 +34,8 @@ class TestSynthesisTask:
         assert wrapped.timeout == 99
 
     def test_use_exact_reaches_construct_property(self):
-        """use_exact must actually flow through SynthesisTask -> construct_specification -> construct_property,
-        which rejects reward properties when use_exact=True."""
+        """use_exact must actually flow through SynthesisTask -> construct_specification -> construct_property, which rejects reward properties when
+        use_exact=True."""
         with pytest.raises(ValueError):
             paynt.task.SynthesisTask(_reward_properties(), use_exact=True)
         # sanity: the same property without use_exact does not raise

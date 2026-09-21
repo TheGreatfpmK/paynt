@@ -8,7 +8,6 @@ def _reachability_properties():
 
 
 class TestConstructSpecification:
-
     def test_builds_specification_from_raw_properties(self):
         spec = paynt.specification.property.construct_specification(_reachability_properties())
         assert spec.num_properties == 1
@@ -16,13 +15,9 @@ class TestConstructSpecification:
 
 
 class TestSpecificationRewrap:
-
     def test_preserves_property_type_and_epsilon(self):
-        """
-        JaniUnfolder needs this: after translating PRISM to JANI, property atoms may change, so the
-        specification's properties must be rebuilt from new raw stormpy formulas while preserving each
-        property's paynt-level type (Property vs OptimalityProperty) and epsilon.
-        """
+        """JaniUnfolder needs this: after translating PRISM to JANI, property atoms may change, so the specification's properties must be rebuilt from new raw
+        stormpy formulas while preserving each property's paynt-level type (Property vs OptimalityProperty) and epsilon."""
         original = paynt.specification.property.construct_specification(_reachability_properties(), relative_error=0.1)
         assert original.has_optimality
         original_epsilon = original.optimality.epsilon

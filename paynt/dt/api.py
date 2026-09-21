@@ -18,9 +18,10 @@ def synthesize(
     build_task: DtTask,
     use_solver: str | None = None,
 ) -> DtResult:
-    """API function to solve a given SynthesisTask/DtTask pair against a DtColoredMdpFactory. Optional
-    use_solver parameter can force a specific solver to be used. Returns paynt_result."""
+    """API function to solve a given SynthesisTask/DtTask pair against a DtColoredMdpFactory.
 
+    Optional use_solver parameter can force a specific solver to be used. Returns paynt_result.
+    """
     cmdp_factory_dt.build_task = build_task
 
     if use_solver is None:
@@ -35,11 +36,9 @@ def synthesize(
 
 def create_task(properties: list[Any], tree_depth: int) -> DtTask:
     """API function to create a DtTask from a list of StormPy properties and a tree depth."""
-
     raise NotImplementedError("API not yet implemented.")
 
 
 def create_colored_mdp_factory(model: Any) -> DtColoredMdpFactory:
     """API function to create a DtColoredMdpFactory from a StormPy model."""
-
     raise NotImplementedError("API not yet implemented.")

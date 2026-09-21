@@ -25,14 +25,12 @@ def reduce_constraint_to_optimality(
     query: a numeric target to approximate, plus a real optimal scheduler to seed its initial tree from. A
     specification with no optimality objective but exactly one constraint (e.g. P>=0.95 [F "goal"]) can still
     be handled: the constraint's own Property.formula is already the bound-free, direction-correct
-    quantitative formula (computed once from the original comparison operator in Property.__init__), so
-    building an OptimalityProperty from it is exactly "drop the bound, keep the direction" (P>=0.95 becomes
-    Pmax=?).
-    :returns (new_specification, constraint) -- new_specification is a single-optimality-property
-        specification usable by the rest of DtNest.run() exactly like a genuine optimality objective;
-        the caller uses constraint.threshold/.minimizing to drive DtNest's own epsilon-based acceptance
-        test at the user's real, original threshold (see classify_constraint_threshold below), instead of
-        silently discarding it in favor of chasing epsilon-close-to-the-true-optimum
+    quantitative formula, so building an OptimalityProperty from it is "drop the bound, keep the direction"
+    (P>=0.95 becomes Pmax=?).
+    :returns: (new_specification, constraint) -- new_specification is usable by the rest of DtNest.run() like
+        a genuine optimality objective; the caller uses constraint.threshold/.minimizing to drive DtNest's
+        epsilon-based acceptance test at the user's real threshold (see classify_constraint_threshold below)
+        instead of chasing epsilon-close-to-the-true-optimum
     """
     assert specification.optimality is None
     assert len(specification.constraints) == 1
@@ -50,10 +48,10 @@ def classify_constraint_threshold(
     Relate a constraint's own threshold (e.g. the 0.95 in P>=0.95) to what DtNest can already compute --
     the true optimum (opt_result_value) and, usually, the random/don't-care scheduler's value
     (random_result_value) -- to decide how DtNest's epsilon-based acceptance test should treat it:
-    :returns ("unsat", None) if even the optimal scheduler cannot clear the threshold -- no admissible tree exists
-    :returns ("trivial", None) if the random/don't-care scheduler already clears the threshold on its own --
+    :returns: ("unsat", None) if even the optimal scheduler cannot clear the threshold -- no admissible tree exists
+    :returns: ("trivial", None) if the random/don't-care scheduler already clears the threshold on its own --
         no search needed, the trivial random tree already satisfies the request
-    :returns ("ok", epsilon) otherwise, where epsilon is the value that reproduces
+    :returns: ("ok", epsilon) otherwise, where epsilon is the value that reproduces
         eps_optimum_threshold == user_threshold exactly through the same formulas already used for a plain
         optimality objective (see synthesize_subtrees) -- i.e. the constraint is treated as "accept any tree
         whose value clears user_threshold", not "get epsilon-close to the unconstrained optimum"

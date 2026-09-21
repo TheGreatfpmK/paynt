@@ -1,18 +1,7 @@
-"""
-A SynthesisTask pairs an underlying PCTL specification with the generic synthesis knobs the AR/CEGIS/Hybrid/
-OneByOne algorithms read (as opposed to feature-specific build knobs like DT's tree_depth or POMDP's
-memory_size, which live on a separate, non-inheriting per-feature task class owned by that feature's
-colored-MDP factory instead -- see e.g. paynt.dt.task.DtTask).
-
-Connection to old PAYNT implementation and explanation of new structure (TODO remove in the future):
-The three fields below (export_synthesis_filename_base, conflict_generator_type, disable_expected_visits)
-are generic synthesis knobs that apply regardless of feature, so they live on this class rather than being
-duplicated onto every feature. Before this class carried them, they were CLI-set mutable class attributes
-on Synthesizer/SynthesizerCEGIS/ModelIndex -- meaning two syntheses running in the same process (e.g. a
-library caller doing two Sketch.load_sketch + synthesize calls back to back) would silently step on each
-other's settings, since a class attribute is shared by every instance. Being fields on a per-instance
-SynthesisTask fixes that: each synthesis run gets its own SynthesisTask, so its settings can no longer leak
-into another run's.
+"""A SynthesisTask pairs an underlying PCTL specification with the generic synthesis knobs the AR/CEGIS/Hybrid/OneByOne algorithms read (as opposed to feature-
+specific build knobs like DT's tree_depth or POMDP's memory_size, which live on a separate, non-inheriting per-feature task class owned by that feature's
+colored-MDP factory instead -- see e.g. paynt.dt.task.DtTask). Each synthesis run constructs its own SynthesisTask, so per-run settings never leak between two
+syntheses running in the same process.
 
 Constructing a SynthesisTask is the one canonical way to turn a list of raw stormpy properties into a
 Specification; every parser should funnel through this (or paynt.specification.property.construct_specification
@@ -27,7 +16,6 @@ import paynt.specification.property
 
 
 class SynthesisTask:
-
     def __init__(
         self,
         properties: list[Any],
@@ -60,9 +48,9 @@ class SynthesisTask:
         discard_unreachable_choices: bool = False,
         **kwargs: Any,
     ) -> SynthesisTask:
-        """
-        Wrap an already-constructed Specification directly, bypassing property parsing. Used when a caller
-        already has a (e.g. copied/negated) Specification in hand rather than a fresh list of raw properties,
+        """Wrap an already-constructed Specification directly, bypassing property parsing.
+
+        Used when a caller already has a (e.g. copied/negated) Specification in hand rather than a fresh list of raw properties,
         and by Sketch.load_sketch, which builds the Specification itself while parsing the sketch.
 
         Unlike __init__, silently accepts and ignores unrecognized keyword arguments (**kwargs, unused here):

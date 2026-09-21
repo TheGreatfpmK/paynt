@@ -1,10 +1,3 @@
-"""
-AR-based synthesis of a policy tree (paynt.mdp_family.policy_tree.PolicyTree): splits a family's parameter space
-until every subspace either has a policy that satisfies all its members, or is proven unsatisfiable. Unlike
-the generic AR/CEGIS/Hybrid synthesizers, this never goes through SynthesizerAR -- policy-tree splitting is a
-genuinely different algorithm (game abstraction + policy compatibility merging), not a scoring variant.
-"""
-
 from __future__ import annotations
 
 from typing import Any, cast
@@ -36,7 +29,6 @@ class MdpFamilyResult:
 
 
 class PolicyTreeSynthesizer(paynt.synthesizer.synthesizer.Synthesizer):
-
     # if True, tree leaves will be double-checked after synthesis
     double_check_policy_tree_leaves = False
 
@@ -48,11 +40,8 @@ class PolicyTreeSynthesizer(paynt.synthesizer.synthesizer.Synthesizer):
         return "AR (policy tree)"
 
     def verify_policy(self, selected_choices: Any, prop: paynt.specification.property.Property, policy: list[int | None]) -> bool:
-        """
-        :param selected_choices the compatible-choices bitmask to verify against -- callers outside this
-            class have no PolicyTreeNode to read it from, so it must be supplied explicitly (see
-            ParameterSpaceEvaluation.selected_choices, captured at decision time)
-        """
+        """:param selected_choices: the compatible-choices bitmask to verify against -- callers outside this class have no PolicyTreeNode to read it from, so it
+        must be supplied explicitly (see ParameterSpaceEvaluation.selected_choices, captured at decision time)"""
         _, mdp = paynt.mdp_family._utils.fix_and_apply_policy_to_parameter_space(self.colored_mdp, selected_choices, policy)
         policy_result = mdp.model_check_property(prop, alt=True)
         assert self.stat is not None

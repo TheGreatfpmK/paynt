@@ -1,9 +1,5 @@
-"""
-Internal support for the DT feature: the DtInfo companion dataclass (attached as ColoredMdp.feature_info
-for feature_kind "dt") and functions that interpret it. Not part of the public API -- a decision-tree
-sketch is used through paynt.dt.DtSynthesizer/paynt.dt.api, never by constructing or reading a DtInfo
-directly.
-"""
+"""Internal support for the DT feature: the DtInfo companion dataclass (attached as ColoredMdp.feature_info for feature_kind "dt") and functions that interpret
+it."""
 
 from __future__ import annotations
 

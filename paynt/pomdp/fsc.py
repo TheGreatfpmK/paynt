@@ -6,7 +6,8 @@ import json
 
 
 class Fsc:
-    """
+    """A finite-state controller.
+
     An FSC having
     - a fixed number of nodes
     - a joint transition function of the type NxZ -> Distr(ActxN), where f(n,z) is a dictionary
@@ -36,7 +37,8 @@ class Fsc:
 
 
 class FscFactored:
-    """
+    """A finite-state controller encoded in factored form.
+
     Class for encoding an FSC having
     - a fixed number of nodes
     - action selection is either:
@@ -180,9 +182,7 @@ class FscFactored:
             self.update_function[node] = [0] * self.num_observations
 
     def fill_implicit_actions_and_updates(self) -> None:
-        """
-        For an FSC with an irregular memory model, make action and updates explicit.
-        """
+        """For an FSC with an irregular memory model, make action and updates explicit."""
         for node in range(self.num_nodes):
             for obs in range(self.num_observations):
                 if self.action_function[node][obs] is None:

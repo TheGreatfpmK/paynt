@@ -1,7 +1,7 @@
-"""
-Outer SAYNT driver: runs PomdpSynthesizer's AR-based search interleaved with Storm belief-exploration
-analysis (via StormPOMDPControl), each side informing the other's next iteration. Absorbs the
-iterative_storm_loop/strategy_storm control flow that used to live directly on SynthesizerPomdp.
+"""Outer SAYNT driver: runs PomdpSynthesizer's AR-based search interleaved with Storm belief-exploration analysis (via StormPOMDPControl), each side informing
+the other's next iteration.
+
+Absorbs the iterative_storm_loop/strategy_storm control flow that used to live directly on SynthesizerPomdp.
 """
 
 from __future__ import annotations
@@ -27,7 +27,6 @@ logger = logging.getLogger(__name__)
 
 
 class SayntSynthesizer(PomdpSynthesizer):
-
     def __init__(
         self,
         colored_mdp_factory: paynt.pomdp.factory.PomdpColoredMdpFactory,

@@ -5,7 +5,6 @@ from helpers.helper import get_sketch_paths
 
 
 class TestSketch:
-
     def test_load_sketch_mdp_prism(self):
         # setup
         sketch_path, props_path = get_sketch_paths("tests/generic-maze")

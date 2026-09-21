@@ -11,7 +11,6 @@ from helpers.helper import get_sketch_paths
 
 
 class TestDtSynthesis:
-
     def test_split_undecided_space_survives_a_multi_property_specification(self):
         """
         Regression test: scheduler_choices is only ever populated by ColoredMdp.scheduler_is_consistent's "dt" branch
@@ -79,16 +78,14 @@ class TestDtSynthesis:
             paynt.utils.timer.GlobalTimer.start()
 
     def test_synthesize_finds_the_known_optimum(self, dt_colored_mdp_factory, dt_task):
-        """
-        Regression test for DtSynthesizer.split_undecided_space/scheduler_scores (the search-policy methods moved
-        off the factory during this migration). Kept at depth 0 deliberately: full AR-based tree synthesis
-        is combinatorially expensive on this model at higher depths (which is exactly why get_dt_with_api.py
-        uses dtnest's subtree-based search instead of plain synthesize_tree for real use) -- but dtnest's
-        subtree calls go through this same split_undecided_space override internally, and that path is already
-        verified end-to-end (byte-identical value 0.6313574509764854) via get_dt_with_api.py.
+        """Regression test for DtSynthesizer.split_undecided_space/scheduler_scores (the search-policy methods moved off the factory during this migration).
+        Kept at depth 0 deliberately: full AR-based tree synthesis is combinatorially expensive on this model at higher depths (which is exactly why
+        get_dt_with_api.py uses dtnest's subtree-based search instead of plain synthesize_tree for real use) -- but dtnest's subtree calls go through this same
+        split_undecided_space override internally, and that path is already verified end-to-end (byte-identical value 0.6313574509764854) via
+        get_dt_with_api.py.
 
-        Since synthesis is deterministic, the tree itself (not just its value) is checked too: at depth 0
-        the only admissible tree is a single leaf, so its string form is a one-line action label.
+        Since synthesis is deterministic, the tree itself (not just its value) is checked too: at depth 0 the only admissible tree is a single leaf, so its
+        string form is a one-line action label.
         """
         synthesizer = paynt.dt.DtSynthesizer(dt_colored_mdp_factory, dt_task)
         synthesizer.synthesize_tree(depth=0)

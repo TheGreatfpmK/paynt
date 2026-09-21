@@ -15,7 +15,6 @@ __all__ = ["get_version", "get_synthesizer"]
 
 def get_version() -> str:
     """Return PAYNT version string."""
-
     return version()
 
 
@@ -27,26 +26,18 @@ def get_synthesizer(
     storm_control: Any = None,
     dtnest: bool = False,
 ) -> Any:
-    """
-    The one canonical synthesis dispatcher: reads colored_mdp_factory.feature_kind (a class attribute, so no
-    ColoredMdp needs to be built just to dispatch) and routes to the right synthesizer, so callers
-    (paynt.cli, library users) never need to isinstance-check or import a specific feature package themselves.
+    """Get the correct synthesizer for the given colored MDP and task.
 
-    :param colored_mdp_factory the factory that produced the ColoredMdp to synthesize -- required (not just
-        the bare ColoredMdp) so that FSC/tree-unfolding synthesizers (DT, POMDP, POSMG, Dec-POMDP, SAYNT) can
-        re-unfold at a different depth/memory size later without the ColoredMdp needing to carry a
-        back-reference to its own factory
-    :param task the SynthesisTask this run is solving -- passed explicitly rather than read off
-        colored_mdp_factory (which instead carries the feature-specific build task, a separate,
-        non-inheriting object; see paynt.task.SynthesisTask / paynt.dt.task.DtTask and friends)
-    :param method the generic algorithm to fall back on when no feature-specific driver applies
+    :param colored_mdp_factory: the factory that produces the ColoredMdp to synthesize
+    :param task: the SynthesisTask this run is solving
+    :param method: the generic algorithm to fall back on when no feature-specific driver applies
         ("onebyone"/"ar"/"cegis"/"hybrid")
-    :param fsc_synthesis for FSC-unfolding features (POMDP/POSMG/Dec-POMDP), enable incremental FSC
+    :param fsc_synthesis: for FSC-unfolding features (POMDP/POSMG/Dec-POMDP), enable incremental FSC
         synthesis over increasing memory sizes rather than plain synthesis over the current unfolding
-    :param storm_control for POMDP with fsc_synthesis, an optional StormPOMDPControl to run SAYNT instead
+    :param storm_control: for POMDP with fsc_synthesis, an optional StormPOMDPControl to run SAYNT instead
         of plain PAYNT POMDP synthesis
-    :param dtnest for decision trees, use the dtnest synthesizer instead of plain AR
-    :return a synthesizer ready to .run()/.synthesize()/.evaluate()
+    :param dtnest: for decision trees, use the dtnest synthesizer instead of plain AR
+    :return: a synthesizer ready to .run()/.synthesize()/.evaluate()
     """
     import paynt.synthesizer.synthesizer
 

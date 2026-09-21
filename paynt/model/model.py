@@ -17,7 +17,6 @@ logger = logging.getLogger(__name__)
 
 
 class Mdp:
-
     @classmethod
     def assert_no_overlapping_guards(cls, model: Any) -> None:
         if model.labeling.contains_label("overlap_guards"):
@@ -28,12 +27,6 @@ class Mdp:
         self.model = model
         if len(model.initial_states) > 1:
             logger.warning("WARNING: obtained model with multiple initial states")
-        # Not set here, and not a concept this generic/colored-MDP-agnostic class otherwise knows about --
-        # tagged onto an already-built Mdp/SubMdp externally by ColoredMdp.build(), so that AR/CEGIS/Hybrid
-        # code walking a search node can recover which parameter (sub)space produced this particular
-        # induced model. Declared here (rather than left as an undeclared dynamic attribute) purely so its
-        # type is known at every one of its many read sites across the synthesizer packages.
-        self.parameter_space: Any = None
 
     @property
     def states(self) -> int:
@@ -75,7 +68,6 @@ class Mdp:
 
 
 class SubMdp(Mdp):
-
     def __init__(self, model: Any, underlying_mdp_state_map: list[int], underlying_mdp_choice_map: list[int]):
         super().__init__(model)
         self.underlying_mdp_choice_map = underlying_mdp_choice_map
@@ -83,7 +75,6 @@ class SubMdp(Mdp):
 
 
 class Smg(Mdp):
-
     def __init__(self, model: Any):
         super().__init__(model)
 
@@ -99,9 +90,9 @@ class Smg(Mdp):
 
 
 class SubmodelBuilder:
-    """
-    Stateless helpers for restricting an MDP to a subset of choices. Used by ColoredMdp.restrict()/.build()/
-    .build_assignment() to construct the induced sub-MDP (or DTMC) for a (sub)parameter space, without any
+    """Stateless helpers for restricting an MDP to a subset of choices.
+
+    Used by ColoredMdp.restrict()/.build()/ .build_assignment() to construct the induced sub-MDP (or DTMC) for a (sub)parameter space, without any
     parameter/coloring knowledge of its own.
     """
 
@@ -114,12 +105,12 @@ class SubmodelBuilder:
 
     @staticmethod
     def restrict(mdp: Any, choices: Any, builder_options: Any) -> tuple[Any, list[int], list[int]]:
-        """
-        Restrict the MDP to the selected actions.
-        :param choices a bitvector of selected actions
-        :return (1) the restricted model
-        :return (2) sub- to full state mapping
-        :return (3) sub- to full action mapping
+        """Restrict the MDP to the selected actions.
+
+        :param choices: a bitvector of selected actions
+        :return: (1) the restricted model
+        :return: (2) sub- to full state mapping
+        :return: (3) sub- to full action mapping
         """
         keep_unreachable_states = False  # TODO investigate this
         all_states = stormpy.BitVector(mdp.nr_states, True)
@@ -147,11 +138,11 @@ class SubmodelBuilder:
 
 
 class ModelIndex:
-    """
-    Stateless helpers for converting between scheduler/choice representations over a model's index space, for
-    generic graph queries on a stormpy model, and for numeric per-choice/per-state facts (choice values, expected
-    visits) derived from a model-checking result. Used by ColoredMdp class and by Colored MDP factories (e.g. paynt.dt)
-    that need this plumbing with no parameter/parameter-space/coloring knowledge of their own.
+    """Stateless helpers for converting between scheduler/choice representations over a model's index space, for generic graph queries on a stormpy model, and
+    for numeric per-choice/per-state facts (choice values, expected visits) derived from a model-checking result.
+
+    Used by ColoredMdp class and by Colored MDP factories (e.g. paynt.dt) that need this plumbing with no parameter/parameter-space/coloring knowledge of their
+    own.
     """
 
     @staticmethod
@@ -186,6 +177,7 @@ class ModelIndex:
         underlying_mdp: Any, choice_destinations: Any, submdp: SubMdp, scheduler: Any, discard_unreachable_choices: bool = True
     ) -> list[int | None]:
         """Convert a scheduler over a sub-MDP to a state-to-choice mapping over the underlying MDP.
+
         param: underlying_mdp: the underlying MDP used to construct the sub-MDP
         param: choice_destinations: the choice destinations of the underlying MDP
         param: submdp: the sub-MDP over which the scheduler is defined
@@ -256,8 +248,8 @@ class ModelIndex:
 
     @staticmethod
     def choice_values(mdp: Any, prop: paynt.specification.property.Property, state_values: list[float]) -> list[float]:
-        """
-        Get choice values after model checking MDP against a property.
+        """Get choice values after model checking MDP against a property.
+
         Value of choice c: s -> s' is computed as
         rew(c) + sum_s' [ P(s,c,s') * mc(s') ], where
         - rew(c) is the reward associated with choice (c)
@@ -285,9 +277,7 @@ class ModelIndex:
 
     @staticmethod
     def compute_expected_visits(mdp: Any, prop: paynt.specification.property.Property, choices: Any, disable_expected_visits: bool = False) -> list[float]:
-        """
-        Compute the expected number of visits in the states of the DTMC induced by the given choices.
-        """
+        """Compute the expected number of visits in the states of the DTMC induced by the given choices."""
         if disable_expected_visits:
             return [1] * mdp.nr_states
 

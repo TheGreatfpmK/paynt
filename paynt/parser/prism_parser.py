@@ -20,7 +20,6 @@ logger = logging.getLogger(__name__)
 
 
 class PrismParser:
-
     @classmethod
     def read_prism(
         cls, sketch_path: str, properties_path: str, relative_error: float, use_exact: bool = False
@@ -87,7 +86,6 @@ class PrismParser:
         parameter_definitions = []
         observables_line = False
         for line in sketch_lines:
-
             # Treat observation definition via "observables" keyword
             if line.startswith("observables"):
                 observables_line = True
@@ -149,9 +147,9 @@ class PrismParser:
             if ".." in parameter_options:
                 assert parameter_type == "int" or parameter_type == "double", "cannot use range-based definitions for non-integer of non-double parameter types"
                 if parameter_type == "double":
-                    assert (
-                        ":" in parameter_options
-                    ), "using range-based definition for double requires specifying the increment step range_start..range_end:step"
+                    assert ":" in parameter_options, (
+                        "using range-based definition for double requires specifying the increment step range_start..range_end:step"
+                    )
                     range_start = float(parameter_options[0 : parameter_options.find("..")])
                     range_end = float(parameter_options[parameter_options.find("..") + 2 : parameter_options.find(":")].strip())
                     increment_string = parameter_options.split(":")[-1].strip()
@@ -211,8 +209,8 @@ class PrismParser:
 
     @classmethod
     def parse_property(cls, line: str, prism: Any = None) -> Any:
-        """
-        Parse a line containing a single PCTL property.
+        """Parse a line containing a single PCTL property.
+
         @return the property or None if no property was detected
         """
         if prism is not None:
@@ -229,9 +227,9 @@ class PrismParser:
     def parse_specification(
         cls, properties_path: str, relative_error: float = 0, prism: Any = None, use_exact: bool = False
     ) -> paynt.specification.property.Specification:
-        """
-        Expecting one property per line. The line may be terminated with a semicolon.
-        Empty lines or comments are allowed.
+        """Expecting one property per line.
+
+        The line may be terminated with a semicolon. Empty lines or comments are allowed.
         """
         if not os.path.isfile(properties_path):
             raise ValueError(f"the properties file {properties_path} does not exist")

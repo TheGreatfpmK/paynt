@@ -28,8 +28,8 @@ logger = logging.getLogger(__name__)
 
 
 def add_options(options: list[Any]) -> Any:
-    """Standard click idiom for composing a decorator list built elsewhere (here, a feature's own _cli.py)
-    onto a command function, applied in the same order as if the decorators had been written inline."""
+    """Standard click idiom for composing a decorator list built elsewhere (here, a feature's own _cli.py) onto a command function, applied in the same order as
+    if the decorators had been written inline."""
 
     def _add_options(func: Any) -> Any:
         for option in reversed(options):
@@ -40,8 +40,7 @@ def add_options(options: list[Any]) -> Any:
 
 
 def print_version(ctx: click.Context, param: click.Parameter, value: bool) -> None:
-    """Eager --version callback: prints the version and exits immediately, before click validates the
-    otherwise-required PROJECT argument."""
+    """Eager --version callback: prints the version and exits immediately, before click validates the otherwise-required PROJECT argument."""
     if not value or ctx.resilient_parsing:
         return
     click.echo(f"Paynt {version()}")
@@ -50,7 +49,6 @@ def print_version(ctx: click.Context, param: click.Parameter, value: bool) -> No
 
 def setup_logger(log_path: str | None = None) -> list[logging.Handler]:
     """Setup routine for logging."""
-
     root = logging.getLogger()
     root.setLevel(logging.DEBUG)
     # root.setLevel(logging.INFO)

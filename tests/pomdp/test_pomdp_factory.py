@@ -5,11 +5,9 @@ import paynt.synthesizer.search_node
 
 
 class TestPomdpColoredMdpFactory:
-
     def test_factory_does_not_build_automatically(self, pomdp_colored_mdp_factory):
-        """Guardrail for the "factories don't eagerly build" redesign: a freshly-constructed factory holds
-        no colored_mdp/memory-size state of its own -- build()/set_imperfect_memory_size() must be called
-        explicitly to get one."""
+        """Guardrail for the "factories don't eagerly build" redesign: a freshly-constructed factory holds no colored_mdp/memory-size state of its own --
+        build()/set_imperfect_memory_size() must be called explicitly to get one."""
         assert not hasattr(pomdp_colored_mdp_factory, "colored_mdp")
         assert not hasattr(pomdp_colored_mdp_factory, "current_memory_size")
 

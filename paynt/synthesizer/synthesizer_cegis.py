@@ -17,16 +17,15 @@ logger = logging.getLogger(__name__)
 
 
 class SynthesizerCEGIS(paynt.synthesizer.synthesizer.Synthesizer):
-
     def __init__(self, colored_mdp: paynt.colored_mdp.ColoredMdp, task: paynt.task.SynthesisTask):
         super().__init__(colored_mdp, task)
 
         self.conflict_generator = self.choose_conflict_generator(colored_mdp, task)
 
         # assert that no reward formula is maximizing
-        assert (
-            not self.task.specification.contains_maximizing_reward_properties
-        ), "Cannot use CEGIS for maximizing reward formulae -- consider using AR or hybrid methods."
+        assert not self.task.specification.contains_maximizing_reward_properties, (
+            "Cannot use CEGIS for maximizing reward formulae -- consider using AR or hybrid methods."
+        )
 
     def choose_conflict_generator(
         self, colored_mdp: paynt.colored_mdp.ColoredMdp, task: paynt.task.SynthesisTask
@@ -45,10 +44,7 @@ class SynthesizerCEGIS(paynt.synthesizer.synthesizer.Synthesizer):
         return "CEGIS " + self.conflict_generator.name
 
     def collect_conflict_requests(self, node: paynt.synthesizer.search_node.SearchNode, mc_result: Any) -> list[tuple[int, Any, Any]]:
-        """
-        Construct conflict request wrt each unsatisfiable property,
-            pack such properties as well as their MDP results (if available)
-        """
+        """Construct conflict request wrt each unsatisfiable property, pack such properties as well as their MDP results (if available)"""
         conflict_requests: list[tuple[int, Any, Any]] = []
         assert node.constraint_indices is not None
         for index in node.constraint_indices:
@@ -76,9 +72,10 @@ class SynthesizerCEGIS(paynt.synthesizer.synthesizer.Synthesizer):
     def analyze_parameter_space_assignment_cegis(
         self, node: paynt.synthesizer.search_node.SearchNode, assignment: paynt.parameter_space.parameter_space.ParameterSpace
     ) -> tuple[list[Any], paynt.parameter_space.parameter_space.ParameterSpace | None]:
-        """
-        :return (1) list of conflicts to exclude from design space (might be empty)
-        :return (2) accepting assignment (or None)
+        """Analyze a single fixed assignment via CEGIS conflict analysis.
+
+        :return: (1) list of conflicts to exclude from design space (might be empty)
+        :return: (2) accepting assignment (or None)
         """
         assert node.mdp is not None, "analyzed parameter space does not have an associated underlying MDP"
         assert self.stat is not None

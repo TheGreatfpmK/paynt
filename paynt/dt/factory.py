@@ -22,17 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 class DtColoredMdpFactory:
-    """
-    Constructs a ColoredMdp (feature_kind "dt") for a given decision-tree depth. Unlike the FSC-unfolding factories
-    (POSMG/Dec-POMDP/POMDP), a fresh tree/coloring must be rebuilt for every depth tried during search
-    (DtSynthesizer.synthesize_tree_sequence tries several), not just when memory needs to grow -- so
-    reset_tree is the main entry point, called far more often than __init__ itself.
-
-    build_task is optional (unlike the other factories) to support constructing a DtColoredMdpFactory purely
-    from an MDP before the tree-depth/scheduler-path settings are known, then attaching the real DtTask
-    once it is (see paynt.dt.api.synthesize) -- this is a real, exercised library usage pattern, not a
-    hypothetical.
-    """
+    """Constructs a ColoredMdp (feature_kind "dt") for a given decision-tree depth."""
 
     feature_kind = "dt"
 
@@ -99,19 +89,12 @@ class DtColoredMdpFactory:
         logger.debug(f"found the following {len(self.variables)} variables: {[str(v) for v in self.variables]}")
 
     def build(self) -> paynt.colored_mdp.ColoredMdp:
-        """Produce a ColoredMdp at build_task's own default tree depth. Not called automatically -- the
-        caller (e.g. DtSynthesizer, paynt.api.get_synthesizer) requests it explicitly."""
+        """Produce a ColoredMdp at build_task's own default tree depth."""
         assert self.build_task is not None
         return self.reset_tree(self.build_task.tree_depth)
 
     def reset_tree(self, depth: int, enable_harmonization: bool = True) -> paynt.colored_mdp.ColoredMdp:
-        """
-        Rebuild the decision tree template, the parameter space and the coloring, producing a fresh
-        ColoredMdp. The factory itself holds no reference to the result -- the caller (e.g. self.colored_mdp
-        = factory.reset_tree(k)) is responsible for tracking it.
-        """
-        logger.debug(f"building tree of depth {depth}")
-
+        """Produce a ColoredMdp at the given tree depth, discarding any previous tree and coloring."""
         num_actions = len(self.action_labels)
         dont_care_action = num_actions
         if DtColoredMdpFactory.DONT_CARE_ACTION_LABEL in self.action_labels:

@@ -24,24 +24,13 @@ class ParameterSpaceEvaluation:
     value: Any
     sat: bool | None
     policy: Any
-    # family/policy_tree.py only: the compatible-choices bitmask this evaluation's policy was verified
-    # against at decision time -- may be narrower than parameter_space's current bounds if postprocessing
-    # later merged this parameter_space with a sibling's, so re-verification (see PolicyTreeSynthesizer.
-    # verify_policy) uses this snapshot rather than recomputing from parameter_space.native
     selected_choices: Any = None
 
 
 class Synthesizer:
-
     @staticmethod
     def for_method(colored_mdp: paynt.colored_mdp.ColoredMdp, task: paynt.task.SynthesisTask, method: str) -> Synthesizer:
-        """
-        Feature-agnostic dispatch: knows only the generic algorithms, never imports a specific feature
-        package. Feature-specific dispatch (FSC synthesis for POMDP/POSMG/Dec-POMDP, policy trees for
-        family, decision trees) lives in paynt.api.get_synthesizer instead, keyed off colored_mdp.feature_kind
-        -- this is the replacement for the old choose_synthesizer, which had to isinstance-check and
-        eagerly import every feature package just to pick a plain "ar"/"cegis"/"hybrid" engine.
-        """
+        """Feature-agnostic dispatch: knows only the generic algorithms, never imports a specific feature package."""
         # hiding imports here to avoid mutual top-level imports
         import paynt.synthesizer.synthesizer_onebyone
         import paynt.synthesizer.synthesizer_ar
@@ -58,17 +47,10 @@ class Synthesizer:
             return paynt.synthesizer.synthesizer_hybrid.SynthesizerHybrid(colored_mdp, task)
         raise ValueError("invalid method name")
 
-    # search-node type constructed to wrap a root/subspace parameter_space for the AR/CEGIS/Hybrid worklist
-    # (see synthesize() below); overridden by SynthesizerARDt with DtSearchNode, which declares an extra
-    # scheduler_choices field these generic algorithms never need
     search_node_type = paynt.synthesizer.search_node.SearchNode
 
     def __init__(self, colored_mdp: paynt.colored_mdp.ColoredMdp, task: paynt.task.SynthesisTask):
         self.colored_mdp = colored_mdp
-        # the SynthesisTask this synthesis run is solving -- deliberately not stored on colored_mdp itself,
-        # so the same representation can be reused across different tasks/specifications without going
-        # through whatever factory produced it; see paynt/task.py and the factories' own
-        # build_task fields
         self.task = task
         self.stat: paynt.synthesizer.statistic.Statistic | None = None
         self.synthesis_timer: paynt.utils.timer.Timer | None = None
@@ -78,7 +60,7 @@ class Synthesizer:
 
     @property
     def method_name(self) -> str:
-        """to be overridden"""
+        """To be overridden."""
         raise NotImplementedError
 
     def time_limit_reached(self) -> bool:
@@ -106,18 +88,19 @@ class Synthesizer:
         self.explored += parameter_space.size
 
     def _reset_best_assignment(self) -> None:
-        """Shared by synthesize() (when not keep_optimum) and run() (which always resets, but only after
-        capturing best_assignment/best_assignment_value into the Result it returns)."""
+        """Shared by synthesize() (when not keep_optimum) and run() (which always resets, but only after capturing best_assignment/best_assignment_value into
+        the Result it returns)."""
         self.best_assignment = None
         self.best_assignment_value = None
         self.task.specification.reset()
 
     def evaluate_all(self, parameter_space: paynt.parameter_space.parameter_space.ParameterSpace, prop: Any, keep_value_only: bool = False) -> list[Any]:
-        """to be overridden"""
+        """To be overridden."""
         raise NotImplementedError
 
     def export_evaluation_result(self, evaluations: list[Any], export_filename_base: str) -> None:
-        """to be overridden"""
+        """To be overridden."""
+        raise NotImplementedError
 
     def evaluate(
         self,
@@ -126,15 +109,14 @@ class Synthesizer:
         keep_value_only: bool = False,
         print_stats: bool = True,
     ) -> list[Any]:
-        """
-        Evaluate each member of the parameter space wrt the given property.
-        :param parameter_space if None, then the design space of the colored MDP will be used
-        :param prop if None, then the default property of the task will be used
-            (assuming single-property specification)
-        :param keep_value_only if True, only value will be associated with the parameter space
-        :param print_stats if True, synthesis statistic will be printed
-        :param export_filename_base base filename used to export the evaluation results
-        :returns a list of (parameter_space,evaluation) pairs
+        """Evaluate each member of the parameter space wrt the given property.
+
+        :param parameter_space: if None, then the design space of the colored MDP will be used
+        :param prop: if None, then the default property of the task will be used (assuming single-property specification)
+        :param keep_value_only: if True, only value will be associated with the parameter space
+        :param print_stats: if True, synthesis statistic will be printed
+        :param export_filename_base: base filename used to export the evaluation results
+        :returns: a list of (parameter_space,evaluation) pairs
         """
         if parameter_space is None:
             parameter_space = self.colored_mdp.parameter_space
@@ -158,7 +140,7 @@ class Synthesizer:
         return evaluations
 
     def synthesize_one(self, node: paynt.synthesizer.search_node.SearchNode) -> paynt.parameter_space.parameter_space.ParameterSpace | None:
-        """to be overridden"""
+        """To be overridden."""
         raise NotImplementedError
 
     def synthesize(
@@ -171,13 +153,13 @@ class Synthesizer:
         timeout: int | None = None,
     ) -> paynt.parameter_space.parameter_space.ParameterSpace | None:
         """
-        :param parameter_space parameter space (subspace) of assignments to search in
-        :param optimum_threshold known bound on the optimum value
-        :param keep_optimum if True, the optimality specification will not be reset upon finish
-        :param return_all if True and the synthesis returns a parameter space, all assignments will be
+        :param parameter_space: parameter space (subspace) of assignments to search in
+        :param optimum_threshold: known bound on the optimum value
+        :param keep_optimum: if True, the optimality specification will not be reset upon finish
+        :param return_all: if True and the synthesis returns a parameter space, all assignments will be
             returned instead of an arbitrary one
-        :param print_stats if True, synthesis stats will be printed upon completion
-        :param timeout synthesis time limit, seconds
+        :param print_stats: if True, synthesis stats will be printed upon completion
+        :param timeout: synthesis time limit, seconds
         """
         if parameter_space is None:
             parameter_space = self.colored_mdp.parameter_space

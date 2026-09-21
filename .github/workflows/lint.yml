@@ -1,10 +1,13 @@
 name: Lint
-# Checks Python code style (black), lint findings (ruff), and type hints (mypy) against paynt/ and tests/.
-# The job fails if any check finds a problem, but all three always run regardless of each other's outcome
-# (via if: success() || failure()) so every finding shows up in one run instead of being discovered one
-# push at a time. Runs directly on a plain Python install (no stormpy/payntbind build needed) since all
-# three tools operate on Python source alone; mypy's ignore_missing_imports config tolerates paynt's
-# compiled/third-party dependencies not being installed.
+# Checks formatting (ruff format), lint findings (ruff check), docstring style (docformatter), and type
+# hints (mypy) against paynt/ and tests/. The job fails if any check finds a problem, but all four always
+# run regardless of each other's outcome (via if: success() || failure()) so every finding shows up in one
+# run instead of being discovered one push at a time. Runs directly on a plain Python install (no
+# stormpy/payntbind build needed) since all four tools operate on Python source alone; mypy's
+# ignore_missing_imports config tolerates paynt's compiled/third-party dependencies not being installed.
+#
+# No standalone black step: ruff format replaces it as the project's formatter (dropped in favor of a
+# single tool covering both lint and format).
 
 on:
   push:
@@ -17,7 +20,7 @@ on:
 jobs:
 
   lint:
-    name: black / ruff / mypy
+    name: ruff / docformatter / mypy
     runs-on: ubuntu-latest
     steps:
       - name: Git clone
@@ -29,14 +32,18 @@ jobs:
           python-version: "3.12"
 
       - name: Install linting tools
-        run: pip install black==26.5.1 ruff==0.16.6 mypy==2.3.1
+        run: pip install ruff==0.16.6 docformatter==1.7.8 mypy==2.3.1
 
-      - name: Run black --check
-        run: black --check --diff paynt/ tests/
+      - name: Run ruff format --check
+        run: ruff format --check --diff paynt/ tests/
 
       - name: Run ruff check
         if: success() || failure()
         run: ruff check paynt/ tests/
+
+      - name: Run docformatter --check
+        if: success() || failure()
+        run: docformatter --check --diff -r paynt/ tests/
 
       - name: Run mypy
         if: success() || failure()

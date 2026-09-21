@@ -20,9 +20,8 @@ class _FakeOptimalityResult:
 
 
 def _spec_result(constraint_sats, optimality_result=None):
-    """Builds an MdpSpecificationResult (a strict superset of SpecificationResult -- accepting_dtmc is
-    inherited unchanged) so this one helper serves both TestAcceptingDtmc (base-class behavior) and
-    TestUndecidedResults (MdpSpecificationResult-only undecided_results())."""
+    """Builds an MdpSpecificationResult (a strict superset of SpecificationResult -- accepting_dtmc is inherited unchanged) so this one helper serves both
+    TestAcceptingDtmc (base-class behavior) and TestUndecidedResults (MdpSpecificationResult-only undecided_results())."""
     spec_result = paynt.specification.property_result.MdpSpecificationResult()
     spec_result.constraints_result = paynt.specification.property_result.ConstraintsResult([_FakeConstraintResult(sat) for sat in constraint_sats])
     spec_result.optimality_result = optimality_result

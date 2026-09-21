@@ -1,10 +1,4 @@
-"""
-Internal splitting-heuristic scoring, shared by every search algorithm that needs to estimate which
-parameter to blame for an inconsistent scheduler (SynthesizerAR and its derivatives code, PolicyTreeSynthesizer --
-two class hierarchies with no common base, which is why this cannot just be a method on one of them).
-Lives under utils/ rather than as a top-level module since it is synthesis-internal support that a
-library user never calls directly, not part of the public API.
-"""
+"""Internal splitting-heuristic scoring, shared by every search algorithm that needs to estimate which parameter to blame for an inconsistent scheduler."""
 
 from __future__ import annotations
 
@@ -25,14 +19,8 @@ def estimate_scheduler_difference(
     choice_values: list[float],
     expected_visits: list[float],
 ) -> dict[int, float]:
-    """
-    Default AR-splitting heuristic: estimate, per inconsistent parameter, how much the choice values
-    differ across the parameter's options (weighted by expected visits). This is the generic
-    implementation shared by every search algorithm; SynthesizerAR exposes it as an overridable hook
-    so a specific colored MDP variant (e.g. POMDP) can plug in a specialized version, but the default
-    -- and PolicyTreeSynthesizer, which never goes through SynthesizerAR -- both call this directly.
-    :param colored_mdp the ColoredMdp providing the parameter space and coloring to score against
-    """
+    """Default AR-splitting heuristic: estimate, per inconsistent parameter, how much the choice values differ across the parameter's options (weighted by
+    expected visits)."""
     return payntbind.synthesis.computeInconsistentParameterVariance(
         colored_mdp.parameter_space.native,
         mdp.nondeterministic_choice_indices,
@@ -52,13 +40,8 @@ def estimate_scheduler_difference_pomdp(
     choice_values: list[float],
     expected_visits: list[float],
 ) -> dict[int, float]:
-    """
-    POMDP specialized variant of estimate_scheduler_difference, hand-optimized for posterior-unaware
-    unfolding using colored_mdp.feature_info.parameter_option_to_actions (the reverse coloring built during unfolding) instead
-    of the generic payntbind call. Dispatched by feature_kind rather than an isinstance check, so this module
-    stays free of a paynt.pomdp import; posterior-aware POMDPs fall back to the generic implementation above,
-    exactly like the pre-refactor PomdpQuotient.estimate_scheduler_difference did via super().
-    """
+    """POMDP specialized variant of estimate_scheduler_difference, hand-optimized for posterior-unaware unfolding using
+    colored_mdp.feature_info.parameter_option_to_actions (the reverse coloring built during unfolding) instead of the generic payntbind call."""
     # create inverse underlying-choice-to-restricted-choice map
     # TODO optimize this for multiple properties
     underlying_to_restricted_action_map: list[int | None] = [None] * colored_mdp.underlying_mdp.nr_choices
@@ -79,7 +62,6 @@ def estimate_scheduler_difference_pomdp(
         states_affected = 0
         edges_0 = colored_mdp.feature_info.parameter_option_to_actions[parameter_index][options[0]]
         for choice_index, _ in enumerate(edges_0):
-
             choice_0_global = edges_0[choice_index]
             choice_0 = underlying_to_restricted_action_map[choice_0_global]
             if choice_0 is None:
@@ -126,9 +108,7 @@ def compute_incompatibility_levels(candidate_selections: list[list[list[int]]]) 
     primary_selection of every still-undecided property whose OWN scheduler is already fully consistent (a
     genuine candidate delta_i in Delta), find parameters where those candidates disagree. Returns
     {parameter: distinct_values} only where L(h) > 1 (>=2 distinct values);
-    empty if fewer than 2 candidates given. A parameter with 0 options in some candidate's selection
-    (possible for "dt", which unlike every other feature does not pad an irrelevant parameter to one
-    arbitrary option) contributes no opinion there rather than crashing. Order of each returned value list is
+    empty if fewer than 2 candidates given. Order of each returned value list is
     first-candidate-seen order, not sorted -- deterministic, and critical for the N=1 byte-identical guarantee
     at the call site (see synthesizer_ar.split_parameter_space).
     """
@@ -147,7 +127,7 @@ def compute_incompatibility_levels(candidate_selections: list[list[list[int]]]) 
 
 
 def parameters_with_max_incompatibility(disagreement_levels: dict[int, list[int]]) -> list[int]:
-    """argmax L(h); same tie-all-winners convention as parameters_with_max_score."""
+    """Argmax L(h); same tie-all-winners convention as parameters_with_max_score."""
     if not disagreement_levels:
         return []
     max_level = max(len(values) for values in disagreement_levels.values())

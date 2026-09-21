@@ -38,12 +38,10 @@ def scheduler_scores(
 
 
 def scheduler_scores_combined(colored_mdp: paynt.colored_mdp.ColoredMdp, task: paynt.task.SynthesisTask, mdp: Any, results: list[Any]) -> dict[int, float]:
-    """
-    Aggregate v(h) across every still-relevant property (MdpSpecificationResult.undecided_results()), taking
-    the max per parameter across properties that consider it inconsistent. A property whose own selection is
-    already fully consistent contributes nothing here (it's an L(h) candidate instead, handled by the
-    caller). Reduces to exactly one scheduler_scores call, byte-identical, whenever len(results) <= 1 -- the
-    single-property case this refactor's baselines already cover.
+    """Aggregate v(h) across every still-relevant property (MdpSpecificationResult.undecided_results()), taking the max per parameter across properties that
+    consider it inconsistent.
+
+    A property whose own selection is already fully consistent contributes nothing here (it's an L(h) candidate instead, handled by the caller).
     """
     combined: dict[int, float] = {}
     for result in results:
@@ -60,20 +58,11 @@ def scheduler_scores_combined(colored_mdp: paynt.colored_mdp.ColoredMdp, task: p
 def split_parameter_space(
     colored_mdp: paynt.colored_mdp.ColoredMdp, task: paynt.task.SynthesisTask, node: paynt.synthesizer.search_node.SearchNode
 ) -> list[paynt.synthesizer.search_node.SearchNode]:
-    """
-    AR splitting step: pick a parameter to split node's parameter_space on and split its options into
-    subspaces, wrapped as child search nodes. Two-tier choice, per the paper's https://www.jair.org/index.php/jair/article/view/16593 Section 3.3 ("AR for
-    Feasibility Synthesis with Multiple Constraints"): first, cross-constraint incompatibility L(h) among
-    undecided constraints whose own scheduler is already fully consistent (a genuine candidate delta_i,
-    disagreeing with another constraint's own candidate); failing that (at most one relevant property, or
-    every relevant property's own scheduler is still locally inconsistent), v(h) aggregated across every
-    still-relevant property -- a strict generalization of the old single-result lookup, byte-identical to it
-    whenever there's exactly one relevant property. A free function rather than a ColoredMdp method, so it
-    works uniformly across every colored-MDP variant without any of them carrying search-decision logic
-    themselves, and so it can be passed around as a plain callable on a future multiprocessing path.
-    :param colored_mdp anything exposing .parameter_space/.coloring -- any ColoredMdp qualifies
-    :param task the SynthesisTask currently being solved (not read from colored_mdp -- it doesn't carry one)
-    :param node the SearchNode currently being split
+    """AR splitting step: pick a parameter to split node's parameter_space on and split its options into subspaces, wrapped as child search nodes.
+
+    :param colored_mdp: anything exposing .parameter_space/.coloring -- any ColoredMdp qualifies
+    :param task: the SynthesisTask currently being solved (not read from colored_mdp -- it doesn't carry one)
+    :param node: the SearchNode currently being split
     """
     mdp = node.mdp
     assert mdp is not None
@@ -110,10 +99,10 @@ def split_parameter_space(
                         used_options.append(option)
 
     if len(used_options) > 1:
-        core_suboptions, other_suboptions = mdp.parameter_space.suboptions_enumerate(splitter, used_options)
+        core_suboptions, other_suboptions = node.parameter_space.suboptions_enumerate(splitter, used_options)
     else:
-        assert mdp.parameter_space.parameter_num_options(splitter) > 1
-        core_suboptions = mdp.parameter_space.suboptions_half(splitter)
+        assert node.parameter_space.parameter_num_options(splitter) > 1
+        core_suboptions = node.parameter_space.suboptions_half(splitter)
         other_suboptions = []
 
     if len(other_suboptions) == 0:
@@ -127,13 +116,12 @@ def split_parameter_space(
 
 
 class SynthesizerAR(paynt.synthesizer.synthesizer.Synthesizer):
-
     @property
     def method_name(self) -> str:
         return "AR"
 
     def check_specification(self, node: paynt.synthesizer.search_node.SearchNode) -> None:
-        """Check specification for mdp or smg based on self.colored_mdp"""
+        """Check specification for mdp or smg based on self.colored_mdp."""
         mdp = node.mdp
         assert mdp is not None
 
@@ -273,10 +261,5 @@ class SynthesizerAR(paynt.synthesizer.synthesizer.Synthesizer):
         return self.best_assignment
 
     def split_undecided_space(self, node: paynt.synthesizer.search_node.SearchNode) -> list[paynt.synthesizer.search_node.SearchNode]:
-        """
-        Overridable hook: the default just delegates to the shared split_parameter_space free function.
-        DtSynthesizer overrides this since decision-tree splitting classifies parameters by kind
-        (action/decision/variable) rather than by scored inconsistency variance -- a genuinely different
-        algorithm, not a performance variant of this one (unlike POMDP's scheduler_scores specialization).
-        """
+        """Overridable hook: the default just delegates to the shared split_parameter_space free function."""
         return split_parameter_space(self.colored_mdp, self.task, node)

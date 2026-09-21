@@ -1,12 +1,6 @@
-"""
-Internal support for the "family" feature: the MdpFamilyInfo companion dataclass (attached as
-ColoredMdp.feature_info for feature_kind "family") and functions that interpret it -- policy
-construction/export logic used only by already-family-typed driver code
-(paynt.mdp_family.policy_tree/.policy_tree_synthesizer). Not part of the public API. build_assignment's
-"family"/"pomdp_family" branch (see paynt.colored_mdp.ColoredMdp) is the one representation-level
-difference this feature needs -- fixing an environment does not also fix the agent's policy, so the result
-can stay nondeterministic.
-"""
+"""Internal support for the "family" feature: the MdpFamilyInfo companion dataclass (attached as ColoredMdp.feature_info for feature_kind "family") and
+functions that interpret it -- policy construction/export logic used only by already-family-typed driver code
+(paynt.mdp_family.policy_tree/.policy_tree_synthesizer)."""
 
 from __future__ import annotations
 
@@ -59,9 +53,9 @@ def scheduler_to_policy(colored_mdp: paynt.colored_mdp.ColoredMdp, scheduler: An
 def policy_to_state_valuation_actions(
     colored_mdp: paynt.colored_mdp.ColoredMdp, policy: tuple[list[int | None], list[int]]
 ) -> list[tuple[dict[str, Any], str]]:
-    """
-    Create a representation for a policy that associates action labels with state valuations. States with only
-    one available action are omitted.
+    """Create a representation for a policy that associates action labels with state valuations.
+
+    States with only one available action are omitted.
     """
     info = cast(MdpFamilyInfo, colored_mdp.feature_info)
     policy_actions, _ = policy
@@ -123,14 +117,13 @@ def policy_to_json(state_valuation_to_action: list[tuple[dict[str, Any], str]], 
 def fix_and_apply_policy_to_parameter_space(
     colored_mdp: paynt.colored_mdp.ColoredMdp, selected_choices: Any, policy: list[int | None]
 ) -> tuple[tuple[list[int | None], list[int]], paynt.model.model.SubMdp]:
-    """
-    Apply policy to the underlying MDP restricted to selected_choices. Every undefined action in a policy
-    is set to an arbitrary one. Upon constructing the MDP, reset unused actions in a policy to None.
-    :param selected_choices the compatible-choices bitmask to restrict the policy to -- passed explicitly
-        (not a parameter_space) since callers may want to verify against a snapshot taken at an earlier
-        point (e.g. before postprocessing widened a node's parameter_space via parameter_set_options)
-    :returns fixed policy
-    :returns the resulting MDP
+    """Apply policy to the underlying MDP restricted to selected_choices.
+
+    Every undefined action in a policy is set to an arbitrary one. Upon constructing the MDP, reset unused actions in a policy to None.
+    :param selected_choices: the compatible-choices bitmask to restrict the policy to -- passed explicitly (not a parameter_space) since callers may want to
+        verify against a snapshot taken at an earlier point (e.g. before postprocessing widened a node's parameter_space via parameter_set_options)
+    :returns: fixed policy
+    :returns: the resulting MDP
     """
     info = cast(MdpFamilyInfo, colored_mdp.feature_info)
     policy = [action if action is not None else info.state_to_actions[state][0] for state, action in enumerate(policy)]
@@ -159,7 +152,6 @@ def assert_mdp_is_deterministic(
     info = cast(MdpFamilyInfo, colored_mdp.feature_info)
     logger.error(f"applied policy to a singleton parameter assignment {parameter_space} and obtained MDP with nondeterminism")
     for state in range(mdp.model.nr_states):
-
         choices = mdp.model.transition_matrix.get_rows_for_group(state)
         if len(choices) > 1:
             underlying_mdp_state = mdp.underlying_mdp_state_map[state]
