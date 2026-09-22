@@ -25,10 +25,9 @@ options = [
         help="decision tree synthesis: path to a scheduler to be mapped to a decision tree",
     ),
     click.option(
-        "--add-dont-care-action",
-        is_flag=True,
+        "--add-dont-care-action/--no-add-dont-care-action",
         default=True,
         panel=_PANEL,
-        help="decision tree synthesis: # if set, an explicit action executing a random choice of an available action will be added to each state",
+        help="decision tree synthesis: if set, an explicit action executing a random choice of an available action will be added to each state",
     ),
 ]

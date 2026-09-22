@@ -29,11 +29,16 @@ public:
     /** Get a mask of choices compatible with the family. */
     BitVector selectCompatibleChoices(Family const& subfamily) const;
     /**
-     * Get a mask of choices compatible with the family, restricting the search to base_choices.
-     * Sound whenever subfamily is a narrowing of the family that produced base_choices (i.e. every hole's
-     * allowed options in subfamily are a subset of what produced base_choices): a choice compatible with the
-     * narrower subfamily must also be compatible with the wider family, so any choice already excluded from
-     * base_choices is guaranteed to stay excluded and can be skipped, without changing the result.
+     * Get a mask of choices compatible with the family, restricting the *colored-choice* search to
+     * base_choices. Uncolored choices (no hole/option assignment at all) are always included regardless of
+     * base_choices -- they carry nothing for any subfamily to exclude them on, so base_choices restricting
+     * them too would be unsound, not just redundant (confirmed by trying it: every state's uncolored
+     * fallback choices are load-bearing for basic model well-formedness, and excluding any of them produces
+     * deadlock states in the constructed submodel). Sound for the colored portion whenever subfamily is a
+     * narrowing of the family that produced base_choices (i.e. every hole's allowed options in subfamily are
+     * a subset of what produced base_choices): a colored choice compatible with the narrower subfamily must
+     * also be compatible with the wider family, so any colored choice already excluded from base_choices is
+     * guaranteed to stay excluded and can be skipped, without changing the result.
      */
     BitVector selectCompatibleChoices(Family const& subfamily, BitVector const& base_choices) const;
     /** For each hole, collect options (colors) involved in any of the given choices. */
