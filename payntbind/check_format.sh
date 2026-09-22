@@ -12,6 +12,14 @@ set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")"
 
+# Requires bash >= 4 (uses mapfile, added in bash 4.0). Deliberately not rewritten for bash 3.2 (macOS's
+# ancient system bash, frozen pre-GPLv3) -- this is a developer-only tooling script, not something end users
+# run; anyone on macOS should already have a newer bash on PATH (e.g. `brew install bash`).
+if [ -z "${BASH_VERSINFO:-}" ] || [ "${BASH_VERSINFO[0]}" -lt 4 ]; then
+    echo "this script requires bash >= 4 (found: ${BASH_VERSION:-unknown}); on macOS, install a newer bash via 'brew install bash' and re-run with it on PATH" >&2
+    exit 2
+fi
+
 if ! command -v clang-format &> /dev/null; then
     echo "clang-format not found on PATH" >&2
     exit 2

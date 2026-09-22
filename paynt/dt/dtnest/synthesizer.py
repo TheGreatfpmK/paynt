@@ -497,6 +497,14 @@ class DtNest(DtSynthesizer):
             random_result_value = mc_result_random.value
             logger.info(f"the random scheduler has value: {random_result_value}")
             # self.set_optimality_threshold(random_result_value)
+        else:
+            # no synthetic don't-care action to build a random-scheduler baseline from (e.g.
+            # add_dont_care_action=False) -- fall back to a genuine, sound baseline instead of leaving
+            # random_result_value unbound: the value the worst-case scheduler achieves over the full
+            # underlying MDP.
+            mc_result_worst = paynt_mdp.model_check_property(self.task.get_property(), alt=True)
+            random_result_value = mc_result_worst.value
+            logger.info(f"no don't-care action available; using the worst-case scheduler value as a baseline: {random_result_value}")
 
         self.best_tree = self.best_tree_value = None
 
@@ -505,8 +513,7 @@ class DtNest(DtSynthesizer):
         self.synthesize_subtrees(opt_result_value, random_result_value, user_threshold, user_threshold_minimizing)
 
         logger.info(f"the optimal scheduler has value: {opt_result_value}")
-        if DONT_CARE_ACTION_LABEL in info.action_labels:
-            logger.info(f"the random scheduler has value: {random_result_value}")
+        logger.info(f"the baseline (random or worst-case) scheduler has value: {random_result_value}")
         if self.best_tree is None:
             logger.info("no admissible tree found")
         else:
@@ -517,10 +524,9 @@ class DtNest(DtSynthesizer):
             logger.info(f"synthesized tree of depth {depth} with {num_nodes} decision nodes")
             if self.task.specification.has_optimality:
                 logger.info(f"the synthesized tree has value {self.best_tree_value}")
-                if DONT_CARE_ACTION_LABEL in info.action_labels:
-                    logger.info(
-                        f"the synthesized tree has relative value: {self.compute_normalized_value(self.best_tree_value, opt_result_value, random_result_value)}"
-                    )
+                logger.info(
+                    f"the synthesized tree has relative value: {self.compute_normalized_value(self.best_tree_value, opt_result_value, random_result_value)}"
+                )
             logger.info("printing the synthesized tree below:")
 
             # integration logs
