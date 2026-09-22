@@ -36,6 +36,7 @@ class Synthesizer:
         import paynt.synthesizer.synthesizer_ar
         import paynt.synthesizer.synthesizer_cegis
         import paynt.synthesizer.synthesizer_hybrid
+        import paynt.synthesizer.smpmc
 
         if method == "onebyone":
             return paynt.synthesizer.synthesizer_onebyone.SynthesizerOneByOne(colored_mdp, task)
@@ -45,6 +46,8 @@ class Synthesizer:
             return paynt.synthesizer.synthesizer_cegis.SynthesizerCEGIS(colored_mdp, task)
         if method == "hybrid":
             return paynt.synthesizer.synthesizer_hybrid.SynthesizerHybrid(colored_mdp, task)
+        if method == "smpmc":
+            return paynt.synthesizer.smpmc.SynthesizerSMPMC(colored_mdp, task)
         raise ValueError("invalid method name")
 
     search_node_type = paynt.synthesizer.search_node.SearchNode

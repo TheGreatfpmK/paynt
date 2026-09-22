@@ -68,6 +68,9 @@ void define_helpers(py::module& m) {
     m.def("set_precision_minmax", [](storm::MinMaxSolverEnvironment& nsenv, double value) {
         nsenv.setPrecision(storm::utility::convertNumber<storm::RationalNumber>(value));
     });
+    m.def("set_max_iterations_minmax", [](storm::MinMaxSolverEnvironment& nsenv, uint64_t value) {
+        nsenv.setMaximalNumberOfIterations(value);
+    });
 
     m.def("transform_until_to_eventually", &synthesis::transformUntilToEventually<double>, py::arg("formula"));
     m.def("remove_reward_model", &synthesis::removeRewardModel<double>, py::arg("model"), py::arg("reward_name"));

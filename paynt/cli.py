@@ -86,7 +86,7 @@ def setup_logger(log_path: str | None = None) -> list[logging.Handler]:
 @click.option("--precision", type=click.FLOAT, default=1e-4, panel="Synthesis", help="model checking precision")
 @click.option("--exact", is_flag=True, default=False, panel="Synthesis", help="use exact synthesis (very limited at the moment)")
 @click.option("--timeout", type=int, panel="Synthesis", help="timeout (s)")
-@click.option("--method", type=click.Choice(["onebyone", "ar", "cegis", "hybrid"]), default="ar", show_default=True, panel="Synthesis", help="synthesis method")
+@click.option("--method", type=click.Choice(["onebyone", "ar", "cegis", "hybrid", "smpmc"]), default="ar", show_default=True, panel="Synthesis", help="synthesis method")
 @click.option("--disable-expected-visits", is_flag=True, default=False, panel="Synthesis", help="do not compute expected visits for the splitting heuristic")
 @click.option(
     "--ce-generator",

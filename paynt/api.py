@@ -70,7 +70,7 @@ def get_synthesizer(
         return paynt.pomdp.decpomdp.DecPomdpSynthesizer(colored_mdp_factory, task, method)
 
     if feature_kind == "family":
-        if method == "onebyone":
+        if method in ("onebyone", "smpmc"):
             return paynt.synthesizer.synthesizer.Synthesizer.for_method(colored_mdp_factory.build(), task, method)
         import paynt.mdp_family
 
