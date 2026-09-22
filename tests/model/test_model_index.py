@@ -15,7 +15,7 @@ def colored_mdp_parameter_space_prop_result():
     unfolding) -- this is the "generic" case paynt.quotient.quotient.Quotient used to handle, before it was
     deleted once its last two callers (SynthesizerHybrid.split, this exact sketch.py construction site)
     were migrated onto the shared ColoredMdp-based mechanisms."""
-    sketch_path, props_path = get_sketch_paths("archive/jair24-synthesis/maze")
+    sketch_path, props_path = get_sketch_paths("tests/generic-maze")
     colored_mdp_factory, task = paynt.parser.sketch.Sketch.load_sketch(sketch_path, props_path)
     colored_mdp = colored_mdp_factory.colored_mdp
     node = paynt.synthesizer.search_node.SearchNode(colored_mdp.parameter_space.copy())

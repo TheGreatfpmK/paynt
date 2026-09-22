@@ -22,7 +22,7 @@ _RUN_SCRIPT = textwrap.dedent("""
 class TestMultiConstraintSplitting:
     """
     Regression coverage for the multi-constraint AR splitting gap (paper Section https://www.jair.org/index.php/jair/article/view/16593 3.3, "AR for Feasibility
-    Synthesis with Multiple Constraints": models/archive/cav21-paynt/dpm's
+    Synthesis with Multiple Constraints": models/tests/generic-multiconstraint-dpm
     easy.props has zero optimality objective and exactly two constraints -- about as pure a multi-constraint
     case as exists -- and used to crash every AR-based method within the first few seconds/iterations: `ar`
     directly (ValueError: max() iterable argument is empty, from split_parameter_space's scheduler_scores
@@ -44,7 +44,7 @@ class TestMultiConstraintSplitting:
 
     @pytest.mark.parametrize("method", ["ar", "cegis", "hybrid"])
     def test_does_not_crash_on_a_genuinely_multi_constraint_specification(self, method):
-        sketch_path, props_path = get_sketch_paths("archive/cav21-paynt/dpm", props_name="easy.props")
+        sketch_path, props_path = get_sketch_paths("tests/generic-multiconstraint-dpm", props_name="easy.props")
         try:
             result = subprocess.run(
                 [sys.executable, "-c", _RUN_SCRIPT, sketch_path, props_path, method],

@@ -38,8 +38,6 @@ class TestDtColoredMdpFactory:
         assert node.mdp.states > 0
 
     def test_factory_without_a_task_matches_the_get_dt_with_api_pattern(self, dt_colored_mdp):
-        """paynt.dt.api.synthesize's real callers (see get_dt_with_api.py) construct a DtColoredMdpFactory from just an mdp, with no task yet, and attach one
-        later."""
         factory = paynt.dt.DtColoredMdpFactory(dt_colored_mdp.underlying_mdp)
         assert factory.build_task is None
         assert factory.reset_tree(0).feature_info.decision_tree.get_depth() == 0

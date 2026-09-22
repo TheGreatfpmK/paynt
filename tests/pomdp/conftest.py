@@ -29,12 +29,7 @@ def pomdp_colored_mdp(pomdp_colored_mdp_factory):
 @pytest.fixture
 def decpomdp_colored_mdp_factory():
     """A genuine multi-agent Cassandra/.dpomdp sketch, which resolves through payntbind.synthesis.parse_decpomdp to a real decpomdp_manager (num_agents > 1) and
-    so through DecPomdpColoredMdpFactory.
-
-    This is NOT the same as models/archive/*/dec-pomdp/*, whose sketch.templ files are actually plain PRISM DTMC-with-parameters sketches (parse cleanly as
-    PRISM, model_type DTMC) -- similarly-named parameters, but they resolve to a plain paynt.colored_mdp.ColoredMdp (no specialist factory at all) and never
-    touch this code at all.
-    """
+    so through DecPomdpColoredMdpFactory."""
     # props_name deliberately omitted (defaults to "sketch.props", which does not exist in this directory)
     # so this exercises the Cassandra branch's model-inferred discounted-reward property (discount 0.9)
     sketch_path, props_path = get_sketch_paths("tests/decpomdp-dectiger", sketch_name="dectiger.dpomdp")
