@@ -1,2 +1,2 @@
-R{"reward"}max=? [F "discount_sink"]
-R{"constraint"}<=10 [F "discount_sink"]
+R{"reward"}max=? [Cdiscount=0.9]
+R{"constraint"}<=10 [Cdiscount=0.9]

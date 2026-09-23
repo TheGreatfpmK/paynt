@@ -1,16 +1,16 @@
+from __future__ import annotations
 
+from dataclasses import dataclass
 
-# TODO this will inherit from general result class eventually
+import paynt.result
 
 from .decision_tree import DecisionTree
 
 import logging
+
 logger = logging.getLogger(__name__)
 
-class DtResult:
 
-    def __init__(self, success : bool, value : float | None, tree : DecisionTree | None):
-        
-        self.success = success
-        self.value = value
-        self.tree = tree
+@dataclass
+class DtResult(paynt.result.Result):
+    tree: DecisionTree | None = None

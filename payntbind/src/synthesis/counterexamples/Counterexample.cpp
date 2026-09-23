@@ -388,7 +388,9 @@ namespace synthesis {
             }
         }
         storm::storage::SparseMatrix<ValueType> sub_matrix = transitionMatrixBuilder.build();
-        assert(sub_matrix.isProbabilistic(storm::utility::zero<ValueType>()));
+        // zero tolerance is too strict for floating-point row sums (a row can be a few ULPs off from 1);
+        // match storm's own default --precision (1e-6, see GeneralSettings::precisionOptionName)
+        assert(sub_matrix.isProbabilistic(storm::utility::convertNumber<ValueType>(1e-6)));
         storm::storage::sparse::ModelComponents<ValueType> components(sub_matrix, labeling_subdtmc, reward_models_subdtmc);
         std::shared_ptr<storm::models::sparse::Model<ValueType>> subdtmc = storm::utility::builder::buildModelFromComponents(storm::models::ModelType::Dtmc, std::move(components));
         // std::cout << "[storm] sub-dtmc has " << subdtmc->getNumberOfStates() << " states" << std::endl;
@@ -418,17 +420,27 @@ namespace synthesis {
         this->timer_model_check.stop();
         storm::modelchecker::ExplicitQuantitativeCheckResult<ValueType>& result = this->hint_result->template asExplicitQuantitativeCheckResult<ValueType>();
 
-        auto comparisonType = this->formula_modified[index]->asOperatorFormula().getComparisonType();
+        // formula_modified[index] is constructed (see the constructor above) from whatever formula Python
+        // passed in -- today, always a bound-free quantitative formula (Specification.stormpy_formulae()),
+        // since a bound-carrying variant of this formula is what's being *searched for*, not something known
+        // up front. getComparisonType() asserts a bound is present (storm::logic::OperatorFormula::
+        // getComparisonType(), only checked -- and only aborts -- in a debug-mode storm build), so it must
+        // not be called at all when there is none; the strict-vs-non-strict distinction below then simply
+        // defaults to non-strict, matching this method's behavior before bound-carrying formulas were ever
+        // considered.
+        auto const& operator_formula = this->formula_modified[index]->asOperatorFormula();
+        bool use_strict_less = operator_formula.hasBound() && operator_formula.getComparisonType() == storm::logic::ComparisonType::Less;
+        bool use_strict_greater = operator_formula.hasBound() && operator_formula.getComparisonType() == storm::logic::ComparisonType::Greater;
 
         bool satisfied;
         if(this->formula_safety[index]) {
-            if (comparisonType == storm::logic::ComparisonType::Less) {
+            if (use_strict_less) {
                 satisfied = result[initial_state] < formula_bound;
             } else {
                 satisfied = result[initial_state] <= formula_bound;
             }
         } else {
-            if (comparisonType == storm::logic::ComparisonType::Greater) {
+            if (use_strict_greater) {
                 satisfied = result[initial_state] > formula_bound;
             } else {
                 satisfied = result[initial_state] >= formula_bound;

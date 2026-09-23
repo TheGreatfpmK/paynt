@@ -133,7 +133,7 @@ std::vector<uint64_t> schedulerToStateToGlobalChoice(
     return state_to_choice;
 }
 
-std::map<uint64_t,double> computeInconsistentHoleVariance(
+std::map<uint64_t,double> computeInconsistentParameterVariance(
     Family const& family,
     std::vector<uint64_t> const& row_groups, std::vector<uint64_t> const& choice_to_global_choice,
     std::vector<double> const& choice_to_value,
@@ -318,7 +318,7 @@ void bindings_coloring(py::module& m) {
     bindings_coloring_vt<double>(m, "");
     bindings_coloring_vt<storm::RationalNumber>(m, "Exact");
 
-    m.def("computeInconsistentHoleVariance", &synthesis::computeInconsistentHoleVariance);
+    m.def("computeInconsistentParameterVariance", &synthesis::computeInconsistentParameterVariance);
 
     m.def("policyToChoicesForFamily", &synthesis::policyToChoicesForFamily);
 
@@ -345,7 +345,11 @@ void bindings_coloring(py::module& m) {
         >())
         .def("getChoiceToAssignment", &synthesis::Coloring::getChoiceToAssignment)
         .def("getStateToHoles", &synthesis::Coloring::getStateToHoles)
-        .def("selectCompatibleChoices", &synthesis::Coloring::selectCompatibleChoices)
+        .def("selectCompatibleChoices", py::overload_cast<synthesis::Family const&>(&synthesis::Coloring::selectCompatibleChoices, py::const_))
+        .def(
+            "selectCompatibleChoices",
+            py::overload_cast<synthesis::Family const&, storm::storage::BitVector const&>(&synthesis::Coloring::selectCompatibleChoices, py::const_)
+        )
         .def("collectHoleOptions", &synthesis::Coloring::collectHoleOptions)
         ;
 

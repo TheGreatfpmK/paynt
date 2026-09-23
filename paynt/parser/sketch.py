@@ -1,45 +1,75 @@
+from __future__ import annotations
+
+import dataclasses
+from typing import Any
+
 import stormpy
 import payntbind
 
-import paynt.models.model_builder
-import paynt.quotient.quotient
-import paynt.quotient.pomdp
-import paynt.quotient.decpomdp
-import paynt.quotient.posmg
-import paynt.quotient.mdp_family
-import paynt.quotient.pomdp_family
-import paynt.verification.property
+import paynt.model.model_builder
+import paynt.colored_mdp
+import paynt.parameter_space.parameter_space
+import paynt.mdp_family
+import paynt.mdp_family.task
+import paynt.pomdp
+import paynt.pomdp.task
+import paynt.pomdp.posmg
+import paynt.pomdp.posmg.task
+import paynt.specification.property
+import paynt.task
 
 from paynt.dt import DtColoredMdpFactory
+import paynt.dt.dtnest.task
 
 from paynt.parser.prism_parser import PrismParser
 from paynt.parser.drn_parser import DrnParser
+from paynt.parser.jani import JaniUnfolder
 
 from ._utils import substitute_suffix, make_rewards_action_based
 
-import uuid
 import os
 import json
 
 import logging
+
 logger = logging.getLogger(__name__)
 
+
+def _dataclass_task_kwargs(cls: type, task_kwargs: dict[str, Any]) -> dict[str, Any]:
+    """load_sketch doesn't know which feature a sketch needs until it has parsed it, so task_kwargs carries every feature's CLI options at once; each feature
+    specific task is a plain dataclass with no **kwargs catch-all of its own -- this keeps only the keys the target dataclass actually declares as real
+    constructor (init=True) fields."""
+    field_names = {f.name for f in dataclasses.fields(cls) if f.init}
+    return {key: value for key, value in task_kwargs.items() if key in field_names}
+
+
 class Sketch:
-
     @classmethod
-    def load_sketch(cls, sketch_path, properties_path,
-        export=None, relative_error=0, precision=1e-4, constraint_bound=None, use_exact=False):
+    def load_sketch(
+        cls,
+        sketch_path: str,
+        properties_path: str,
+        export: str | None = None,
+        relative_error: float = 0,
+        precision: float = 1e-4,
+        constraint_bound: Any = None,
+        use_exact: bool = False,
+        task_kwargs: dict[str, Any] | None = None,
+    ) -> tuple[Any, paynt.task.SynthesisTask]:
 
-        prism = None
-        explicit_quotient = None
-        specification = None
-        family = None
-        coloring = None
-        jani_unfolder = None
-        decpomdp_manager = None
-        obs_evaluator = None
+        # this function's real types are heavily branch-dependent (which of the PRISM/DRN/Cassandra parsers
+        # ran, and, for PRISM, whether the sketch had parameters) -- kept as Any/Optional rather than forcing
+        # every branch's read site to re-narrow a handful of mutually-exclusive control-flow paths
+        prism: Any = None
+        explicit_model: Any = None
+        specification: paynt.specification.property.Specification | None = None
+        parameter_space: paynt.parameter_space.parameter_space.ParameterSpace | None = None
+        coloring: Any = None
+        jani_unfolder: JaniUnfolder | None = None
+        decpomdp_manager: Any = None
+        obs_evaluator: Any = None
 
-        paynt.verification.property.Property.model_checking_precision = precision
+        paynt.specification.property.Property.model_checking_precision = precision
 
         # check path
         if not os.path.isfile(sketch_path):
@@ -48,16 +78,17 @@ class Sketch:
 
         filetype = None
         try:
-            logger.info(f"assuming sketch in PRISM format...")
-            prism, explicit_quotient, specification, family, coloring, jani_unfolder, obs_evaluator = PrismParser.read_prism(
-                        sketch_path, properties_path, relative_error, use_exact)
+            logger.info("assuming sketch in PRISM format...")
+            prism, explicit_model, specification, parameter_space, coloring, jani_unfolder, obs_evaluator = PrismParser.read_prism(
+                sketch_path, properties_path, relative_error, use_exact
+            )
             filetype = "prism"
         except SyntaxError:
             pass
         if filetype is None:
             try:
-                logger.info(f"assuming sketch in DRN format...")
-                explicit_quotient = paynt.models.model_builder.ModelBuilder.from_drn(sketch_path, use_exact)
+                logger.info("assuming sketch in DRN format...")
+                explicit_model = paynt.model.model_builder.ModelBuilder.from_drn(sketch_path, use_exact)
                 specification = PrismParser.parse_specification(properties_path, relative_error, use_exact=use_exact)
                 filetype = "drn"
                 project_path = os.path.dirname(sketch_path)
@@ -71,49 +102,58 @@ class Sketch:
                     if use_exact:
                         raise Exception("exact synthesis is not supported with state valuations")
                     logger.info(f"found state valuations in {valuations_path}, adding to the model...")
-                    explicit_quotient = payntbind.synthesis.addStateValuations(explicit_quotient,state_valuations)
+                    explicit_model = payntbind.synthesis.addStateValuations(explicit_model, state_valuations)
             except Exception as e:
                 print(e)
-                pass
         if filetype is None:
             try:
-                logger.info(f"assuming sketch in Cassandra format...")
+                logger.info("assuming sketch in Cassandra format...")
                 decpomdp_manager = payntbind.synthesis.parse_decpomdp(sketch_path)
                 if constraint_bound is not None:
                     decpomdp_manager.set_constraint(constraint_bound)
                 if decpomdp_manager is None:
                     raise SyntaxError
-                logger.info("applying discount factor transformation...")
-                decpomdp_manager.apply_discount_factor_transformation()
-                explicit_quotient = decpomdp_manager.construct_pomdp()
-                if constraint_bound is not None:
-                    specification = PrismParser.parse_specification(properties_path, relative_error)
+                explicit_model = decpomdp_manager.construct_pomdp()
+                if constraint_bound is not None or os.path.isfile(properties_path):
+                    # a properties file, when it exists, takes precedence over the model's own discount
+                    # factor (e.g. it may specify its own Cdiscount=X) -- constraint_bound always needs one,
+                    # since there's no model-inferable default for a constraint's own threshold
+                    specification = PrismParser.parse_specification(properties_path, relative_error, use_exact=use_exact)
+                    # every Cassandra-derived model has a synthetic, zero-reward initial state (see
+                    # DecPomdp.cpp) that silently eats one extra discount factor under Cdiscount -- correct
+                    # for it on every discounted-reward property, reading the value from the formula itself
+                    # (not decpomdp_manager.discount_factor) since the user's own file may override it.
+                    for prop in specification.all_properties():
+                        if prop.is_discounted_reward:
+                            prop.discount_factor_correction = prop.extract_discount_factor_from_formula()
                 else:
-                    optimality = paynt.verification.property.construct_reward_property(
-                        decpomdp_manager.reward_model_name,
-                        decpomdp_manager.reward_minimizing,
-                        decpomdp_manager.discount_sink_label)
-                    specification = paynt.verification.property.Specification([optimality])
+                    optimality = paynt.specification.property.construct_discounted_reward_property(
+                        decpomdp_manager.reward_model_name, decpomdp_manager.reward_minimizing, decpomdp_manager.discount_factor
+                    )
+                    # same correction as above, but the discount value is already known here directly --
+                    # no need to parse it back out of the formula this function just built.
+                    optimality.discount_factor_correction = decpomdp_manager.discount_factor
+                    specification = paynt.specification.property.Specification([optimality])
                 filetype = "cassandra"
             except SyntaxError:
                 pass
 
         assert filetype is not None, "unknown format of input file"
+        assert specification is not None
         logger.info("sketch parsing OK")
 
-        paynt.verification.property.Property.initialize(use_exact)
-        if explicit_quotient.is_exact:
-            updated = payntbind.synthesis.addMissingChoiceLabelsExact(explicit_quotient)
+        paynt.specification.property.Property.initialize(use_exact)
+        if explicit_model.is_exact:
+            updated = payntbind.synthesis.addMissingChoiceLabelsExact(explicit_model)
         else:
-            updated = payntbind.synthesis.addMissingChoiceLabels(explicit_quotient)
-        if updated is not None: explicit_quotient = updated
-        if not payntbind.synthesis.assertChoiceLabelingIsCanonic(explicit_quotient.nondeterministic_choice_indices,explicit_quotient.choice_labeling,False):
-            logger.warning("WARNING: choice labeling for the quotient is not canonic")
+            updated = payntbind.synthesis.addMissingChoiceLabels(explicit_model)
+        if updated is not None:
+            explicit_model = updated
+        if not payntbind.synthesis.assertChoiceLabelingIsCanonic(explicit_model.nondeterministic_choice_indices, explicit_model.choice_labeling, False):
+            logger.warning("WARNING: choice labeling for the model is not canonic")
 
-
-        make_rewards_action_based(explicit_quotient)
-        logger.debug("constructed explicit quotient having {} states and {} choices".format(
-            explicit_quotient.nr_states, explicit_quotient.nr_choices))
+        make_rewards_action_based(explicit_model)
+        logger.debug(f"constructed explicit model having {explicit_model.nr_states} states and {explicit_model.nr_choices} choices")
 
         if specification.contains_until_properties() and filetype != "prism":
             logger.info("WARNING: using until formulae with non-PRISM inputs might lead to unexpected behaviour")
@@ -121,95 +161,58 @@ class Sketch:
         logger.info(f"found the following specification {specification}")
 
         if export is not None:
-            Sketch.export(export, sketch_path, jani_unfolder, explicit_quotient)
+            Sketch.export(export, sketch_path, jani_unfolder, explicit_model)
             logger.info("export OK, aborting...")
             exit(0)
 
+        task_kwargs = task_kwargs or {}
+        task = paynt.task.SynthesisTask.from_specification(specification, use_exact=use_exact, **task_kwargs)
+
+        colored_mdp_factory: Any
+        build_task: Any
         if jani_unfolder is not None:
+            assert parameter_space is not None
             if prism.model_type == stormpy.storage.PrismModelType.DTMC:
-                quotient_container = paynt.quotient.quotient.Quotient(explicit_quotient, family, coloring, specification, use_exact=use_exact)
+                colored_mdp = paynt.colored_mdp.ColoredMdp(explicit_model, parameter_space, coloring, use_exact=use_exact)
+                colored_mdp_factory = paynt.colored_mdp.IdentityColoredMdpFactory(colored_mdp, task)
             elif prism.model_type == stormpy.storage.PrismModelType.MDP:
-                quotient_container = paynt.quotient.mdp_family.MdpFamilyQuotient(explicit_quotient, family, coloring, specification, use_exact=use_exact)
+                build_task = paynt.mdp_family.task.MdpFamilyTask(**_dataclass_task_kwargs(paynt.mdp_family.task.MdpFamilyTask, task_kwargs))
+                colored_mdp_factory = paynt.mdp_family.MdpFamilyColoredMdpFactory(explicit_model, parameter_space, coloring, build_task, use_exact=use_exact)
             elif prism.model_type == stormpy.storage.PrismModelType.POMDP:
-                quotient_container = paynt.quotient.pomdp_family.PomdpFamilyQuotient(explicit_quotient, family, coloring, specification, obs_evaluator, use_exact=use_exact)
+                build_task = paynt.mdp_family.task.MdpFamilyTask(**_dataclass_task_kwargs(paynt.mdp_family.task.MdpFamilyTask, task_kwargs))
+                colored_mdp_factory = paynt.mdp_family.PomdpFamilyColoredMdpFactory(
+                    explicit_model, parameter_space, coloring, build_task, obs_evaluator, use_exact=use_exact
+                )
         else:
-            # assert explicit_quotient.is_nondeterministic_model, "expected nondeterministic model"
+            # assert explicit_model.is_nondeterministic_model, "expected nondeterministic model"
             if decpomdp_manager is not None and decpomdp_manager.num_agents > 1:
-                quotient_container = paynt.quotient.decpomdp.DecPomdpQuotient(decpomdp_manager, specification, use_exact=use_exact)
-            elif isinstance(explicit_quotient, payntbind.synthesis.Posmg):
-                quotient_container = paynt.quotient.posmg.PosmgQuotient(explicit_quotient, specification, use_exact=use_exact)
-            elif not explicit_quotient.is_partially_observable:
-                quotient_container = DtColoredMdpFactory(explicit_quotient, specification, use_exact=use_exact)
+                build_task = paynt.pomdp.task.PomdpTask(**_dataclass_task_kwargs(paynt.pomdp.task.PomdpTask, task_kwargs))
+                colored_mdp_factory = paynt.pomdp.decpomdp.DecPomdpColoredMdpFactory(decpomdp_manager, build_task, use_exact=use_exact)
+            elif isinstance(explicit_model, payntbind.synthesis.Posmg):
+                build_task = paynt.pomdp.posmg.task.PosmgTask(**_dataclass_task_kwargs(paynt.pomdp.posmg.task.PosmgTask, task_kwargs))
+                colored_mdp_factory = paynt.pomdp.posmg.PosmgColoredMdpFactory(explicit_model, build_task, specification, use_exact=use_exact)
+            elif not explicit_model.is_partially_observable:
+                # always use the more capable DtNestTask (a strict superset of DtTask) since at
+                # this point we don't yet know whether the caller intends to run dtnest or plain AR on this
+                # sketch
+                build_task = paynt.dt.dtnest.task.DtNestTask(**_dataclass_task_kwargs(paynt.dt.dtnest.task.DtNestTask, task_kwargs))
+                colored_mdp_factory = DtColoredMdpFactory(explicit_model, build_task, use_exact=use_exact)
             else:
-                quotient_container = paynt.quotient.pomdp.PomdpQuotient(explicit_quotient, specification, decpomdp_manager, use_exact=use_exact)
-        return quotient_container
-
-
-    @classmethod
-    def load_sketch_as_all_in_one(cls, sketch_path, properties_path):
-        if not os.path.isfile(sketch_path):
-            raise ValueError(f"the sketch file {sketch_path} does not exist")
-        logger.info(f"loading sketch from {sketch_path} ...")
-        logger.info(f"all in one approach so assuming input in PRISM format...")
-        try:
-            prism, hole_definitions = PrismParser.load_sketch_prism(sketch_path)
-            expression_parser = stormpy.storage.ExpressionParser(prism.expression_manager)
-            expression_parser.set_identifier_mapping(dict())
-            prism_model_type = {
-                stormpy.storage.PrismModelType.DTMC:"DTMC",
-                stormpy.storage.PrismModelType.MDP:"MDP",
-                stormpy.storage.PrismModelType.POMDP:"POMDP"
-            }[prism.model_type]
-            logger.debug("PRISM model type: " + prism_model_type)
-
-            hole_expressions = None
-            family = None
-            if len(hole_definitions) > 0:
-                logger.info("processing hole definitions...")
-                prism, hole_expressions, family = PrismParser.parse_holes(prism, expression_parser, hole_definitions)
-
-            specification = PrismParser.parse_specification(properties_path, prism=prism)
-
-            prism = prism.replace_variable_initialization_by_init_expression()
-            expression_manager = prism.expression_manager
-            for index, hole in enumerate(hole_definitions):
-                # TODO add support for double holes
-                assert hole[1] == 'int', "all in one approach only works with integer holes"
-                var = prism.get_constant(hole[0])
-                var_values = [x.evaluate_as_int() for x in hole_expressions[index]]
-                prism = prism.replace_constant_by_variable(var, expression_manager.create_integer(min(var_values)), expression_manager.create_integer(max(var_values)))
-                var_options = [stormpy.Expression.Eq(var.expression_variable.get_expression(), expression_manager.create_integer(val)) for val in var_values]
-                prism.update_initial_states_expression(stormpy.Expression.And(prism.initial_states_expression, stormpy.Expression.Disjunction(var_options)))
-
-            # TODO investigate why we have to print and load the prism program again for all in one construction to work
-            tmp_path = sketch_path + str(uuid.uuid4())
-            with open(tmp_path, 'w') as f:
-                print(prism, end="", file=f)
-            try:
-                prism = stormpy.parse_prism_program(tmp_path, prism_compat=True)
-                os.remove(tmp_path)
-            except:
-                os.remove(tmp_path)
-                raise SyntaxError
-
-        except SyntaxError as e:
-            logger.error(f"all in one approach supports only input in PRISM format!")
-            raise e
-
-        return prism, specification, family
+                build_task = paynt.pomdp.task.PomdpTask(**_dataclass_task_kwargs(paynt.pomdp.task.PomdpTask, task_kwargs))
+                colored_mdp_factory = paynt.pomdp.PomdpColoredMdpFactory(explicit_model, build_task, decpomdp_manager, use_exact=use_exact)
+        return colored_mdp_factory, task
 
     @classmethod
-    def export(cls, export, sketch_path, jani_unfolder, explicit_quotient):
+    def export(cls, export: str, sketch_path: str, jani_unfolder: JaniUnfolder | None, explicit_model: Any) -> None:
         if export == "jani":
             assert jani_unfolder is not None, "jani unfolder was not used"
-            output_path = substitute_suffix(sketch_path, '.', 'jani')
+            output_path = substitute_suffix(sketch_path, ".", "jani")
             jani_unfolder.write_jani(output_path)
         if export == "drn":
-            output_path = substitute_suffix(sketch_path, '.', 'drn')
-            stormpy.export_to_drn(explicit_quotient, output_path)
+            output_path = substitute_suffix(sketch_path, ".", "drn")
+            stormpy.export_to_drn(explicit_model, output_path)
         if export == "pomdp":
-            assert explicit_quotient.is_nondeterministic_model and explicit_quotient.is_partially_observable, \
-                "cannot '--export pomdp' with non-POMDP sketches"
-            output_path = substitute_suffix(sketch_path, '.', 'pomdp')
-            property_path = substitute_suffix(sketch_path, '/', 'props.pomdp')
-            paynt.parser.pomdp_parser.PomdpParser.write_model_in_pomdp_solve_format(explicit_quotient, output_path, property_path)
+            assert explicit_model.is_nondeterministic_model and explicit_model.is_partially_observable, "cannot '--export pomdp' with non-POMDP sketches"
+            output_path = substitute_suffix(sketch_path, ".", "pomdp")
+            property_path = substitute_suffix(sketch_path, "/", "props.pomdp")
+            DrnParser.write_model_in_pomdp_solve_format(explicit_model, output_path, property_path)
