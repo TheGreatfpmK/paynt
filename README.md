@@ -25,7 +25,7 @@ Alternatively, you may build PAYNT from source:
 
 ```shell
 git clone https://github.com/randriu/paynt.git
-cd synthesis
+cd paynt
 python3 -m venv venv && source venv/bin/activate
 pip install .
 ```
@@ -141,7 +141,7 @@ Finally, the last argument specifies the selected synthesis method: `hybrid`.
 Having the tool installed, you can quickly test it by navigating to the tool folder, activating the Python environment and asking PAYNT to evaluate a simple synthesis problem:
 
 ```sh
-cd /home/cav21/synthesis
+cd /home/cav21/paynt
 source env/bin/activate
 python3 -m paynt models/archive/cav21-paynt/dpm-demo --method hybrid
 ```
