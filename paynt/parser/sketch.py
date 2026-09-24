@@ -82,7 +82,7 @@ class Sketch:
                 explicit_model = stormpy.build_from_umb(sketch_path)
                 specification = PrismParser.parse_specification(properties_path, relative_error, use_exact=use_exact)
                 filetype = "umb"
-            except SyntaxError:
+            except Exception as e:
                 pass
         if filetype is None:
             try:
@@ -112,7 +112,7 @@ class Sketch:
                     logger.info(f"found state valuations in {valuations_path}, adding to the model...")
                     explicit_model = payntbind.synthesis.addStateValuations(explicit_model, state_valuations)
             except Exception as e:
-                print(e)
+                pass
         if filetype is None:
             try:
                 logger.info("assuming sketch in Cassandra format...")
