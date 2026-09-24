@@ -290,8 +290,9 @@ class ColoredMdpTheory:
             # (5 consecutive trials on that same model) the *value* it reports is identical to 7 significant
             # figures at this cap and takes well under a second, matching VI's own capped value on the same
             # model -- so a capped-but-technically-"non-converged" PI result is still trustworthy here.
-            payntbind.synthesis.set_max_iterations_minmax(
-                env.solver_environment.minmax_solver_environment, self.prop.max_minmax_iterations
-            )
+            if not self.prop.sound:
+                payntbind.synthesis.set_max_iterations_minmax(
+                    env.solver_environment.minmax_solver_environment, self.prop.max_minmax_iterations
+                )
             self._reward_pi_environment = env
         return self._reward_pi_environment
