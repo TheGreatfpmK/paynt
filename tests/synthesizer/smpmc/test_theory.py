@@ -6,7 +6,9 @@ from __future__ import annotations
 import pytest
 
 import paynt.parser.sketch
+import paynt.synthesizer.smpmc
 import paynt.synthesizer.smpmc.checker
+import paynt.synthesizer.statistic
 
 from helpers.helper import get_sketch_paths
 
@@ -191,3 +193,60 @@ class TestColoredMdpTheoryCache:
         theory.epoch += 1
         theory.check(fixed, True)
         assert theory.mc_calls == calls_after_first + 1, "an inconclusive verdict from a stale epoch must not be reused"
+
+
+class TestColoredMdpTheoryStatisticWiring:
+    """check() is optionally given the run's Statistic object, feeding SMPMC into the same
+    iteration-counting/status-throttling/progress-percentage machinery AR and CEGIS already use (see
+    Statistic.iteration/.status in paynt/synthesizer/statistic.py) -- this is what backs --method smpmc's
+    periodic "progress X%, ..., iters = {...}, opt = ..." log line."""
+
+    def _theory_with_real_stat(self, colored_mdp, task):
+        synthesizer = paynt.synthesizer.smpmc.SynthesizerSMPMC(colored_mdp, task)
+        synthesizer.stat = paynt.synthesizer.statistic.Statistic(synthesizer)
+        synthesizer.explored = 0
+        prop = task.specification.optimality if task.specification.has_optimality else task.specification.constraints[0]
+        theory = paynt.synthesizer.smpmc.checker.ColoredMdpTheory(colored_mdp, prop, synthesizer.stat)
+        return synthesizer, theory
+
+    def test_stat_is_optional(self, smpmc_tiny_colored_mdp, smpmc_tiny_task):
+        """The default (no stat argument) must keep working -- test_propagator.py's fake-theory tests and
+        every other test_theory.py test above construct ColoredMdpTheory this way."""
+        prop = smpmc_tiny_task.specification.constraints[0]
+        theory = paynt.synthesizer.smpmc.checker.ColoredMdpTheory(smpmc_tiny_colored_mdp, prop)
+        assert theory.stat is None
+        # a full round of checks over every combination must not raise just because stat is absent
+        for combination in smpmc_tiny_colored_mdp.parameter_space.all_combinations():
+            theory.check(dict(enumerate(combination)), True)
+
+    def test_a_model_check_is_recorded_as_a_dtmc_iteration(self, smpmc_tiny_colored_mdp, smpmc_tiny_task):
+        synthesizer, theory = self._theory_with_real_stat(smpmc_tiny_colored_mdp, smpmc_tiny_task)
+        assert synthesizer.stat.iterations_dtmc is None
+        theory.check({0: 0, 1: 0, 2: 0}, True)  # a full assignment -> the singleton-eta/DTMC path
+        assert synthesizer.stat.iterations_dtmc == 1
+        assert synthesizer.stat.iterations_mdp is None
+
+    def test_a_cache_hit_does_not_double_count_an_iteration(self, smpmc_tiny_colored_mdp, smpmc_tiny_task):
+        synthesizer, theory = self._theory_with_real_stat(smpmc_tiny_colored_mdp, smpmc_tiny_task)
+        fixed = {0: 0, 1: 0, 2: 0}
+        theory.check(fixed, True)
+        theory.check(fixed, True)
+        assert synthesizer.stat.iterations_dtmc == 1
+
+    def test_a_fresh_refutation_increments_explored_on_the_synthesizer(self, smpmc_tiny_colored_mdp, smpmc_tiny_task):
+        synthesizer, theory = self._theory_with_real_stat(smpmc_tiny_colored_mdp, smpmc_tiny_task)
+        assert synthesizer.explored == 0
+        # {x1=1 (index 0)} alone is enough to refute viable for this sketch (P>=0.1[F "done"] fails for
+        # every combination with x1's label 1 and x2's label 3 -- see test_theory.py's ground-truth sweep)
+        result = theory.check({0: 0, 1: 0}, True)
+        assert result is not None, "expected a refutation to set up this test meaningfully"
+        assert synthesizer.explored > 0
+
+    def test_a_cache_hit_does_not_double_count_explored(self, smpmc_tiny_colored_mdp, smpmc_tiny_task):
+        synthesizer, theory = self._theory_with_real_stat(smpmc_tiny_colored_mdp, smpmc_tiny_task)
+        fixed = {0: 0, 1: 0}
+        theory.check(fixed, True)
+        explored_after_first = synthesizer.explored
+        assert explored_after_first > 0
+        theory.check(fixed, True)
+        assert synthesizer.explored == explored_after_first

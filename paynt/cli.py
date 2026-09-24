@@ -97,6 +97,14 @@ def setup_logger(log_path: str | None = None) -> list[logging.Handler]:
     help="counterexample generator",
 )
 @click.option(
+    "--constraint",
+    type=click.Choice(["exists", "costs", "prob0", "prob1"]),
+    default=None,
+    panel="Synthesis",
+    help="custom constraint over the parameter space (SMPMC and CEGIS); defaults to a plain existential search",
+)
+@click.option("--costs-threshold", type=int, default=None, panel="Synthesis", help="threshold for --constraint costs (reads a sketch.costs file in the project)")
+@click.option(
     "--fsc-synthesis",
     is_flag=True,
     default=False,
@@ -154,6 +162,8 @@ def paynt_run(
     dtnest_subtree_depth: int,
     dtnest_error_threshold: float,
     ce_generator: str,
+    constraint: str | None,
+    costs_threshold: int | None,
     profiling: bool,
 ) -> None:
 
@@ -184,6 +194,9 @@ def paynt_run(
         "add_dont_care_action": add_dont_care_action,
         "max_subtree_depth": dtnest_subtree_depth,
         "error_threshold": dtnest_error_threshold,
+        "constraint_name": constraint,
+        "costs_threshold": costs_threshold,
+        "costs_file_path": os.path.join(project, "sketch.costs"),
     }
 
     storm_control = None

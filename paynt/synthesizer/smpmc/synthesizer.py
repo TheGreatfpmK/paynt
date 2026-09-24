@@ -6,10 +6,10 @@ paynt/synthesizer/smpmc/theory.py's theory-solver plugin) whenever it needs to k
 parameter assignment is still viable. synthesize_one therefore owns its entire search internally (one
 Z3 solver session) rather than participating in PAYNT's AR-style node-splitting.
 
-Phase 1 scope: a single property (a plain threshold constraint, or a single optimality objective --
-not both together, and not multiple constraints -- see the plan), no custom constraints beyond the
-plain "exists" case (inlined below; extracted into paynt/parameter_space/constraints/ once CEGIS becomes
-a second consumer), no robust (forall-quantified) parameters.
+Scope so far: a single property (a plain threshold constraint, or a single optimality objective -- not
+both together, and not multiple constraints -- see the plan), one constraint at a time selected via
+--constraint (paynt.parameter_space.constraints, shared with CEGIS), no robust (forall-quantified)
+parameters yet.
 """
 
 from __future__ import annotations
@@ -19,6 +19,7 @@ from typing import Any
 import z3
 
 import paynt.colored_mdp
+import paynt.parameter_space.constraints
 import paynt.parameter_space.parameter_space
 import paynt.specification.property
 import paynt.synthesizer.search_node
@@ -42,6 +43,10 @@ class SynthesizerSMPMC(paynt.synthesizer.synthesizer.Synthesizer):
             "optimality objective, not both together and not several constraints at once"
         )
         self.prop: paynt.specification.property.Property = spec.optimality if spec.has_optimality else spec.constraints[0]
+        # unlike CEGIS, SMPMC always needs *some* constraint -- it's what supplies the viable(...) clause
+        # the theory-solver integration depends on -- so it defaults to "exists" rather than to no
+        # constraint at all
+        self.constraint = paynt.parameter_space.constraints.build_constraint(task.constraint_name or "exists")
 
     @property
     def method_name(self) -> str:
@@ -51,7 +56,7 @@ class SynthesizerSMPMC(paynt.synthesizer.synthesizer.Synthesizer):
         self, node: paynt.synthesizer.search_node.SearchNode
     ) -> paynt.parameter_space.parameter_space.ParameterSpace | None:
         encoding = paynt.synthesizer.smpmc.encoding.ParameterBitVecEncoding(node.parameter_space)
-        theory = paynt.synthesizer.smpmc.checker.ColoredMdpTheory(self.colored_mdp, self.prop)
+        theory = paynt.synthesizer.smpmc.checker.ColoredMdpTheory(self.colored_mdp, self.prop, self.stat)
 
         sorts = [variable.sort() for variable in encoding.variables]
         viable = z3.PropagateFunction("viable", *sorts, z3.BoolSort())
@@ -61,11 +66,13 @@ class SynthesizerSMPMC(paynt.synthesizer.synthesizer.Synthesizer):
         # registration, so letting Python garbage-collect it mid-search is a use-after-free
         propagator = paynt.synthesizer.smpmc.theory.SmpmcPropagator(solver, None, theory, encoding.name_to_parameter)
 
-        # the plain "exists" constraint: every parameter within its currently-allowed options, and a
-        # solution must be viable. Registering the propagator before these solver.add() calls matters --
-        # it's what makes `created` fire correctly for the viable(...) term as it's asserted.
-        solver.add(encoding.in_range(node.parameter_space))
-        solver.add(viable(*encoding.variables))
+        # Registering the propagator before this solver.add() call matters -- it's what makes `created`
+        # fire correctly for the viable(...) term as it's asserted.
+        ctx = paynt.parameter_space.constraints.ConstraintContext(
+            colored_mdp=self.colored_mdp, parameter_space=node.parameter_space, task=self.task,
+            variables=encoding.variables, width=encoding.width, viable=viable,
+        )
+        solver.add(*self.constraint.build(ctx))
 
         is_optimality = self.task.specification.has_optimality
         while not self.resource_limit_reached():

@@ -113,7 +113,37 @@ class SmpmcPropagator(z3.UserPropagateBase):  # type: ignore[misc]
     def _analyse(self) -> None:
         """Check every currently-fixed viable(...) literal against the theory; on the first refutation,
         push a learned conflict clause back into Z3 and stop (Z3 will call back in for more once it has
-        backtracked past this conflict)."""
+        backtracked past this conflict).
+
+        Deliberately does NOT wait for every argument of viable(...) to be fixed before consulting the
+        theory -- Algorithm 1 in the paper is explicit that it works over whatever partial model K
+        currently holds ("for all literals k in K do ... eta <- {theta | theta satisfies K \\ {v}}"), not
+        just a complete one. An earlier version of this method required every parameter to be fixed first,
+        which is a correctness-preserving but severely performance-destroying simplification: since
+        viable(...) is asserted over every parameter, "wait for all of them" means the theory is *never*
+        consulted until Z3 has already committed to one fully concrete candidate, degenerating the whole
+        search into one-candidate-at-a-time enumeration with no early pruning from partial information --
+        exactly the CEGIS-like behavior SMPMC is meant to avoid, confirmed empirically (see the
+        conversation this was found in: a controlled comparison on a small synthetic instance showed a
+        4x reduction in total theory calls -- most of them genuinely partial -- once this requirement was
+        removed, with identical sat/unsat answers either way). Parameters not yet fixed are simply left
+        out of `fixed`; checker.py's eta construction already treats an unmentioned parameter as "still
+        fully open" and reasons about the induced sub-MDP accordingly.
+
+        One exception, ported from molehill's own Mole.partial_model_consistent (its "magic trick" that
+        checks a DTMC first): a *partial* (non-empty, not-fully-fixed) query is skipped entirely --
+        reported inconclusive without ever calling the theory -- until at least one fully-fixed assignment
+        has been checked. This isn't in tension with the paragraph above; it's a different failure mode
+        the partial-consultation fix doesn't address on its own. Partial consultation pays off when a
+        partial query can be *refuted*, pruning a whole region for free -- but on a property that's easy
+        to satisfy (found on a real 1.65M-state DTMC-with-holes model, arXiv:2511.08078's own benchmark
+        suite: a reward threshold so generous that virtually every completion satisfies it), no partial
+        query is ever refutable, so every one of them is pure, expensive overhead: an 8-second VI call on
+        a barely-smaller sub-MDP, paid once per parameter Z3 fixes on the way to its first candidate, for
+        no pruning benefit at all. Deferring partial checks until Z3 has found *some* concrete candidate
+        first sidesteps this without giving up early pruning altogether -- it only delays it until pruning
+        has a chance to actually pay for itself.
+        """
         for key, value in list(self.partial_model.items()):
             if not isinstance(value, bool):
                 continue
@@ -122,19 +152,20 @@ class SmpmcPropagator(z3.UserPropagateBase):  # type: ignore[misc]
                 continue
 
             fixed: dict[int, int] = {}
-            ready = True
             for parameter, (kind, payload) in enumerate(arg_specs):
                 if kind == "const":
                     fixed[parameter] = payload
-                else:
-                    if payload not in self.partial_model:
-                        ready = False
-                        break
+                elif payload in self.partial_model:
                     fixed[parameter] = self.partial_model[payload]
-            if not ready:
+                # else: this parameter isn't fixed yet -- leave it out of `fixed`, don't abort the analysis
+
+            is_full_assignment = len(fixed) == len(arg_specs)
+            if not is_full_assignment and fixed and not self.theory.first_full_assignment_checked:
                 continue
 
             result = self.theory.check(fixed, value)
+            if is_full_assignment:
+                self.theory.first_full_assignment_checked = True
             if result is None:
                 continue
 

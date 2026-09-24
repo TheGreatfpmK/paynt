@@ -20,6 +20,7 @@ dependencies = [
     "rich-click>=1.9",
     "psutil>=7.0.0",
     "graphviz>=0.20.1",
+    "mercury-settrie>=1.5.1",
     "scikit-learn>=1.8.0",
 ]
 classifiers = [

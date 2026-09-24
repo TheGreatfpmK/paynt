@@ -10,6 +10,7 @@ import paynt.synthesizer.conflict_generator.dtmc
 import paynt.synthesizer.conflict_generator.mdp
 import paynt.parameter_space.parameter_space
 import paynt.parameter_space.smt
+import paynt.parameter_space.constraints
 
 import logging
 
@@ -26,6 +27,10 @@ class SynthesizerCEGIS(paynt.synthesizer.synthesizer.Synthesizer):
         assert not self.task.specification.contains_maximizing_reward_properties, (
             "Cannot use CEGIS for maximizing reward formulae -- consider using AR or hybrid methods."
         )
+
+        # unlike SynthesizerSMPMC, CEGIS's pre-existing behavior (no constraint at all) is the default --
+        # a constraint is only built when the user explicitly asks for one via --constraint
+        self.constraint = paynt.parameter_space.constraints.build_constraint(task.constraint_name) if task.constraint_name else None
 
     def choose_conflict_generator(
         self, colored_mdp: paynt.colored_mdp.ColoredMdp, task: paynt.task.SynthesisTask
@@ -108,7 +113,7 @@ class SynthesizerCEGIS(paynt.synthesizer.synthesizer.Synthesizer):
         self.conflict_generator.initialize()
 
         # use sketch design space as a SAT baseline (TODO why?)
-        smt_solver = paynt.parameter_space.smt.SmtSolver(self.colored_mdp.parameter_space)
+        smt_solver = paynt.parameter_space.smt.SmtSolver(self.colored_mdp.parameter_space, self.constraint, self.colored_mdp, self.task)
 
         # CEGIS loop
         assignment = smt_solver.pick_assignment(node)

@@ -23,6 +23,7 @@ class FakeTheory:
 
     def __init__(self):
         self.calls: list[tuple[dict, bool]] = []
+        self.first_full_assignment_checked = False
 
     def check(self, fixed: dict, polarity: bool):
         self.calls.append((dict(fixed), polarity))
@@ -101,6 +102,51 @@ class TestExistentialSearch:
         assert bad == 0
 
 
+class TestChecksAFullAssignmentFirst:
+    """Regression coverage for the "check a full assignment first" heuristic ported from molehill's own
+    Mole.partial_model_consistent (its "magic trick"): a genuinely partial query (some but not all
+    parameters fixed) must never reach the theory before at least one fully-fixed one has. Found necessary
+    on a real 1.65M-state model where a threshold so generous that no partial query is ever refutable
+    turned this into pure overhead -- an expensive model check paid once per parameter Z3 fixes on the way
+    to its first candidate, for no pruning benefit. See theory.py's module docstring."""
+
+    def test_no_partial_query_reaches_the_theory_before_the_first_full_one(self):
+        solver, _vars, theory = _build_solver(width=3, p0_max=3, p1_max=1, p2_max=0)
+        solver.check()
+        first_full_index = next(i for i, (fixed, _polarity) in enumerate(theory.calls) if len(fixed) == 3)
+        for fixed, _polarity in theory.calls[:first_full_index]:
+            assert len(fixed) in (0, 3), (
+                f"a genuinely partial query ({fixed}) reached the theory before any full assignment did: "
+                f"{theory.calls[:first_full_index + 1]}"
+            )
+
+    def test_partial_queries_resume_after_the_first_full_one(self):
+        # p0 and p1 both genuinely live (p1_max=1, not 0 -- a single-valued range would be constant-folded
+        # away like p2 is, leaving no room for a partial state at all); max achievable sum is 1+1+0=2 < 3,
+        # so every one of the 4 combinations is refuted, forcing Z3 to keep backtracking and re-deciding
+        # both variables, giving partial queries repeated opportunities to run once
+        # first_full_assignment_checked flips to True
+        solver, _vars, theory = _build_solver(width=3, p0_max=1, p1_max=1, p2_max=0)
+        solver.check()
+        first_full_index = next(i for i, (fixed, _polarity) in enumerate(theory.calls) if len(fixed) == 3)
+        later_calls = theory.calls[first_full_index + 1 :]
+        assert any(0 < len(fixed) < 3 for fixed, _polarity in later_calls), (
+            "expected at least one genuinely partial query to reach the theory after the first full "
+            f"assignment was checked; calls after that point: {later_calls}"
+        )
+
+    def test_the_flag_is_shared_across_fresh_propagator_instances(self):
+        """fresh() propagators (MBQI sub-contexts) share theory, so a full assignment checked via one
+        instance must be visible to another -- this is what lets partial-query pruning resume globally,
+        not per sub-context."""
+        theory = FakeTheory()
+        propagator_a = paynt.synthesizer.smpmc.theory.SmpmcPropagator(z3.Solver(), None, theory, {})
+        propagator_b = propagator_a.fresh(None)
+        assert propagator_b.theory is theory
+        theory.first_full_assignment_checked = True
+        assert propagator_a.theory.first_full_assignment_checked is True
+
+
 class RobustFakeTheory:
     """viable(x0, x1, y0) iff x0 + x1 >= y0 -- a different predicate from FakeTheory above (deliberately:
     this is what exercises the forall-quantified/MBQI path meaningfully, since it depends on the third
@@ -108,6 +154,7 @@ class RobustFakeTheory:
 
     def __init__(self):
         self.calls: list[tuple[dict, bool]] = []
+        self.first_full_assignment_checked = False
 
     def check(self, fixed: dict, polarity: bool):
         self.calls.append((dict(fixed), polarity))
