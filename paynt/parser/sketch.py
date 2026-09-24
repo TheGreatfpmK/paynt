@@ -79,14 +79,22 @@ class Sketch:
         logger.info(f"loading sketch from {sketch_path} ...")
 
         filetype = None
-        try:
-            logger.info("assuming sketch in PRISM format...")
-            prism, explicit_model, specification, parameter_space, coloring, jani_unfolder, obs_evaluator = PrismParser.read_prism(
-                sketch_path, properties_path, relative_error, use_exact
-            )
-            filetype = "prism"
-        except SyntaxError:
-            pass
+        if filetype is None:
+            try:
+                explicit_model = stormpy.build_from_umb(sketch_path)
+                specification = PrismParser.parse_specification(properties_path, relative_error, use_exact=use_exact)
+                filetype = "umb"
+            except SyntaxError:
+                pass
+        if filetype is None:
+            try:
+                logger.info("assuming sketch in PRISM format...")
+                prism, explicit_model, specification, parameter_space, coloring, jani_unfolder, obs_evaluator = PrismParser.read_prism(
+                    sketch_path, properties_path, relative_error, use_exact
+                )
+                filetype = "prism"
+            except SyntaxError:
+                pass
         if filetype is None:
             try:
                 logger.info("assuming sketch in DRN format...")
