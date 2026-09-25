@@ -36,8 +36,7 @@ class TestParameterBitvecVariables:
         assert all(v.size() == width for v in variables)
 
     def test_variables_are_named_by_index_not_bare_name(self):
-        """Two parameters sharing a name must not collide into the same Z3 variable -- see
-        parameter_bitvec_variables' docstring."""
+        """Two parameters sharing a name must not collide into the same Z3 variable -- see parameter_bitvec_variables' docstring."""
         parameter_space = paynt.parameter_space.parameter_space.ParameterSpace()
         parameter_space.add_parameter("dup", ["a", "b"])
         parameter_space.add_parameter("dup", ["c", "d"])

@@ -3,11 +3,11 @@ strictly positive ("prob0" -- some way of resolving any leftover nondeterminism 
 ("prob1" -- every way of resolving leftover nondeterminism reaches it), encoded directly as Z3 assertions
 over per-state reachability/min-step variables rather than via a Storm model-check call. This is a
 *structural* property of the colored MDP itself, independent of any specific scheduler: even a fully
-fixed hole assignment can leave a state with more than one available action (an unlabelled/uncolored
-choice is always available regardless of hole values, alongside any colored ones -- see
+fixed parameter assignment can leave a state with more than one available action (an unlabelled/uncolored
+choice is always available regardless of parameter values, alongside any colored ones -- see
 payntbind/src/synthesis/quotient/Coloring.h's selectCompatibleChoices), so "every action makes progress"
 (prob1) and "some action makes progress" (prob0) remain genuinely different constraints even after every
-hole is pinned down. That is exactly what the z3.And/z3.Or choice below distinguishes.
+parameter is pinned down. That is exactly what the z3.And/z3.Or choice below distinguishes.
 
 Ported from molehill's constraints/prob_goal.py (https://github.com/linusheck/molehill, GPL-3.0). The
 prob=0 and prob=1 cases were two near-duplicate ~50-line code paths differing only in that one z3.And/
@@ -29,10 +29,11 @@ logger = logging.getLogger(__name__)
 
 
 class ProbGoalConstraint(Constraint):
+    name = "prob_goal"
+
     def __init__(self, prob: int):
         assert prob in (0, 1), "ProbGoalConstraint requires prob to be 0 (Prob>0) or 1 (Prob=1)"
         self.prob = prob
-        self.name = "prob0" if prob == 0 else "prob1"
 
     def build(self, ctx: ConstraintContext) -> list[Any]:
         colored_mdp = ctx.colored_mdp
@@ -53,7 +54,7 @@ class ProbGoalConstraint(Constraint):
         min_step = [z3.Int(f"__prob_goal_min_step_{state}") for state in range(num_states)]
 
         # "every action must make progress" (prob=1, almost sure) vs "some action suffices" (prob=0,
-        # possible) -- see this module's docstring for why these differ even once every hole is fixed
+        # possible) -- see this module's docstring for why these differ even once every parameter is fixed
         combine = z3.And if self.prob == 1 else z3.Or
 
         assertions: list[Any] = [step_var >= 0 for step_var in min_step]

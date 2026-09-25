@@ -1,7 +1,8 @@
-"""ExistsConstraint: the plain existential case -- every parameter within its currently-allowed options,
-and (for SMPMC) a solution must be viable. This was Phase 1's only constraint, inlined directly in
-paynt/synthesizer/smpmc/synthesizer.py; extracted here once CEGIS became a second consumer of the shared
-constraint framework."""
+"""ExistsConstraint: the plain existential case -- every parameter within its currently-allowed options, and (for SMPMC) a solution must be viable.
+
+This was Phase 1's only constraint, inlined directly in paynt/synthesizer/smpmc/synthesizer.py; extracted here once CEGIS became a second consumer of the shared
+constraint framework.
+"""
 
 from __future__ import annotations
 

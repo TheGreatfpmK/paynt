@@ -1,5 +1,5 @@
-"""The Z3 theory-solver plugin: a z3.UserPropagateBase subclass that turns Z3's own CDCL search into
-the CDCL(T) integration described in Section 4.2-4.3 of arXiv:2511.08078.
+"""The Z3 theory-solver plugin: a z3.UserPropagateBase subclass that turns Z3's own CDCL search into the CDCL(T) integration described in Section 4.2-4.3 of
+arXiv:2511.08078.
 
 Ported from molehill's plugins/search.py:SearchMarkovChain (https://github.com/linusheck/molehill,
 GPL-3.0), with one correctness fix found empirically during this port and worth calling out explicitly:
@@ -32,13 +32,14 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-class SmpmcPropagator(z3.UserPropagateBase):  # type: ignore[misc]
+class SmpmcPropagator(z3.UserPropagateBase):
     def __init__(
         self,
         solver: Any,
         ctx: Any,
         theory: paynt.synthesizer.smpmc.checker.ColoredMdpTheory,
         name_to_parameter: dict[str, int],
+        owner_ctx: Any = None,
     ):
         super().__init__(solver, ctx)
         self.add_fixed(self._fixed)
@@ -54,20 +55,30 @@ class SmpmcPropagator(z3.UserPropagateBase):  # type: ignore[misc]
         self.trail: list[str] = []
         # trail marks, one per push()
         self.scopes: list[int] = []
+        # per scope: the theory state (see _theory_state) once that push's analysis found no conflict, None otherwise
+        self.scope_states: list[tuple[int, bool, int] | None] = []
         # ast key of a viable(...) application -> its argument specs, positional (position == parameter
         # index): ("const", value) for a Z3-constant-folded argument, ("var", arg_key) for a live one
         self.viable_args: dict[str, list[tuple[str, Any]]] = {}
         # ast key -> the actual z3 term, needed to build conflict() dependencies
         self.term_of: dict[str, Any] = {}
+        # the context every term in term_of is held through: the solver's own, also in a fresh() propagator. Z3 frees
+        # an MBQI sub-context once its round ends, but z3's Python API keeps every propagator registered until
+        # interpreter exit, so a term held through the sub-context would be released through a dangling context
+        # pointer, corrupting the heap. Sub-contexts share the solver's AST manager, so the solver's context can hold
+        # their terms just as well.
+        self.owner_ctx = owner_ctx if owner_ctx is not None else solver.ctx
 
     @staticmethod
     def _key(ast: Any) -> str:
-        """A cheap, stable key for a Z3 AST node -- the Z3 APIs for structural identity are too slow to
-        call on this hot path (molehill's own comment on the equivalent code), so this uses the printed
-        s-expression for an application (distinguishing e.g. different viable(...) argument tuples) and
-        the declaration name for a plain variable."""
+        """A cheap, stable key for a Z3 AST node -- the Z3 APIs for structural identity are too slow to call on this hot path (molehill's own comment on the
+        equivalent code), so this uses the printed s-expression for an application (distinguishing e.g. different viable(...) argument tuples) and the
+        declaration name for a plain variable."""
         text = ast.sexpr()
         return text if text.startswith("(") else ast.decl().name()
+
+    def _retain(self, term: Any) -> Any:
+        return z3.ExprRef(term.as_ast(), self.owner_ctx)
 
     def _created(self, term: Any) -> None:
         key = self._key(term)
@@ -78,15 +89,16 @@ class SmpmcPropagator(z3.UserPropagateBase):  # type: ignore[misc]
                 args.append(("const", arg.as_long()))
             else:
                 arg_key = self._key(arg)
-                self.term_of[arg_key] = arg
+                self.term_of[arg_key] = self._retain(arg)
                 self.add(arg)
                 args.append(("var", arg_key))
         self.viable_args[key] = args
-        self.term_of[key] = term
+        self.term_of[key] = self._retain(term)
 
     def _fixed(self, ast: Any, value: Any) -> None:
         key = self._key(ast)
-        self.term_of[key] = ast
+        if key not in self.term_of:
+            self.term_of[key] = self._retain(ast)
         if z3.is_true(value):
             decoded: Any = True
         elif z3.is_false(value):
@@ -96,13 +108,28 @@ class SmpmcPropagator(z3.UserPropagateBase):  # type: ignore[misc]
         self.partial_model[key] = decoded
         self.trail.append(key)
 
+    def _theory_state(self) -> tuple[int, bool, int]:
+        """Changes whenever the theory may answer a query differently: after each Storm call (whose verdict it caches), once a first full assignment has been
+        checked, and when the optimality threshold tightens."""
+        return (self.theory.mc_calls, self.theory.first_full_assignment_checked, self.theory.epoch)
+
     def push(self) -> None:
-        self.scopes.append(len(self.trail))
-        self._analyse()
+        mark = len(self.trail)
+        # Nothing fixed since the enclosing push, whose analysis found no conflict, and the theory unchanged since, also by
+        # the fresh() propagators sharing it: analysing again would ask the same queries and get the same answers.
+        # molehill skips on the first condition alone, which also skips pruning newly enabled by the shared theory.
+        redundant = bool(self.scopes) and self.scopes[-1] == mark and self.scope_states[-1] == self._theory_state()
+        self.scopes.append(mark)
+        if redundant:
+            self.scope_states.append(self._theory_state())
+            return
+        conflict = self._analyse()
+        self.scope_states.append(None if conflict else self._theory_state())
 
     def pop(self, num_scopes: int) -> None:
         for _ in range(num_scopes):
             mark = self.scopes.pop()
+            self.scope_states.pop()
             while len(self.trail) > mark:
                 key = self.trail.pop()
                 del self.partial_model[key]
@@ -110,10 +137,11 @@ class SmpmcPropagator(z3.UserPropagateBase):  # type: ignore[misc]
     def _final(self) -> None:
         self._analyse()
 
-    def _analyse(self) -> None:
-        """Check every currently-fixed viable(...) literal against the theory; on the first refutation,
-        push a learned conflict clause back into Z3 and stop (Z3 will call back in for more once it has
-        backtracked past this conflict).
+    def _analyse(self) -> bool:
+        """Check every currently-fixed viable(...) literal against the theory; on the first refutation, push a learned conflict clause back into Z3 and stop (Z3
+        will call back in for more once it has backtracked past this conflict).
+
+        :returns: whether a conflict was pushed
 
         Deliberately does NOT wait for every argument of viable(...) to be fixed before consulting the
         theory -- Algorithm 1 in the paper is explicit that it works over whatever partial model K
@@ -175,11 +203,13 @@ class SmpmcPropagator(z3.UserPropagateBase):  # type: ignore[misc]
                 if kind == "var":
                     deps.append(self.term_of[payload])
             self.conflict(deps=deps)
-            return
+            return True
+        return False
 
     def fresh(self, new_ctx: Any) -> SmpmcPropagator:
-        """Called by Z3 to create a sub-context propagator, notably during MBQI quantifier instantiation
-        for robust synthesis (Section 4.4). Shares theory (hence its cache) with the parent -- MBQI's
-        sub-contexts explore the same colored MDP, so there is no reason to lose cached results, and the
-        theory's own epoch/cache state must stay consistent across every propagator instance in a run."""
-        return SmpmcPropagator(None, new_ctx, self.theory, self.name_to_parameter)
+        """Called by Z3 to create a sub-context propagator, notably during MBQI quantifier instantiation for robust synthesis (Section 4.4).
+
+        Shares theory (hence its cache) with the parent -- MBQI's sub-contexts explore the same colored MDP, so there is no reason to lose cached results, and
+        the theory's own epoch/cache state must stay consistent across every propagator instance in a run.
+        """
+        return SmpmcPropagator(None, new_ctx, self.theory, self.name_to_parameter, owner_ctx=self.owner_ctx)

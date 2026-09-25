@@ -1,5 +1,5 @@
-"""Algorithm 1 "CheckMDPs" (arXiv:2511.08078): decide whether a `viable(...)`/`not viable(...)` literal
-over a partial parameter assignment is refuted, by model-checking the induced sub-MDP with Storm.
+"""Algorithm 1 "CheckMDPs" (arXiv:2511.08078): decide whether a `viable(...)`/`not viable(...)` literal over a partial parameter assignment is refuted, by
+model-checking the induced sub-MDP with Storm.
 
 Ported from molehill's Mole.partial_model_consistent + counterexamples.check
 (https://github.com/linusheck/molehill, GPL-3.0), but built directly on PAYNT's own primitives instead
@@ -57,18 +57,18 @@ _PI_VERIFICATION_MAX_STATES = 50_000
 
 @dataclass
 class TheoryResult:
-    """A refutation: the Theorem-6-minimized set of parameters responsible, and the value that triggered
-    it (kept only for logging/stats)."""
+    """A refutation: the Theorem-6-minimized set of parameters responsible, and the value that triggered it (kept only for logging/stats)."""
 
     conflict_parameters: list[int]
     value: Any
 
 
 class ColoredMdpTheory:
-    """Owns the Storm-calling half of the theory solver. Stateless across polarities/literals except for
-    the epoch counter (bumped once per optimum update, see the optimality loop in synthesizer.py) and the
-    result cache -- one instance is shared by every SmpmcPropagator produced via Z3's fresh() during MBQI,
-    so the cache (and epoch) stay consistent across quantifier-instantiation sub-contexts.
+    """Owns the Storm-calling half of the theory solver.
+
+    Stateless across polarities/literals except for the epoch counter (bumped once per optimum update, see the optimality loop in synthesizer.py) and the result
+    cache -- one instance is shared by every SmpmcPropagator produced via Z3's fresh() during MBQI, so the cache (and epoch) stay consistent across quantifier-
+    instantiation sub-contexts.
     """
 
     def __init__(
@@ -217,15 +217,18 @@ class ColoredMdpTheory:
                 for parameter in range(self.colored_mdp.parameter_space.num_parameters)
                 if parameter not in conflict_parameters
             )
+            assert self.stat.synthesizer.explored is not None
             self.stat.synthesizer.explored += pruning_estimate
 
         self.cache.insert_refuted(fixed, polarity, conflict_parameters)
         return TheoryResult(conflict_parameters, result.value)
 
     def _model_check(self, sub_mdp: Any, alt: bool) -> paynt.specification.property_result.PropertyResult:
-        """Like sub_mdp.model_check_property(self.prop, alt=alt), but for reward properties verifies (once
-        per direction) that PAYNT's default capped value-iteration environment actually converged, falling
-        back to policy iteration for this direction's remaining queries if it didn't. See __init__."""
+        """Like sub_mdp.model_check_property(self.prop, alt=alt), but for reward properties verifies (once per direction) that PAYNT's default capped value-
+        iteration environment actually converged, falling back to policy iteration for this direction's remaining queries if it didn't.
+
+        See __init__.
+        """
         if not self.prop.reward:
             return sub_mdp.model_check_property(self.prop, alt=alt)
 
@@ -291,8 +294,6 @@ class ColoredMdpTheory:
             # figures at this cap and takes well under a second, matching VI's own capped value on the same
             # model -- so a capped-but-technically-"non-converged" PI result is still trustworthy here.
             if not self.prop.sound:
-                payntbind.synthesis.set_max_iterations_minmax(
-                    env.solver_environment.minmax_solver_environment, self.prop.max_minmax_iterations
-                )
+                payntbind.synthesis.set_max_iterations_minmax(env.solver_environment.minmax_solver_environment, self.prop.max_minmax_iterations)
             self._reward_pi_environment = env
         return self._reward_pi_environment

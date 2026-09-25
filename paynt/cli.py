@@ -15,6 +15,7 @@ import paynt.dt.dtnest._cli
 import paynt.pomdp._cli
 import paynt.pomdp.saynt._cli
 import paynt.mdp_family._cli
+import paynt.synthesizer.smpmc._cli
 
 import rich_click as click
 import sys
@@ -93,7 +94,9 @@ def setup_logger(log_path: str | None = None) -> list[logging.Handler]:
     help="do not cap value/policy iteration: never uses an unconverged model checking result, but a slowly converging solve may run indefinitely",
 )
 @click.option("--timeout", type=int, panel="Synthesis", help="timeout (s)")
-@click.option("--method", type=click.Choice(["onebyone", "ar", "cegis", "hybrid", "smpmc"]), default="ar", show_default=True, panel="Synthesis", help="synthesis method")
+@click.option(
+    "--method", type=click.Choice(["onebyone", "ar", "cegis", "hybrid", "smpmc"]), default="ar", show_default=True, panel="Synthesis", help="synthesis method"
+)
 @click.option("--disable-expected-visits", is_flag=True, default=False, panel="Synthesis", help="do not compute expected visits for the splitting heuristic")
 @click.option(
     "--ce-generator",
@@ -105,12 +108,14 @@ def setup_logger(log_path: str | None = None) -> list[logging.Handler]:
 )
 @click.option(
     "--constraint",
-    type=click.Choice(["exists", "costs", "prob0", "prob1"]),
+    type=click.Choice(["exists", "exists_forall", "costs", "prob0", "prob1"]),
     default=None,
     panel="Synthesis",
     help="custom constraint over the parameter space (SMPMC and CEGIS); defaults to a plain existential search",
 )
-@click.option("--costs-threshold", type=int, default=None, panel="Synthesis", help="threshold for --constraint costs (reads a sketch.costs file in the project)")
+@click.option(
+    "--costs-threshold", type=int, default=None, panel="Synthesis", help="threshold for --constraint costs (reads a sketch.costs file in the project)"
+)
 @click.option(
     "--fsc-synthesis",
     is_flag=True,
@@ -130,6 +135,7 @@ def setup_logger(log_path: str | None = None) -> list[logging.Handler]:
 @add_options(paynt.mdp_family._cli.options)
 @add_options(paynt.dt._cli.options)
 @add_options(paynt.dt.dtnest._cli.options)
+@add_options(paynt.synthesizer.smpmc._cli.options)
 @click.option("--export", type=click.Choice(["jani", "drn", "pomdp"]), panel="Output", help="export the model to specified format and abort")
 @click.option("--export-synthesis", type=click.Path(), default=None, panel="Output", help="base filename to output synthesis result")
 @click.option("--profiling", is_flag=True, default=False, panel="Output", help="run profiling")
@@ -172,6 +178,8 @@ def paynt_run(
     ce_generator: str,
     constraint: str | None,
     costs_threshold: int | None,
+    smpmc_forall: str | None,
+    smpmc_verify_robust: bool,
     profiling: bool,
 ) -> None:
 
@@ -205,6 +213,8 @@ def paynt_run(
         "constraint_name": constraint,
         "costs_threshold": costs_threshold,
         "costs_file_path": os.path.join(project, "sketch.costs"),
+        "forall_pattern": smpmc_forall,
+        "verify_robust": smpmc_verify_robust,
     }
 
     storm_control = None

@@ -1,13 +1,12 @@
-"""Pure unit tests of SmpmcPropagator against a fake theory -- no Storm, no real colored MDP. This is
-deliberately the cheapest and most direct test of the Z3 UserPropagateBase integration itself, isolated
-from whether Storm/model-checking is doing the right thing (see test_theory.py for that).
+"""Pure unit tests of SmpmcPropagator against a fake theory -- no Storm, no real colored MDP.
 
-The FakeTheory below models `viable(p0, p1, p2)` as "p0 + p1 + p2 >= 3" -- simple enough to reason about
-by hand, but with three parameters (not two) specifically because the bug this test suite is built to
-catch (see theory.py's module docstring) only shows up once at least one parameter is not a live Z3
-variable at `created` time. That happens for the real engine's `--forall`-free single-option holes and,
-here, whenever a domain constraint pins a parameter to one value before the propagator inspects the
-viable(...) term -- both are exercised below.
+This is deliberately the cheapest and most direct test of the Z3 UserPropagateBase integration itself, isolated from whether Storm/model-checking is doing the
+right thing (see test_theory.py for that).
+
+The FakeTheory below models `viable(p0, p1, p2)` as "p0 + p1 + p2 >= 3" -- simple enough to reason about by hand, but with three parameters (not two)
+specifically because the bug this test suite is built to catch (see theory.py's module docstring) only shows up once at least one parameter is not a live Z3
+variable at `created` time. That happens for the real engine's `--forall`-free single-option holes and, here, whenever a domain constraint pins a parameter to
+one value before the propagator inspects the viable(...) term -- both are exercised below.
 """
 
 from __future__ import annotations
@@ -19,11 +18,14 @@ import paynt.synthesizer.smpmc.theory
 
 
 class FakeTheory:
-    """viable(p0, p1, p2) iff p0 + p1 + p2 >= 3."""
+    """Viable(p0, p1, p2) iff p0 + p1 + p2 >= 3."""
 
     def __init__(self):
         self.calls: list[tuple[dict, bool]] = []
         self.first_full_assignment_checked = False
+        # the parts of ColoredMdpTheory's state SmpmcPropagator watches (see SmpmcPropagator._theory_state)
+        self.mc_calls = 0
+        self.epoch = 0
 
     def check(self, fixed: dict, polarity: bool):
         self.calls.append((dict(fixed), polarity))
@@ -44,7 +46,7 @@ def _build_solver(width, p0_max, p1_max, p2_max, force_p2_to_zero=True):
     name_to_parameter = {"p0": 0, "p1": 1, "p2": 2}
     viable = z3.PropagateFunction("viable", z3.BitVecSort(width), z3.BitVecSort(width), z3.BitVecSort(width), z3.BoolSort())
     theory = FakeTheory()
-    propagator = paynt.synthesizer.smpmc.theory.SmpmcPropagator(solver, None, theory, name_to_parameter)
+    _propagator = paynt.synthesizer.smpmc.theory.SmpmcPropagator(solver, None, theory, name_to_parameter)
 
     solver.add(z3.ULE(p0, p0_max))
     solver.add(z3.ULE(p1, p1_max))
@@ -74,11 +76,13 @@ class TestExistentialSearch:
         assert len(theory.calls) > 0, "expected the theory to actually be consulted before concluding unsat"
 
     def test_constant_folded_parameter_still_participates_in_theory_checks(self):
-        """Regression test for the bug this module's docstring describes: p2 is pinned to 0 via a plain
-        equality, so Z3 constant-folds it into viable(p0, p1, 0) before `created` fires. A propagator that
-        only tracks live-variable arguments would build `fixed` dicts missing parameter 2 entirely, so
-        FakeTheory.check (which requires len(fixed) == 3) would never actually run -- silently returning
-        `sat` for a non-viable witness. This asserts both the specific failure mode and its absence."""
+        """Regression test for the bug this module's docstring describes: p2 is pinned to 0 via a plain equality, so Z3 constant-folds it into viable(p0, p1, 0)
+        before `created` fires.
+
+        A propagator that only tracks live-variable arguments would build `fixed` dicts missing parameter 2 entirely, so FakeTheory.check (which requires
+        len(fixed) == 3) would never actually run -- silently returning `sat` for a non-viable witness. This asserts both the specific failure mode and its
+        absence.
+        """
         solver, (p0, p1, p2), theory = _build_solver(width=3, p0_max=1, p1_max=0, p2_max=0, force_p2_to_zero=True)
         result = solver.check()
         assert result == z3.unsat
@@ -103,12 +107,12 @@ class TestExistentialSearch:
 
 
 class TestChecksAFullAssignmentFirst:
-    """Regression coverage for the "check a full assignment first" heuristic ported from molehill's own
-    Mole.partial_model_consistent (its "magic trick"): a genuinely partial query (some but not all
-    parameters fixed) must never reach the theory before at least one fully-fixed one has. Found necessary
-    on a real 1.65M-state model where a threshold so generous that no partial query is ever refutable
-    turned this into pure overhead -- an expensive model check paid once per parameter Z3 fixes on the way
-    to its first candidate, for no pruning benefit. See theory.py's module docstring."""
+    """Regression coverage for the "check a full assignment first" heuristic ported from molehill's own Mole.partial_model_consistent (its "magic trick"): a
+    genuinely partial query (some but not all parameters fixed) must never reach the theory before at least one fully-fixed one has.
+
+    Found necessary on a real 1.65M-state model where a threshold so generous that no partial query is ever refutable turned this into pure overhead -- an
+    expensive model check paid once per parameter Z3 fixes on the way to its first candidate, for no pruning benefit. See theory.py's module docstring.
+    """
 
     def test_no_partial_query_reaches_the_theory_before_the_first_full_one(self):
         solver, _vars, theory = _build_solver(width=3, p0_max=3, p1_max=1, p2_max=0)
@@ -116,8 +120,7 @@ class TestChecksAFullAssignmentFirst:
         first_full_index = next(i for i, (fixed, _polarity) in enumerate(theory.calls) if len(fixed) == 3)
         for fixed, _polarity in theory.calls[:first_full_index]:
             assert len(fixed) in (0, 3), (
-                f"a genuinely partial query ({fixed}) reached the theory before any full assignment did: "
-                f"{theory.calls[:first_full_index + 1]}"
+                f"a genuinely partial query ({fixed}) reached the theory before any full assignment did: {theory.calls[: first_full_index + 1]}"
             )
 
     def test_partial_queries_resume_after_the_first_full_one(self):
@@ -136,9 +139,8 @@ class TestChecksAFullAssignmentFirst:
         )
 
     def test_the_flag_is_shared_across_fresh_propagator_instances(self):
-        """fresh() propagators (MBQI sub-contexts) share theory, so a full assignment checked via one
-        instance must be visible to another -- this is what lets partial-query pruning resume globally,
-        not per sub-context."""
+        """Fresh() propagators (MBQI sub-contexts) share theory, so a full assignment checked via one instance must be visible to another -- this is what lets
+        partial-query pruning resume globally, not per sub-context."""
         theory = FakeTheory()
         propagator_a = paynt.synthesizer.smpmc.theory.SmpmcPropagator(z3.Solver(), None, theory, {})
         propagator_b = propagator_a.fresh(None)
@@ -147,14 +149,61 @@ class TestChecksAFullAssignmentFirst:
         assert propagator_a.theory.first_full_assignment_checked is True
 
 
+class TestPushSkipsRedundantAnalyses:
+    """A push re-analyses only if a value was fixed or the (shared) theory changed since the enclosing push; driven by hand, outside any Z3 search, on a
+    viable(1, 1, 1) literal fixed to true -- viable for FakeTheory, so no conflict is ever pushed."""
+
+    def _propagator(self):
+        theory = FakeTheory()
+        propagator = paynt.synthesizer.smpmc.theory.SmpmcPropagator(z3.Solver(), None, theory, {})
+        propagator.viable_args["v"] = [("const", 1), ("const", 1), ("const", 1)]
+        propagator.partial_model["v"] = True
+        propagator.trail.append("v")
+        return propagator, theory
+
+    def test_an_unchanged_push_skips_the_analysis(self):
+        propagator, theory = self._propagator()
+        propagator.push()
+        propagator.push()
+        assert len(theory.calls) == 1
+
+    def test_a_newly_fixed_value_is_analysed(self):
+        propagator, theory = self._propagator()
+        propagator.push()
+        propagator.partial_model["x"] = 0
+        propagator.trail.append("x")
+        propagator.push()
+        assert len(theory.calls) == 2
+
+    def test_a_theory_change_is_analysed(self):
+        """e.g. a fresh() propagator sharing the theory made a Storm call in between, whose cached verdict may now refute a query here."""
+        propagator, theory = self._propagator()
+        propagator.push()
+        theory.mc_calls += 1
+        propagator.push()
+        assert len(theory.calls) == 2
+
+    def test_pop_drops_the_scope_state_with_the_scope(self):
+        propagator, _theory = self._propagator()
+        propagator.push()
+        propagator.push()
+        propagator.pop(1)
+        assert len(propagator.scopes) == len(propagator.scope_states) == 1
+
+
 class RobustFakeTheory:
-    """viable(x0, x1, y0) iff x0 + x1 >= y0 -- a different predicate from FakeTheory above (deliberately:
-    this is what exercises the forall-quantified/MBQI path meaningfully, since it depends on the third
-    argument, whereas the plain-existential tests above never vary the "environment" argument)."""
+    """Viable(x0, x1, y0) iff x0 + x1 >= y0 -- a different predicate from FakeTheory above (deliberately:
+
+    this is what exercises the forall-quantified/MBQI path meaningfully, since it depends on the third argument, whereas the plain-existential tests above never
+    vary the "environment" argument).
+    """
 
     def __init__(self):
         self.calls: list[tuple[dict, bool]] = []
         self.first_full_assignment_checked = False
+        # the parts of ColoredMdpTheory's state SmpmcPropagator watches (see SmpmcPropagator._theory_state)
+        self.mc_calls = 0
+        self.epoch = 0
 
     def check(self, fixed: dict, polarity: bool):
         self.calls.append((dict(fixed), polarity))
@@ -168,7 +217,10 @@ class RobustFakeTheory:
 
 
 class TestRobustSearch:
-    """The forall-quantified (MBQI) path: exists x0,x1 . forall y0 in [0,y_max] . viable(x0,x1,y0)."""
+    """The forall-quantified (MBQI) path: exists x0,x1 .
+
+    forall y0 in [0,y_max] . viable(x0,x1,y0).
+    """
 
     def _build_robust_solver(self, width, x_max, y_max):
         solver = z3.Solver()

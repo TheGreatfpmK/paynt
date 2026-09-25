@@ -47,8 +47,8 @@ class TestCostsConstraintOnSmpmc:
 
 
 class TestCostsConstraintOnCegis:
-    """The same constraint, threaded through the other consumer -- must agree with SMPMC exactly, since
-    both are querying the same underlying combinatorics, just via different search strategies."""
+    """The same constraint, threaded through the other consumer -- must agree with SMPMC exactly, since both are querying the same underlying combinatorics,
+    just via different search strategies."""
 
     def test_agrees_with_smpmc_at_the_exact_boundary(self, smpmc_tiny_colored_mdp_factory, smpmc_tiny_task):
         result = _run(smpmc_tiny_colored_mdp_factory.build(), smpmc_tiny_task, threshold=25, method="cegis")

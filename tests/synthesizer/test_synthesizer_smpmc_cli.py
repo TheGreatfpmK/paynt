@@ -1,3 +1,4 @@
+import os
 import subprocess
 import sys
 import textwrap
@@ -19,9 +20,8 @@ _RUN_SCRIPT = textwrap.dedent("""
 
 
 class TestSynthesizerSmpmcCli:
-    """Subprocess regression test mirroring test_synthesizer_ar.py: like every non-AR engine,
-    SynthesizerSMPMC.synthesize_one does not call resource_limit_reached() inside a single blocking
-    solver.check(), so an external kill is the only reliable way to bound it."""
+    """Subprocess regression test mirroring test_synthesizer_ar.py: like every non-AR engine, SynthesizerSMPMC.synthesize_one does not call
+    resource_limit_reached() inside a single blocking solver.check(), so an external kill is the only reliable way to bound it."""
 
     def test_does_not_crash_on_threshold_property(self):
         sketch_path, props_path = get_sketch_paths("tests/smpmc-tiny")
@@ -52,3 +52,17 @@ class TestSynthesizerSmpmcCli:
             timeout=60,
         )
         assert result.returncode == 0, result.stderr
+
+    def test_robust_synthesis_exits_cleanly(self):
+        """Regression: MBQI's fresh() propagators held terms through Z3 sub-contexts that Z3 had already freed, corrupting the heap at interpreter exit (see
+        SmpmcPropagator.owner_ctx) -- only a separate process sees that, and not on every run, as it depends on the heap layout; test_robust.py checks the
+        invariant itself."""
+        project = os.path.dirname(get_sketch_paths("tests/mdp-family-rocks-4-2")[0])
+        result = subprocess.run(
+            [sys.executable, "-m", "paynt", project, "--method", "smpmc", "--constraint", "exists_forall", "--smpmc-verify-robust"],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        assert result.returncode == 0, result.stderr
+        assert "robustness verified by AR: True" in result.stdout

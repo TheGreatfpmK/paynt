@@ -1,8 +1,9 @@
-"""ParameterBitVecEncoding: the BitVec variables and domain (tau_V) formula for a parameter space, used
-by SynthesizerSMPMC.synthesize_one for every synthesis run."""
+"""ParameterBitVecEncoding: the BitVec variables and domain (tau_V) formula for a parameter space, used by SynthesizerSMPMC.synthesize_one for every synthesis
+run."""
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from typing import Any
 
 import z3
@@ -25,7 +26,9 @@ class ParameterBitVecEncoding:
 
     def in_range(self, parameter_space: paynt.parameter_space.parameter_space.ParameterSpace | None = None) -> Any:
         """tau_V's domain conjunct: every parameter constrained to one of its currently-allowed options.
-        Defaults to self.parameter_space, but accepts a narrower one (e.g. a split-off child subspace)."""
+
+        Defaults to self.parameter_space, but accepts a narrower one (e.g. a split-off child subspace).
+        """
         if parameter_space is None:
             parameter_space = self.parameter_space
         clauses = []
@@ -36,22 +39,27 @@ class ParameterBitVecEncoding:
         return clauses[0] if len(clauses) == 1 else z3.And(clauses)
 
     def exclude(self, assignment: paynt.parameter_space.parameter_space.ParameterSpace) -> Any:
-        """A clause ruling out exactly this one concrete assignment -- used by the optimality loop to
-        force Z3 to look elsewhere after recording assignment as the new best, since nothing else about
-        the Z3-level formula changes when only the theory's threshold tightens."""
+        """A clause ruling out exactly this one concrete assignment -- used by the optimality loop to force Z3 to look elsewhere after recording assignment as
+        the new best, since nothing else about the Z3-level formula changes when only the theory's threshold tightens."""
         assert assignment.size == 1, "exclude() expects a single concrete assignment"
-        equalities = [
-            self.variables[parameter] == self.value(assignment.parameter_options(parameter)[0])
-            for parameter in range(assignment.num_parameters)
-        ]
+        equalities = [self.variables[parameter] == self.value(assignment.parameter_options(parameter)[0]) for parameter in range(assignment.num_parameters)]
         conjunction = equalities[0] if len(equalities) == 1 else z3.And(equalities)
         return z3.Not(conjunction)
 
     def extract_assignment(
-        self, model: Any, parameter_space: paynt.parameter_space.parameter_space.ParameterSpace
+        self,
+        model: Any,
+        parameter_space: paynt.parameter_space.parameter_space.ParameterSpace,
+        free_parameters: Iterable[int] = (),
     ) -> paynt.parameter_space.parameter_space.ParameterSpace:
+        """:param free_parameters: parameters left at their options in parameter_space rather than fixed to their value in
+        model -- the universally quantified parameters of a robust result, whose model values mean nothing"""
+        free = set(free_parameters)
         parameter_options = []
         for parameter in range(parameter_space.num_parameters):
+            if parameter in free:
+                parameter_options.append(parameter_space.parameter_options(parameter))
+                continue
             option = model.eval(self.variables[parameter], model_completion=True).as_long()
             parameter_options.append([option])
         return parameter_space.assume_options_copy(parameter_options)

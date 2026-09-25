@@ -1,5 +1,5 @@
-"""Integration tests of ColoredMdpTheory (Algorithm 1 "CheckMDPs") against a real colored MDP and real
-Storm model-checking calls, on the smpmc-tiny fixture (see models/tests/smpmc-tiny)."""
+"""Integration tests of ColoredMdpTheory (Algorithm 1 "CheckMDPs") against a real colored MDP and real Storm model-checking calls, on the smpmc-tiny fixture
+(see models/tests/smpmc-tiny)."""
 
 from __future__ import annotations
 
@@ -59,15 +59,13 @@ class TestColoredMdpTheoryOnFullAssignments:
 
 
 class TestColoredMdpTheorySingletonEta:
-    """Regression coverage for a real correctness bug found on models/tests/generic-maze: for a fully-
-    fixed (singleton) eta, ColoredMdp.build() hands back an MDP-typed model even though it has exactly one
-    choice per state, and solving that via minmax/policy iteration can disagree with the exact value
-    build_assignment()'s DTMC conversion gives for the mathematically identical process -- by an amount
-    that lands just past model_checking_precision. That was enough to make SynthesizerSMPMC's optimality
-    loop treat a non-improving witness as still-viable and terminate with the wrong (much worse) optimum:
-    real 24-hole run converged to 36001.06 instead of the true minimum around 8.13. check() now uses
-    build_assignment() directly whenever eta.size == 1, sidestepping the disagreement rather than working
-    around its symptom.
+    """Regression coverage for a real correctness bug found on models/tests/generic-maze: for a fully- fixed (singleton) eta, ColoredMdp.build() hands back an
+    MDP-typed model even though it has exactly one choice per state, and solving that via minmax/policy iteration can disagree with the exact value
+    build_assignment()'s DTMC conversion gives for the mathematically identical process -- by an amount that lands just past model_checking_precision.
+
+    That was enough to make SynthesizerSMPMC's optimality loop treat a non-improving witness as still-viable and terminate with the wrong (much worse) optimum:
+    real 24-hole run converged to 36001.06 instead of the true minimum around 8.13. check() now uses build_assignment() directly whenever eta.size == 1,
+    sidestepping the disagreement rather than working around its symptom.
     """
 
     def test_a_full_assignment_is_checked_via_the_exact_dtmc_value_not_build(self):
@@ -96,10 +94,11 @@ class TestColoredMdpTheorySingletonEta:
 
 
 class TestColoredMdpTheoryOutOfRangeValues:
-    """Regression test: an out-of-range option must be treated as inconclusive (letting the plain
-    in_range() Boolean constraint reject it), not passed through to ColoredMdp.build() -- which previously
-    crashed stormpy's submodel construction with a deadlock-state error for some out-of-range partial
-    assignments. See checker.py's check() for the guard this tests."""
+    """Regression test: an out-of-range option must be treated as inconclusive (letting the plain in_range() Boolean constraint reject it), not passed through
+    to ColoredMdp.build() -- which previously crashed stormpy's submodel construction with a deadlock-state error for some out-of-range partial assignments.
+
+    See checker.py's check() for the guard this tests.
+    """
 
     def test_out_of_range_option_is_inconclusive_not_a_crash(self, smpmc_tiny_colored_mdp, smpmc_tiny_task):
         prop = smpmc_tiny_task.specification.constraints[0]
@@ -160,9 +159,8 @@ class TestColoredMdpTheoryRewardConvergence:
         assert second.value == first.value
 
     def test_probability_properties_are_unaffected(self, smpmc_tiny_colored_mdp, smpmc_tiny_task):
-        """The escalation machinery only ever triggers for reward properties -- probability values are
-        bounded in [0,1] and don't exhibit this failure mode, so a probability property should never end
-        up flagged for policy iteration."""
+        """The escalation machinery only ever triggers for reward properties -- probability values are bounded in [0,1] and don't exhibit this failure mode, so
+        a probability property should never end up flagged for policy iteration."""
         prop = smpmc_tiny_task.specification.constraints[0]
         theory = paynt.synthesizer.smpmc.checker.ColoredMdpTheory(smpmc_tiny_colored_mdp, prop)
         sub_mdp, _selected_choices = smpmc_tiny_colored_mdp.build(smpmc_tiny_colored_mdp.parameter_space)
@@ -210,8 +208,8 @@ class TestColoredMdpTheoryStatisticWiring:
         return synthesizer, theory
 
     def test_stat_is_optional(self, smpmc_tiny_colored_mdp, smpmc_tiny_task):
-        """The default (no stat argument) must keep working -- test_propagator.py's fake-theory tests and
-        every other test_theory.py test above construct ColoredMdpTheory this way."""
+        """The default (no stat argument) must keep working -- test_propagator.py's fake-theory tests and every other test_theory.py test above construct
+        ColoredMdpTheory this way."""
         prop = smpmc_tiny_task.specification.constraints[0]
         theory = paynt.synthesizer.smpmc.checker.ColoredMdpTheory(smpmc_tiny_colored_mdp, prop)
         assert theory.stat is None

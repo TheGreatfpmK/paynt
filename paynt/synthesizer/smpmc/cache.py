@@ -36,7 +36,7 @@ Two other deliberate deviations from a byte-for-byte port, both behavior-preserv
 `id` must be a string, so an entry's payload needs the same stringify/parse round-trip molehill uses --
 but ast.literal_eval (safe, stdlib) replaces molehill's bare eval() for parsing it back. And trie elements
 are f"{parameter}={option}" strings, matching molehill's own f"{name}={option}" encoding exactly (adapted
-from a hole *name* to PAYNT's integer parameter index) rather than plain (parameter, option) tuples --
+from a parameter *name* to PAYNT's integer parameter index) rather than plain (parameter, option) tuples --
 confirmed empirically that mercury-settrie's subset/superset comparison does not treat tuple elements
 correctly (silently ignores everything but the first component, so e.g. (1, 0) and (1, 1) collide),
 so this isn't just fidelity to the reference implementation, it's a required workaround: molehill's own
@@ -46,10 +46,18 @@ choice of string-encoded elements over a more natural tuple encoding was very li
 from __future__ import annotations
 
 import ast
+import enum
+from typing import Final
 
 import settrie
 
-MISS = object()
+
+class _Miss(enum.Enum):
+    MISS = enum.auto()
+
+
+# a single-member enum rather than object(), so that `is MISS` narrows lookup()'s result for mypy
+MISS: Final = _Miss.MISS
 
 
 def _key(fixed: dict[int, int]) -> set[str]:
@@ -57,10 +65,10 @@ def _key(fixed: dict[int, int]) -> set[str]:
 
 
 class PartialModelCache:
-    """Caches ColoredMdpTheory.check(fixed, polarity) verdicts, with subset/superset subsumption so a
-    single refutation (or inconclusive verdict) can answer many future queries without another Storm call.
-    See module docstring for the subsumption rules and the epoch-driven reset used for inconclusive
-    entries.
+    """Caches ColoredMdpTheory.check(fixed, polarity) verdicts, with subset/superset subsumption so a single refutation (or inconclusive verdict) can answer
+    many future queries without another Storm call.
+
+    See module docstring for the subsumption rules and the epoch-driven reset used for inconclusive entries.
     """
 
     def __init__(self) -> None:
@@ -76,10 +84,10 @@ class PartialModelCache:
             self._inconclusive = [settrie.SetTrie(), settrie.SetTrie()]
             self._inconclusive_epoch = epoch
 
-    def lookup(self, fixed: dict[int, int], polarity: bool, epoch: int) -> list[int] | None | object:
+    def lookup(self, fixed: dict[int, int], polarity: bool, epoch: int) -> list[int] | None | _Miss:
         """:returns: the cached conflict-parameter list on a cached (or subsumed) refutation, None on a
-            still-valid cached (or subsumed) inconclusive verdict, or the MISS sentinel if nothing usable
-            is cached."""
+        still-valid cached (or subsumed) inconclusive verdict, or the MISS sentinel if nothing usable
+        is cached."""
         self._sync_epoch(epoch)
         key = _key(fixed)
         p = int(polarity)

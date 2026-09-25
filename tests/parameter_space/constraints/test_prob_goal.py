@@ -1,10 +1,10 @@
-"""Integration tests for ProbGoalConstraint against models/tests/smpmc-tiny, whose 8 combinations happen
-to give reachability probability of exactly 0.0 or 1.0 -- never anything in between -- for reaching
-"done" (verified directly against Storm: only (x1=1,x2=4), (x1=4,x2=3) and (x1=4,x2=4), all with x3=8,
-give 1.0; every other combination gives 0.0). That makes it an unambiguous fixture for prob0/prob1: since
-every parameter is fully determined for a "generic" sketch (no residual nondeterminism, see
-checker.py's singleton-eta shortcut), "possible" (prob0) and "almost-sure" (prob1) coincide here on
-exactly the same 3-combination set -- the constraint should accept only those and refute everything else.
+"""Integration tests for ProbGoalConstraint against models/tests/smpmc-tiny, whose 8 combinations happen to give reachability probability of exactly 0.0 or 1.0
+-- never anything in between -- for reaching "done" (verified directly against Storm: only (x1=1,x2=4), (x1=4,x2=3) and (x1=4,x2=4), all with x3=8, give 1.0;
+every other combination gives 0.0).
+
+That makes it an unambiguous fixture for prob0/prob1: since every parameter is fully determined for a "generic" sketch (no residual nondeterminism, see
+checker.py's singleton-eta shortcut), "possible" (prob0) and "almost-sure" (prob1) coincide here on exactly the same 3-combination set -- the constraint should
+accept only those and refute everything else.
 """
 
 from __future__ import annotations

@@ -1,6 +1,8 @@
 """Fixture-based tests of SynthesizerSMPMC, mirroring tests/pomdp/test_pomdp_synthesizer.py's style:
-instantiate the synthesizer directly, synthesize, and assert against a pinned answer -- plus cross-checks
-against AR/OneByOne on the same fixtures, since SMPMC and those engines must agree on feasibility."""
+
+instantiate the synthesizer directly, synthesize, and assert against a pinned answer -- plus cross-checks against AR/OneByOne on the same fixtures, since SMPMC
+and those engines must agree on feasibility.
+"""
 
 from __future__ import annotations
 
@@ -45,10 +47,11 @@ class TestSmpmcOnOptimalityProperty:
 
 
 class TestSmpmcOnFamilyModel:
-    """mdp-family-avoid-8-2-easy is a feature_kind=="family" sketch: --method ar on it routes to
-    PolicyTreeSynthesizer (a robust-by-construction game-abstraction algorithm solving a *different*
-    problem), not plain existential search -- so the correct cross-check for Phase 1's plain-exists SMPMC
-    is --method onebyone, which api.py also routes through the generic Synthesizer.for_method path."""
+    """Mdp-family-avoid-8-2-easy is a feature_kind=="family" sketch: --method ar on it routes to PolicyTreeSynthesizer (a robust-by-construction game-
+
+    abstraction algorithm solving a *different* problem), not plain existential search -- so the correct cross-check for Phase 1's plain-exists SMPMC is
+    --method onebyone, which api.py also routes through the generic Synthesizer.for_method path.
+    """
 
     def test_agrees_with_onebyone_on_feasibility(self, mdp_family_colored_mdp, mdp_family_task):
         smpmc_result = paynt.synthesizer.smpmc.SynthesizerSMPMC(mdp_family_colored_mdp, mdp_family_task).run()
