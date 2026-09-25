@@ -82,9 +82,9 @@ def add_policy_parameters(colored_mdp: paynt.colored_mdp.ColoredMdp) -> tuple[pa
 
     choice_to_assignment = colored_mdp.coloring.getChoiceToAssignment()
     state_names = _state_names(mdp)
-    # A policy picks actions, so otherwise a full assignment would not induce a DTMC. With several choices enabled, the choice among them would be left open:
-    # PAYNT's policy trees give it to the environment (checking a policy in the worst direction), molehill implicitly to the agent. With none enabled, a
-    # policy picking that action would deadlock. Robust SMPMC resolves neither yet.
+    # A policy picks actions, so otherwise the augmented model would violate Definition 2 of arXiv:2511.08078: a full assignment (environment and policy)
+    # would not induce a Markov chain. With several choices of the picked action enabled, the model stays nondeterministic; with none, it deadlocks. The
+    # family itself only colors the environment's choices (the policy tree leaves the policy open), so this is the first point where it is checked.
     requirement = "robust synthesis needs each environment to enable exactly one choice of each action of a state"
     shared = _shared_action(colored_mdp, choice_to_assignment)
     if shared is not None:
