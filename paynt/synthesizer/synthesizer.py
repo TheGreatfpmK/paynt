@@ -183,6 +183,11 @@ class Synthesizer:
         if self.best_assignment is not None:
             logger.info("printing synthesized assignment below:")
             logger.info(self.best_assignment)
+        elif optimum_threshold is not None and self.task.specification.optimality is not None:
+            logger.info(
+                f"no assignment improving the given --optimum-threshold {optimum_threshold} was found -- either {optimum_threshold} is already at or "
+                "within model checking precision of the optimum, or no assignment reaches it at all"
+            )
 
         if self.best_assignment is not None and self.best_assignment.size == 1:
             dtmc = self.colored_mdp.build_assignment(self.best_assignment)

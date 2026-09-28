@@ -57,18 +57,27 @@ _PI_VERIFICATION_MAX_STATES = 50_000
 
 @dataclass
 class TheoryResult:
-    """A refutation: the Theorem-6-minimized set of parameters responsible, and the value that triggered it (kept only for logging/stats)."""
+    """A refutation: the Theorem-6-minimized set of parameters responsible, and the value that triggered it."""
 
     conflict_parameters: list[int]
     value: Any
 
 
+@dataclass
+class WorstCase:
+    """A bound on a policy's worst case over the environments (at least as bad as that worst case, up to model checking precision); exact if some environment
+    attains it."""
+
+    value: Any
+    exact: bool
+
+
 class ColoredMdpTheory:
     """Owns the Storm-calling half of the theory solver.
 
-    Stateless across polarities/literals except for the epoch counter (bumped once per optimum update, see the optimality loop in synthesizer.py) and the result
-    cache -- one instance is shared by every SmpmcPropagator produced via Z3's fresh() during MBQI, so the cache (and epoch) stay consistent across quantifier-
-    instantiation sub-contexts.
+    Stateless across polarities/literals except for the epoch counter (bumped once per optimum update, see the optimality loop in synthesizer.py), the result
+    cache and the worst-case bounds -- one instance is shared by every SmpmcPropagator produced via Z3's fresh() during MBQI, so all of them stay consistent
+    across quantifier-instantiation sub-contexts.
     """
 
     def __init__(
@@ -76,7 +85,9 @@ class ColoredMdpTheory:
         colored_mdp: paynt.colored_mdp.ColoredMdp,
         prop: paynt.specification.property.Property,
         stat: paynt.synthesizer.statistic.Statistic | None = None,
+        forall_parameters: list[int] | None = None,
     ):
+        """:param forall_parameters: the universally quantified parameters of a robust search; the remaining ones, the policy, key worst_case_bound()"""
         self.colored_mdp = colored_mdp
         self.prop = prop
         # optional: not needed by the propagator tests (test_propagator.py -- a fake theory that never
@@ -94,11 +105,22 @@ class ColoredMdpTheory:
         self.state_to_parameters: list[Any] = colored_mdp.coloring.getStateToHoles()
         self.cache = paynt.synthesizer.smpmc.cache.PartialModelCache()
         # bumped by the optimality loop (synthesizer.py) each time the threshold tightens, so cached
-        # "inconclusive" verdicts computed under a looser threshold aren't wrongly reused -- see
-        # PartialModelCache's docstring. Refutations need no such tagging: they stay valid as the
-        # threshold only ever tightens.
+        # verdicts computed under a looser threshold that may no longer hold aren't wrongly reused -- see
+        # PartialModelCache's docstring
         self.epoch = 0
         self.mc_calls = 0
+
+        # Robust search: Z3 only reports a policy once every environment has been covered by refuted `not viable` literals, each of which comes with its
+        # model-checked worst case over its region -- so the worst of those, per policy, bounds the policy's worst case over all environments, and beats the
+        # current threshold. See worst_case_bound(); reset with every epoch, as the covering is only valid under the threshold it was refuted against.
+        self.policy_parameters: list[int] | None = None
+        if forall_parameters:
+            forall = set(forall_parameters)
+            self.policy_parameters = [parameter for parameter in range(colored_mdp.parameter_space.num_parameters) if parameter not in forall]
+        self._worst_case: dict[tuple[int, ...], WorstCase] = {}
+        # policies with a refutation of unknown value: no bound
+        self._worst_case_unknown: set[tuple[int, ...]] = set()
+        self._worst_case_epoch = 0
 
         # Set once the first fully-fixed parameter assignment has been checked (via check()), regardless
         # of its verdict -- see theory.py's _analyse(), which skips every *partial* query until this is
@@ -148,8 +170,22 @@ class ColoredMdpTheory:
                 return None
 
         cached = self.cache.lookup(fixed, polarity, self.epoch)
+        if cached is None:
+            return None
         if cached is not paynt.synthesizer.smpmc.cache.MISS:
-            return TheoryResult(cached, None) if cached is not None else None
+            refutation = min(cached, key=lambda refutation: len(refutation.conflict_parameters))
+            if polarity is False:
+                # each cached region contains the query's, so each value bounds it; the tightest does so best
+                known = [refutation for refutation in cached if refutation.value is not None]
+                exact_refutations = [refutation for refutation in known if refutation.exact]
+                if exact_refutations:
+                    self._record_worst_case(fixed, exact_refutations[0].value, True)
+                elif known:
+                    tightest = min if self.prop.minimizing else max
+                    self._record_worst_case(fixed, tightest(refutation.value for refutation in known), False)
+                else:
+                    self._record_worst_case(fixed, None, False)
+            return TheoryResult(refutation.conflict_parameters, refutation.value)
 
         eta = self.colored_mdp.parameter_space.copy()
         for parameter, option in fixed.items():
@@ -220,8 +256,45 @@ class ColoredMdpTheory:
             assert self.stat.synthesizer.explored is not None
             self.stat.synthesizer.explored += pruning_estimate
 
-        self.cache.insert_refuted(fixed, polarity, conflict_parameters)
+        exact = eta.size == 1
+        self.cache.insert_refuted(fixed, polarity, conflict_parameters, self.epoch, result.value, exact)
+        if polarity is False:
+            self._record_worst_case(fixed, result.value, exact)
         return TheoryResult(conflict_parameters, result.value)
+
+    def _record_worst_case(self, fixed: dict[int, int], value: Any, exact: bool) -> None:
+        """Account a refuted `not viable` literal, whose region's worst case is (bounded by) value, to its policy -- if the policy is fully fixed."""
+        if self.policy_parameters is None or any(parameter not in fixed for parameter in self.policy_parameters):
+            return
+        self._sync_worst_case()
+        policy = tuple(fixed[parameter] for parameter in self.policy_parameters)
+        if value is None:
+            self._worst_case_unknown.add(policy)
+            return
+        current = self._worst_case.get(policy)
+        if current is None or (value > current.value if self.prop.minimizing else value < current.value):
+            self._worst_case[policy] = WorstCase(value, exact)
+        elif value == current.value and exact:
+            current.exact = True
+
+    def _sync_worst_case(self) -> None:
+        if self._worst_case_epoch != self.epoch:
+            self._worst_case = {}
+            self._worst_case_unknown = set()
+            self._worst_case_epoch = self.epoch
+
+    def worst_case_bound(self, policy: dict[int, int]) -> WorstCase | None:
+        """A bound on the worst case over the environments of policy -- sound once Z3 has reported policy as robust under the current threshold, as it then
+        refuted every environment's `not viable` literal; None if there is no such bound.
+
+        :param policy: {parameter: option} for every policy parameter
+        """
+        assert self.policy_parameters is not None, "worst-case bounds are only kept for a robust search"
+        self._sync_worst_case()
+        key = tuple(policy[parameter] for parameter in self.policy_parameters)
+        if key in self._worst_case_unknown:
+            return None
+        return self._worst_case.get(key)
 
     def _model_check(self, sub_mdp: Any, alt: bool) -> paynt.specification.property_result.PropertyResult:
         """Like sub_mdp.model_check_property(self.prop, alt=alt), but for reward properties verifies (once per direction) that PAYNT's default capped value-

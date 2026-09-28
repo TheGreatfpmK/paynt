@@ -11,7 +11,7 @@ both together, and not multiple constraints -- see the plan), one constraint at 
 --constraint (paynt.parameter_space.constraints, shared with CEGIS). Robust synthesis (--constraint
 exists_forall, Section 4.4) quantifies the parameters selected by --smpmc-forall universally; on an MDP family,
 the policy is made explicit as parameters (see _augment.py) and the family's own parameters are the default
-universally quantified environment.
+universally quantified environment. An optimality objective then optimizes the worst case over those.
 """
 
 from __future__ import annotations
@@ -61,8 +61,6 @@ class SynthesizerSMPMC(paynt.synthesizer.synthesizer.Synthesizer):
             self._init_forall_parameters()
 
     def _init_forall_parameters(self) -> None:
-        if self.task.specification.has_optimality:
-            raise ValueError("--constraint exists_forall needs a threshold property, optimality objectives are not supported")
         if self.colored_mdp.feature_kind == "family":
             # the family's parameters are the environment; making the policy explicit lets it be quantified existentially
             self.colored_mdp, self.forall_parameters = paynt.synthesizer.smpmc._augment.add_policy_parameters(self.colored_mdp)
@@ -86,18 +84,10 @@ class SynthesizerSMPMC(paynt.synthesizer.synthesizer.Synthesizer):
 
     def synthesize_one(self, node: paynt.synthesizer.search_node.SearchNode) -> paynt.parameter_space.parameter_space.ParameterSpace | None:
         encoding = paynt.synthesizer.smpmc.encoding.ParameterBitVecEncoding(node.parameter_space)
-        theory = paynt.synthesizer.smpmc.checker.ColoredMdpTheory(self.colored_mdp, self.prop, self.stat)
+        theory = paynt.synthesizer.smpmc.checker.ColoredMdpTheory(self.colored_mdp, self.prop, self.stat, self.forall_parameters)
 
         sorts = [variable.sort() for variable in encoding.variables]
         viable = z3.PropagateFunction("viable", *sorts, z3.BoolSort())
-
-        solver = z3.Solver()
-        # keep the propagator alive for as long as solver is used -- it owns the native callback
-        # registration, so letting Python garbage-collect it mid-search is a use-after-free
-        _propagator = paynt.synthesizer.smpmc.theory.SmpmcPropagator(solver, None, theory, encoding.name_to_parameter)
-
-        # Registering the propagator before this solver.add() call matters -- it's what makes `created`
-        # fire correctly for the viable(...) term as it's asserted.
         ctx = paynt.parameter_space.constraints.ConstraintContext(
             colored_mdp=self.colored_mdp,
             parameter_space=node.parameter_space,
@@ -107,8 +97,22 @@ class SynthesizerSMPMC(paynt.synthesizer.synthesizer.Synthesizer):
             viable=viable,
             forall_parameters=self.forall_parameters,
         )
-        solver.add(*self.constraint.build(ctx))
+        clauses = self.constraint.build(ctx)
+        # the parameters a witness fixes: all of them, or the policy of a robust search
+        policy_parameters = [parameter for parameter in range(node.parameter_space.num_parameters) if parameter not in self.forall_parameters]
+        # clauses ruling out witnesses whose value is known, see below
+        exclusions: list[Any] = []
 
+        def new_solver() -> tuple[Any, Any]:
+            solver = z3.Solver()
+            # Registering the propagator before adding the clauses matters -- it's what makes `created` fire correctly for the viable(...) terms as they're
+            # asserted. Keep the propagator alive for as long as solver is used -- it owns the native callback registration, so letting Python
+            # garbage-collect it mid-search is a use-after-free.
+            propagator = paynt.synthesizer.smpmc.theory.SmpmcPropagator(solver, None, theory, encoding.name_to_parameter)
+            solver.add(*clauses, *exclusions)
+            return solver, propagator
+
+        solver, _propagator = new_solver()
         optimality = self.task.specification.optimality
         while not self.resource_limit_reached():
             result = solver.check()
@@ -128,33 +132,59 @@ class SynthesizerSMPMC(paynt.synthesizer.synthesizer.Synthesizer):
                 self.best_assignment = assignment
                 break
 
-            value = self._value_of(assignment)
-            if not optimality.improves_optimum(value):
-                # Does happen in practice, not just a theoretical edge case: the theory's own value for a
-                # witness (computed while Z3 was still exploring) can disagree with this exact recheck by
-                # an amount that straddles model_checking_precision, letting a non-improving candidate
-                # through as apparently-viable. That does not mean no better assignment exists elsewhere --
-                # only solver.check() returning unsat is a genuine proof of that -- so this witness is
-                # excluded like any other explored point and the search continues, exactly as it does
-                # below after a genuine improvement (see also checker.py's singleton-eta shortcut, which
-                # eliminates the specific solver-disagreement this guards against for future assignments,
-                # but this remains the correct response to a non-improving witness regardless of cause).
-                solver.add(encoding.exclude(assignment))
-                continue
-            self.best_assignment = assignment
-            self.best_assignment_value = value
-            optimality.update_optimum(value)
-            # the threshold just tightened: previously-"inconclusive" verdicts may no longer hold (a
-            # refutation, by contrast, only gets more valid as the threshold tightens) -- see
-            # PartialModelCache's docstring
-            theory.epoch += 1
-            # force Z3 to look elsewhere: without this, re-checking would trivially return the same model,
-            # since nothing at the Z3/Boolean level has changed -- only self.prop's threshold has, and the
-            # theory solver only revisits a literal when asked to
-            solver.add(encoding.exclude(assignment))
+            if self.forall_parameters:
+                value, exact = self._worst_case_of(theory, assignment, policy_parameters, optimality)
+            else:
+                value, exact = self._value_of(assignment), True
+            # A plain witness can fail to improve, not just in theory: the theory's own value for it (computed while Z3 was still exploring) can disagree
+            # with this exact recheck by an amount that straddles model_checking_precision, letting a non-improving candidate through as apparently-viable.
+            # That does not mean no better assignment exists elsewhere -- only solver.check() returning unsat is a genuine proof of that -- so it is excluded
+            # like any other explored point and the search continues (see also checker.py's singleton-eta shortcut, which eliminates the specific
+            # solver-disagreement this guards against for future assignments). A robust witness always improves unless its value is exact, see
+            # _worst_case_of.
+            improves = optimality.improves_optimum(value)
+            if improves:
+                self.best_assignment = assignment
+                self.best_assignment_value = value
+                if self.forall_parameters:
+                    self.robust_assignment = assignment
+                optimality.update_optimum(value)
+                # the threshold just tightened: some cached verdicts may no longer hold -- see PartialModelCache's docstring
+                theory.epoch += 1
+            if exact:
+                # force Z3 to look elsewhere: without this, re-checking could return the same witness, since nothing at the Z3/Boolean level has changed --
+                # only self.prop's threshold has, and the theory solver only revisits a literal when asked to. A robust witness is excluded only if its
+                # value is exact: if only bounded, it may still turn out better than the tightened threshold.
+                exclusions.append(encoding.exclude(assignment, policy_parameters))
+            if improves and self.forall_parameters:
+                # A tighter threshold can falsify what Z3 learned from refuted `not viable` literals ("every completion meets the threshold"), and a
+                # learned clause cannot be retracted: start over, from the theory's cache, which drops exactly those (see PartialModelCache).
+                solver, _propagator = new_solver()
+            elif exact:
+                solver.add(exclusions[-1])
 
         self.explored = node.parameter_space.size
         return self.best_assignment
+
+    def _worst_case_of(
+        self,
+        theory: paynt.synthesizer.smpmc.checker.ColoredMdpTheory,
+        robust_assignment: paynt.parameter_space.parameter_space.ParameterSpace,
+        policy_parameters: list[int],
+        optimality: paynt.specification.property.OptimalityProperty,
+    ) -> tuple[Any, bool]:
+        """The worst case over the environments of the policy robust_assignment fixes, and whether it is exact rather than a bound (see WorstCase).
+
+        Z3 only reports a robust policy after covering every environment by refuted `not viable` literals, whose model-checked values the theory keeps: the
+        worst of them bounds the policy's worst case and beats the current threshold, so it is a sound next threshold, and the policy needs no separate
+        evaluation. Only if that bookkeeping comes up empty is the worst case computed, by AR.
+        """
+        policy = {parameter: robust_assignment.parameter_options(parameter)[0] for parameter in policy_parameters}
+        bound = theory.worst_case_bound(policy)
+        if bound is not None and optimality.improves_optimum(bound.value):
+            return bound.value, bound.exact
+        logger.warning("no usable worst-case bound for the robust policy, computing its worst case by AR")
+        return paynt.synthesizer.smpmc._utils.worst_case_by_ar(self.colored_mdp, optimality, robust_assignment), True
 
     def run(self, optimum_threshold: Any = None) -> paynt.synthesizer.smpmc.result.SmpmcResult:
         """Also reports the robust space: synthesize() collapses best_assignment to one member of it (and double-checks that one)."""
@@ -162,9 +192,12 @@ class SynthesizerSMPMC(paynt.synthesizer.synthesizer.Synthesizer):
         result = super().run(optimum_threshold)
         robust_verified = None
         if self.robust_assignment is not None:
-            logger.info(f"robust assignment, every member satisfies the specification: {self.robust_assignment}")
+            if result.value is None:
+                logger.info(f"robust assignment, every member satisfies the specification: {self.robust_assignment}")
+            else:
+                logger.info(f"robust assignment, worst case {result.value} over its members: {self.robust_assignment}")
             if self.task.verify_robust:
-                robust_verified = paynt.synthesizer.smpmc._utils.verify_robust(self.colored_mdp, self.task, self.robust_assignment)
+                robust_verified = paynt.synthesizer.smpmc._utils.verify_robust(self.colored_mdp, self.task, self.robust_assignment, result.value)
                 logger.info(f"robustness verified by AR: {robust_verified}")
         return paynt.synthesizer.smpmc.result.SmpmcResult(
             success=result.success,

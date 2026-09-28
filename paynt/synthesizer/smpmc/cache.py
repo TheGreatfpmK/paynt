@@ -22,19 +22,19 @@ only narrow the induced sub-MDP's choices, which can only lower Vmax and raise V
     separate, larger piece of work from "port the subsumption cache" if wanted later.
 
 One deliberate correctness addition beyond a literal port: molehill has no notion of a live-tightening
-threshold (its own TODO confirms optimality search was never implemented), so its inconclusive tries never
-need invalidating. PAYNT's SMPMC supports optimality objectives, where a threshold tightening can turn a
-previously-inconclusive verdict wrong (see the epoch mechanism this module already had before the
-mercury-settrie port). Reusing an inconclusive entry across a subset/superset match must stay bound by the
-exact same rule, so instead of tagging every entry with the epoch it was computed under, the two
-inconclusive tries are simply replaced with fresh, empty ones whenever the epoch advances -- cheaper than
-per-entry filtering, and correct because every entry computed under an old epoch becomes simultaneously
-unusable the moment the epoch changes. Refuted entries need no such handling: they stay valid forever, as
-the feasible region only ever shrinks while a threshold tightens.
+threshold (its own TODO confirms optimality search was never implemented), so its tries never need
+invalidating. PAYNT's SMPMC supports optimality objectives, where tightening the threshold (a new epoch) can
+turn a cached verdict wrong. A refuted `viable` ("no completion meets the threshold") stays valid under a
+tighter threshold, but a refuted `not viable` ("every completion meets it") need not, and neither need an
+inconclusive verdict; those tries are replaced with fresh, empty ones whenever the epoch advances -- cheaper
+than per-entry filtering, and correct because every entry computed under an old epoch becomes unusable at
+once. (Refuted `not viable` literals only arise under a quantifier, so plain existential optimality never
+had any to drop.)
 
-Two other deliberate deviations from a byte-for-byte port, both behavior-preserving: mercury-settrie's
-`id` must be a string, so an entry's payload needs the same stringify/parse round-trip molehill uses --
-but ast.literal_eval (safe, stdlib) replaces molehill's bare eval() for parsing it back. And trie elements
+Two other deliberate deviations from a byte-for-byte port: mercury-settrie's `id` must be a string, so a
+refutation's payload (its Refutation) lives in a dict under a unique integer id, instead of being the id
+itself as in molehill -- where two conflicts over the same parameters would share an id, so removing one by
+id could remove the other. And trie elements
 are f"{parameter}={option}" strings, matching molehill's own f"{name}={option}" encoding exactly (adapted
 from a parameter *name* to PAYNT's integer parameter index) rather than plain (parameter, option) tuples --
 confirmed empirically that mercury-settrie's subset/superset comparison does not treat tuple elements
@@ -45,9 +45,9 @@ choice of string-encoded elements over a more natural tuple encoding was very li
 
 from __future__ import annotations
 
-import ast
 import enum
-from typing import Final
+from dataclasses import dataclass
+from typing import Any, Final
 
 import settrie
 
@@ -60,6 +60,19 @@ class _Miss(enum.Enum):
 MISS: Final = _Miss.MISS
 
 
+@dataclass(frozen=True)
+class Refutation:
+    """A cached refutation: the Theorem-6-minimized conflict, and the value that refuted it.
+
+    If exact (computed on a full assignment), every member of the conflict's region has that value: the parameters dropped by the minimization do not affect the
+    reachable Markov chain. Otherwise it bounds the values of the region's members.
+    """
+
+    conflict_parameters: list[int]
+    value: Any = None
+    exact: bool = False
+
+
 def _key(fixed: dict[int, int]) -> set[str]:
     return {f"{parameter}={option}" for parameter, option in fixed.items()}
 
@@ -68,7 +81,7 @@ class PartialModelCache:
     """Caches ColoredMdpTheory.check(fixed, polarity) verdicts, with subset/superset subsumption so a single refutation (or inconclusive verdict) can answer
     many future queries without another Storm call.
 
-    See module docstring for the subsumption rules and the epoch-driven reset used for inconclusive entries.
+    See module docstring for the subsumption rules and the epoch-driven reset.
     """
 
     def __init__(self) -> None:
@@ -76,25 +89,30 @@ class PartialModelCache:
         # indexing translated to PAYNT's polarity (no negated-spec "invert" concept here, just direct
         # polarity indexing).
         self._refuted: list[settrie.SetTrie] = [settrie.SetTrie(), settrie.SetTrie()]
+        # per polarity: trie set id -> its refutation
+        self._refutations: list[dict[str, Refutation]] = [{}, {}]
+        self._next_id = 0
         self._inconclusive: list[settrie.SetTrie] = [settrie.SetTrie(), settrie.SetTrie()]
-        self._inconclusive_epoch: int | None = None
+        self._epoch = 0
 
     def _sync_epoch(self, epoch: int) -> None:
-        if epoch != self._inconclusive_epoch:
+        if epoch != self._epoch:
+            # a tighter threshold: refuted not-viable literals and inconclusive verdicts may no longer hold, see the module docstring
+            self._refuted[0] = settrie.SetTrie()
+            self._refutations[0] = {}
             self._inconclusive = [settrie.SetTrie(), settrie.SetTrie()]
-            self._inconclusive_epoch = epoch
+            self._epoch = epoch
 
-    def lookup(self, fixed: dict[int, int], polarity: bool, epoch: int) -> list[int] | None | _Miss:
-        """:returns: the cached conflict-parameter list on a cached (or subsumed) refutation, None on a
-        still-valid cached (or subsumed) inconclusive verdict, or the MISS sentinel if nothing usable
-        is cached."""
+    def lookup(self, fixed: dict[int, int], polarity: bool, epoch: int) -> list[Refutation] | None | _Miss:
+        """:returns: every cached refutation of this polarity whose conflict fixed agrees with (each one refutes the query), None on a still-valid cached (or
+        subsumed) inconclusive verdict, or the MISS sentinel if nothing usable is cached."""
         self._sync_epoch(epoch)
         key = _key(fixed)
         p = int(polarity)
 
-        conflicts = list(self._refuted[p].subsets(key))
-        if conflicts:
-            return min((ast.literal_eval(c) for c in conflicts), key=len)
+        refutations = [self._refutations[p][entry] for entry in self._refuted[p].subsets(key)]
+        if refutations:
+            return refutations
 
         if any(self._inconclusive[p].supersets(key)):
             return None
@@ -108,15 +126,23 @@ class PartialModelCache:
 
         return MISS
 
-    def insert_refuted(self, fixed: dict[int, int], polarity: bool, conflict_parameters: list[int]) -> None:
+    def insert_refuted(self, fixed: dict[int, int], polarity: bool, conflict_parameters: list[int], epoch: int, value: Any = None, exact: bool = False) -> None:
+        """:param value: the value that refuted the literal, see Refutation
+        :param exact: whether value was computed on a full assignment, see Refutation"""
+        self._sync_epoch(epoch)
         key = {f"{parameter}={fixed[parameter]}" for parameter in conflict_parameters}
         p = int(polarity)
         # this new (already Theorem-6-minimized) conflict subsumes any existing cached entry that's a
         # superset of it -- anything the old, larger entry could answer, this smaller one answers too, so
         # drop the redundant entry to keep the trie lean (mirrors molehill's own insert-time compaction).
+        # The dropped entry's value may have bounded its smaller region more tightly; the new one still bounds it.
         for stale in list(self._refuted[p].supersets(key)):
             self._refuted[p].remove(stale)
-        self._refuted[p].insert(key, str(sorted(conflict_parameters)))
+            del self._refutations[p][stale]
+        entry = str(self._next_id)
+        self._next_id += 1
+        self._refuted[p].insert(key, entry)
+        self._refutations[p][entry] = Refutation(sorted(conflict_parameters), value, exact)
 
     def insert_inconclusive(self, fixed: dict[int, int], polarity: bool, epoch: int) -> None:
         self._sync_epoch(epoch)

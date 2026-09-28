@@ -7,7 +7,13 @@ See cache.py's module docstring for the subsumption rules these tests exercise.
 from __future__ import annotations
 
 import paynt.synthesizer.smpmc.cache as cache_module
-from paynt.synthesizer.smpmc.cache import MISS, PartialModelCache
+from paynt.synthesizer.smpmc.cache import MISS, PartialModelCache, Refutation
+
+
+def _conflicts(result):
+    """The conflicts of the refutations a lookup returned."""
+    assert isinstance(result, list), f"expected refutations, got {result}"
+    return sorted(refutation.conflict_parameters for refutation in result)
 
 
 class TestExactMatch:
@@ -19,8 +25,8 @@ class TestExactMatch:
 
     def test_exact_match_refuted_lookup_hits(self):
         cache = PartialModelCache()
-        cache.insert_refuted({0: 1, 1: 2}, True, conflict_parameters=[0, 1])
-        assert cache.lookup({0: 1, 1: 2}, True, epoch=0) == [0, 1]
+        cache.insert_refuted({0: 1, 1: 2}, True, conflict_parameters=[0, 1], epoch=0)
+        assert _conflicts(cache.lookup({0: 1, 1: 2}, True, epoch=0)) == [[0, 1]]
 
     def test_exact_match_inconclusive_lookup_hits(self):
         cache = PartialModelCache()
@@ -29,7 +35,7 @@ class TestExactMatch:
 
     def test_different_option_on_the_same_parameter_misses(self):
         cache = PartialModelCache()
-        cache.insert_refuted({0: 1}, True, conflict_parameters=[0])
+        cache.insert_refuted({0: 1}, True, conflict_parameters=[0], epoch=0)
         assert cache.lookup({0: 2}, True, epoch=0) is MISS
 
 
@@ -39,30 +45,43 @@ class TestRefutedSubsetSubsumption:
 
     def test_a_superset_query_reuses_a_smaller_cached_refutation(self):
         cache = PartialModelCache()
-        cache.insert_refuted({0: 1}, True, conflict_parameters=[0])
-        assert cache.lookup({0: 1, 1: 2, 2: 3}, True, epoch=0) == [0]
+        cache.insert_refuted({0: 1}, True, conflict_parameters=[0], epoch=0)
+        assert _conflicts(cache.lookup({0: 1, 1: 2, 2: 3}, True, epoch=0)) == [[0]]
 
     def test_a_subset_query_does_not_reuse_a_larger_cached_refutation(self):
         """The opposite direction is not a valid subsumption: a larger fixed set being refuted says nothing about a smaller (less constrained) one."""
         cache = PartialModelCache()
-        cache.insert_refuted({0: 1, 1: 2}, True, conflict_parameters=[0, 1])
+        cache.insert_refuted({0: 1, 1: 2}, True, conflict_parameters=[0, 1], epoch=0)
         assert cache.lookup({0: 1}, True, epoch=0) is MISS
 
-    def test_the_smallest_matching_conflict_is_returned(self):
+    def test_every_matching_refutation_is_returned(self):
         cache = PartialModelCache()
-        cache.insert_refuted({0: 1, 1: 2, 2: 3}, True, conflict_parameters=[0, 1, 2])
-        cache.insert_refuted({0: 1}, True, conflict_parameters=[0])
-        assert cache.lookup({0: 1, 1: 2, 2: 3, 3: 4}, True, epoch=0) == [0]
+        cache.insert_refuted({0: 1}, True, conflict_parameters=[0], epoch=0)
+        cache.insert_refuted({1: 2, 2: 3}, True, conflict_parameters=[1, 2], epoch=0)
+        assert _conflicts(cache.lookup({0: 1, 1: 2, 2: 3, 3: 4}, True, epoch=0)) == [[0], [1, 2]]
 
     def test_a_non_matching_option_on_a_shared_parameter_does_not_subsume(self):
         cache = PartialModelCache()
-        cache.insert_refuted({0: 1}, True, conflict_parameters=[0])
+        cache.insert_refuted({0: 1}, True, conflict_parameters=[0], epoch=0)
         assert cache.lookup({0: 2, 1: 2}, True, epoch=0) is MISS
 
-    def test_refuted_entries_are_never_invalidated_by_an_epoch_change(self):
+    def test_a_refuted_viable_literal_survives_an_epoch_change(self):
+        """No completion meets the threshold: neither can one meet a tighter one."""
         cache = PartialModelCache()
-        cache.insert_refuted({0: 1}, True, conflict_parameters=[0])
-        assert cache.lookup({0: 1}, True, epoch=5) == [0]
+        cache.insert_refuted({0: 1}, True, conflict_parameters=[0], epoch=0)
+        assert _conflicts(cache.lookup({0: 1}, True, epoch=5)) == [[0]]
+
+    def test_a_refuted_not_viable_literal_is_dropped_by_an_epoch_change(self):
+        """Every completion meets the threshold: that need not hold for a tighter one."""
+        cache = PartialModelCache()
+        cache.insert_refuted({0: 1}, False, conflict_parameters=[0], epoch=0)
+        assert _conflicts(cache.lookup({0: 1}, False, epoch=0)) == [[0]]
+        assert cache.lookup({0: 1}, False, epoch=1) is MISS
+
+    def test_a_refutation_keeps_its_value(self):
+        cache = PartialModelCache()
+        cache.insert_refuted({0: 1, 1: 0}, False, conflict_parameters=[0], epoch=0, value=0.25, exact=True)
+        assert cache.lookup({0: 1, 1: 1}, False, epoch=0) == [Refutation([0], 0.25, True)]
 
 
 class TestRefutedCompaction:
@@ -71,16 +90,25 @@ class TestRefutedCompaction:
 
     def test_inserting_a_subset_conflict_retires_a_previously_cached_superset(self):
         cache = PartialModelCache()
-        cache.insert_refuted({0: 1, 1: 2}, True, conflict_parameters=[0, 1])
+        cache.insert_refuted({0: 1, 1: 2}, True, conflict_parameters=[0, 1], epoch=0)
         assert len(cache._refuted[1]) == 1
-        cache.insert_refuted({0: 1}, True, conflict_parameters=[0])
+        cache.insert_refuted({0: 1}, True, conflict_parameters=[0], epoch=0)
         assert len(cache._refuted[1]) == 1, "the now-redundant {0:1,1:2} entry should have been removed"
-        assert cache.lookup({0: 1, 1: 2}, True, epoch=0) == [0], "the surviving entry must still answer the old query"
+        assert _conflicts(cache.lookup({0: 1, 1: 2}, True, epoch=0)) == [[0]], "the surviving entry must still answer the old query"
+
+    def test_conflicts_over_the_same_parameters_are_kept_apart(self):
+        """Retiring one of them must not retire the other (as it could when their payload doubled as their trie id)."""
+        cache = PartialModelCache()
+        cache.insert_refuted({0: 1, 1: 1}, True, conflict_parameters=[0, 1], epoch=0)
+        cache.insert_refuted({0: 2, 1: 2}, True, conflict_parameters=[0, 1], epoch=0)
+        cache.insert_refuted({0: 1}, True, conflict_parameters=[0], epoch=0)
+        assert _conflicts(cache.lookup({0: 2, 1: 2}, True, epoch=0)) == [[0, 1]]
+        assert _conflicts(cache.lookup({0: 1, 1: 1}, True, epoch=0)) == [[0]]
 
     def test_inserting_a_superset_conflict_does_not_disturb_an_existing_subset(self):
         cache = PartialModelCache()
-        cache.insert_refuted({0: 1}, True, conflict_parameters=[0])
-        cache.insert_refuted({0: 1, 1: 2}, True, conflict_parameters=[0, 1])
+        cache.insert_refuted({0: 1}, True, conflict_parameters=[0], epoch=0)
+        cache.insert_refuted({0: 1, 1: 2}, True, conflict_parameters=[0, 1], epoch=0)
         assert len(cache._refuted[1]) == 2, "the new, strictly-larger entry is not redundant and should be kept"
 
 
@@ -121,24 +149,24 @@ class TestCrossPolaritySubsumption:
 
     def test_an_opposite_polarity_subset_refutation_makes_the_query_inconclusive(self):
         cache = PartialModelCache()
-        cache.insert_refuted({0: 1}, False, conflict_parameters=[0])
+        cache.insert_refuted({0: 1}, False, conflict_parameters=[0], epoch=0)
         assert cache.lookup({0: 1, 1: 2}, True, epoch=0) is None
 
     def test_an_opposite_polarity_superset_refutation_makes_the_query_inconclusive(self):
         cache = PartialModelCache()
-        cache.insert_refuted({0: 1, 1: 2}, False, conflict_parameters=[0, 1])
+        cache.insert_refuted({0: 1, 1: 2}, False, conflict_parameters=[0, 1], epoch=0)
         assert cache.lookup({0: 1}, True, epoch=0) is None
 
     def test_an_exact_opposite_polarity_refutation_makes_the_query_inconclusive(self):
         """The most common real case: a full assignment's viable(fixed) is refuted, so the subsequent not_viable(fixed) query on the exact same fixed set must
         come back inconclusive, never refuted -- the two literals are logical negations of each other on a fully-fixed assignment."""
         cache = PartialModelCache()
-        cache.insert_refuted({0: 1, 1: 2}, True, conflict_parameters=[0, 1])
+        cache.insert_refuted({0: 1, 1: 2}, True, conflict_parameters=[0, 1], epoch=0)
         assert cache.lookup({0: 1, 1: 2}, False, epoch=0) is None
 
     def test_cross_polarity_reuse_never_produces_a_false_refutation(self):
         cache = PartialModelCache()
-        cache.insert_refuted({0: 1}, False, conflict_parameters=[0])
+        cache.insert_refuted({0: 1}, False, conflict_parameters=[0], epoch=0)
         result = cache.lookup({0: 1, 1: 2}, True, epoch=0)
         assert result is None, "cross-polarity information must never manufacture a positive refutation"
 
@@ -146,9 +174,9 @@ class TestCrossPolaritySubsumption:
         """If the query is refuted for its *own* polarity too, that (more useful) answer must win over the weaker cross-polarity "just inconclusive"
         shortcut."""
         cache = PartialModelCache()
-        cache.insert_refuted({0: 1}, True, conflict_parameters=[0])
-        cache.insert_refuted({1: 2}, False, conflict_parameters=[1])
-        assert cache.lookup({0: 1, 1: 2}, True, epoch=0) == [0]
+        cache.insert_refuted({0: 1}, True, conflict_parameters=[0], epoch=0)
+        cache.insert_refuted({1: 2}, False, conflict_parameters=[1], epoch=0)
+        assert _conflicts(cache.lookup({0: 1, 1: 2}, True, epoch=0)) == [[0]]
 
 
 class TestSetTrieBackedStructure:

@@ -66,3 +66,15 @@ class TestSynthesizerSmpmcCli:
         )
         assert result.returncode == 0, result.stderr
         assert "robustness verified by AR: True" in result.stdout
+
+    def test_robust_optimization_reports_a_verified_worst_case(self):
+        project = os.path.dirname(get_sketch_paths("tests/mdp-family-correlated")[0])
+        result = subprocess.run(
+            [sys.executable, "-m", "paynt", project, "--method", "smpmc", "--constraint", "exists_forall", "--smpmc-verify-robust"],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        assert result.returncode == 0, result.stderr
+        assert "robust assignment, worst case 0.45" in result.stdout
+        assert "robustness verified by AR: True" in result.stdout

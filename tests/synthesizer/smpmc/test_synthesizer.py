@@ -6,11 +6,14 @@ and those engines must agree on feasibility.
 
 from __future__ import annotations
 
+import logging
+
 import pytest
 
 import paynt.parser.sketch
 import paynt.synthesizer.smpmc
 import paynt.synthesizer.synthesizer
+import paynt.synthesizer.synthesizer_ar
 
 from helpers.helper import get_sketch_paths
 
@@ -44,6 +47,31 @@ class TestSmpmcOnOptimalityProperty:
         result = synthesizer.run()
         assert result.success is True
         assert result.value == pytest.approx(1.0)
+
+    def test_a_seed_already_at_the_optimum_reports_no_improvement(self, smpmc_tiny_optimality_colored_mdp, smpmc_tiny_optimality_task, caplog):
+        """Regression test for a real point of confusion: --optimum-threshold means "confirm you can beat this", not "confirm this is achievable" -- seeded with
+        the known optimum (1.0, itself the maximum possible probability, so nothing can beat it), the search correctly finds nothing, and used to do so in total
+        silence.
+
+        See Synthesizer.synthesize's elif branch.
+        """
+        with caplog.at_level(logging.INFO, logger="paynt.synthesizer.synthesizer"):
+            synthesizer = paynt.synthesizer.smpmc.SynthesizerSMPMC(smpmc_tiny_optimality_colored_mdp, smpmc_tiny_optimality_task)
+            result = synthesizer.run(optimum_threshold=1.0)
+        assert result.success is False
+        assert result.assignment is None
+        assert any("no assignment improving the given --optimum-threshold 1.0 was found" in record.message for record in caplog.records)
+
+
+class TestOptimumThresholdSeedLoggingIsEngineAgnostic:
+    """The new log line lives in the generic Synthesizer.synthesize() driver, not in SMPMC's own code -- confirm AR (which only overrides synthesize_one, same
+    as SMPMC) gets it too, on the same fixture."""
+
+    def test_ar_also_reports_no_improvement_on_the_same_seed(self, smpmc_tiny_optimality_colored_mdp, smpmc_tiny_optimality_task, caplog):
+        with caplog.at_level(logging.INFO, logger="paynt.synthesizer.synthesizer"):
+            result = paynt.synthesizer.synthesizer_ar.SynthesizerAR(smpmc_tiny_optimality_colored_mdp, smpmc_tiny_optimality_task).run(optimum_threshold=1.0)
+        assert result.success is False
+        assert any("no assignment improving the given --optimum-threshold 1.0 was found" in record.message for record in caplog.records)
 
 
 class TestSmpmcOnFamilyModel:

@@ -248,3 +248,46 @@ class TestColoredMdpTheoryStatisticWiring:
         assert explored_after_first > 0
         theory.check(fixed, True)
         assert synthesizer.explored == explored_after_first
+
+
+class TestWorstCaseBounds:
+    """A robust search on smpmc-tiny with x2 universally quantified: the policy x1=4, x3=8 (options 3 and 0) reaches "done" for both values of x2, so its worst
+    case is 1.0."""
+
+    policy = {0: 3, 2: 0}
+
+    def _theory(self, colored_mdp, task):
+        return paynt.synthesizer.smpmc.checker.ColoredMdpTheory(colored_mdp, task.specification.constraints[0], forall_parameters=[1])
+
+    def test_a_refuted_not_viable_literal_bounds_its_policy(self, smpmc_tiny_colored_mdp, smpmc_tiny_task):
+        theory = self._theory(smpmc_tiny_colored_mdp, smpmc_tiny_task)
+        assert theory.check(self.policy, False) is not None
+        bound = theory.worst_case_bound(self.policy)
+        assert bound is not None and bound.value == pytest.approx(1.0) and not bound.exact
+
+    def test_a_refuted_full_assignment_makes_the_bound_exact(self, smpmc_tiny_colored_mdp, smpmc_tiny_task):
+        theory = self._theory(smpmc_tiny_colored_mdp, smpmc_tiny_task)
+        theory.check({**self.policy, 1: 0}, False)
+        bound = theory.worst_case_bound(self.policy)
+        assert bound is not None and bound.exact
+
+    def test_a_cached_refutation_bounds_its_policy_too(self, smpmc_tiny_colored_mdp, smpmc_tiny_task):
+        theory = self._theory(smpmc_tiny_colored_mdp, smpmc_tiny_task)
+        theory.check(self.policy, False)
+        theory._worst_case.clear()
+        calls = theory.mc_calls
+        theory.check({**self.policy, 1: 1}, False)
+        assert theory.mc_calls == calls, "the query should have been answered by the cached refutation"
+        assert theory.worst_case_bound(self.policy) is not None
+
+    def test_a_viable_literal_does_not_bound_the_worst_case(self, smpmc_tiny_colored_mdp, smpmc_tiny_task):
+        theory = self._theory(smpmc_tiny_colored_mdp, smpmc_tiny_task)
+        theory.check({0: 0, 1: 0, 2: 0}, True)
+        assert theory.worst_case_bound({0: 0, 2: 0}) is None
+
+    def test_bounds_are_dropped_with_the_epoch(self, smpmc_tiny_colored_mdp, smpmc_tiny_task):
+        """They cover the environments only under the threshold they were refuted against."""
+        theory = self._theory(smpmc_tiny_colored_mdp, smpmc_tiny_task)
+        theory.check(self.policy, False)
+        theory.epoch += 1
+        assert theory.worst_case_bound(self.policy) is None

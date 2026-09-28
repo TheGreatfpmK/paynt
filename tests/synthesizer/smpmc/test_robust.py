@@ -12,9 +12,13 @@ import gc
 
 import pytest
 
+import paynt.parser.sketch
 import paynt.synthesizer.smpmc
 import paynt.synthesizer.smpmc._utils
+import paynt.synthesizer.smpmc.checker
 import paynt.synthesizer.smpmc.theory
+
+from helpers.helper import get_sketch_paths
 
 
 def _robust(task, forall_pattern=None, verify_robust=False):
@@ -22,6 +26,21 @@ def _robust(task, forall_pattern=None, verify_robust=False):
     task.forall_pattern = forall_pattern
     task.verify_robust = verify_robust
     return task
+
+
+def _run(project, props_name, **robust):
+    sketch_path, props_path = get_sketch_paths(project, props_name=props_name)
+    factory, task = paynt.parser.sketch.Sketch.load_sketch(sketch_path, props_path)
+    synthesizer = paynt.synthesizer.smpmc.SynthesizerSMPMC(factory.build(), _robust(task, **robust))
+    return synthesizer, task, synthesizer.run()
+
+
+def _policy(synthesizer, robust_assignment):
+    return [
+        robust_assignment.parameter_to_option_labels[parameter][robust_assignment.parameter_options(parameter)[0]]
+        for parameter in range(robust_assignment.num_parameters)
+        if parameter not in synthesizer.forall_parameters
+    ]
 
 
 class TestRobustSynthesisOnFamily:
@@ -71,15 +90,64 @@ class TestRobustSynthesisOnGenericSketch:
         with pytest.raises(ValueError, match="matches no parameter"):
             paynt.synthesizer.smpmc.SynthesizerSMPMC(smpmc_tiny_colored_mdp, _robust(smpmc_tiny_task, forall_pattern="no_such_hole"))
 
-    def test_an_optimality_objective_is_rejected(self, smpmc_tiny_optimality_colored_mdp, smpmc_tiny_optimality_task):
-        with pytest.raises(ValueError, match="threshold property"):
-            paynt.synthesizer.smpmc.SynthesizerSMPMC(smpmc_tiny_optimality_colored_mdp, _robust(smpmc_tiny_optimality_task, forall_pattern="^x2$"))
+    def test_an_optimality_objective_optimizes_the_worst_case(self):
+        _synthesizer, _task, result = _run("tests/smpmc-tiny", "optimality.props", forall_pattern="^x2$", verify_robust=True)
+        assert result.value == pytest.approx(1.0)
+        assert str(result.robust_assignment) == "x1=4, x2: {3,4}, x3=8"
+        assert result.robust_verified is True
 
     def test_a_plain_search_reports_no_robust_assignment(self, smpmc_tiny_colored_mdp, smpmc_tiny_task):
         result = paynt.synthesizer.smpmc.SynthesizerSMPMC(smpmc_tiny_colored_mdp, smpmc_tiny_task).run()
         assert result.success
         assert result.robust_assignment is None
         assert result.robust_verified is None
+
+
+class TestRobustOptimality:
+    """The worst case over the environments, optimized.
+
+    On mdp-family-correlated (see its sketch), the best worst case is 0.45 when maximizing, with the policy (a, c), and 0.36 when minimizing, with (b, d).
+    """
+
+    def test_maximizes_the_worst_case(self):
+        synthesizer, _task, result = _run("tests/mdp-family-correlated", "sketch.props", verify_robust=True)
+        assert result.value == pytest.approx(0.45)
+        assert _policy(synthesizer, result.robust_assignment) == ["a", "c"]
+        assert result.robust_assignment.parameter_num_options(0) == 2, "the environment should be left open"
+        assert result.robust_verified is True
+
+    def test_minimizes_the_worst_case(self):
+        synthesizer, _task, result = _run("tests/mdp-family-correlated", "min.props", verify_robust=True)
+        assert result.value == pytest.approx(0.36)
+        assert _policy(synthesizer, result.robust_assignment) == ["b", "d"]
+        assert result.robust_verified is True
+
+    def test_over_many_rounds(self):
+        """On rocks-4-2 the worst case improves over several rounds before reaching 1.0, as P>=1 is robustly sat (see TestRobustSynthesisOnFamily)."""
+        _synthesizer, _task, result = _run("tests/mdp-family-rocks-4-2", "max.props", verify_robust=True)
+        assert result.value == pytest.approx(1.0)
+        assert result.robust_verified is True
+
+    def test_verification_rejects_a_worst_case_the_policy_does_not_attain(self):
+        synthesizer, task, result = _run("tests/mdp-family-correlated", "sketch.props")
+        verify = paynt.synthesizer.smpmc._utils.verify_robust
+        assert verify(synthesizer.colored_mdp, task, result.robust_assignment, 0.45)
+        assert not verify(synthesizer.colored_mdp, task, result.robust_assignment, 0.46)
+
+    def test_the_worst_case_comes_from_the_search_not_from_ar(self, monkeypatch):
+        """Each witness's worst case is read off the refutations the search made anyway, see SynthesizerSMPMC._worst_case_of."""
+
+        def fail(*args):
+            raise AssertionError("AR was used to evaluate a witness")
+
+        monkeypatch.setattr(paynt.synthesizer.smpmc._utils, "worst_case_by_ar", fail)
+        _synthesizer, _task, result = _run("tests/mdp-family-correlated", "min.props")
+        assert result.value == pytest.approx(0.36)
+
+    def test_the_ar_fallback_finds_the_same_optimum(self, monkeypatch):
+        monkeypatch.setattr(paynt.synthesizer.smpmc.checker.ColoredMdpTheory, "worst_case_bound", lambda self, policy: None)
+        _synthesizer, _task, result = _run("tests/mdp-family-correlated", "min.props")
+        assert result.value == pytest.approx(0.36)
 
 
 class TestVerifyRobust:

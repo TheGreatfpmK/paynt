@@ -38,11 +38,17 @@ class ParameterBitVecEncoding:
             clauses.append(option_clauses[0] if len(option_clauses) == 1 else z3.Or(option_clauses))
         return clauses[0] if len(clauses) == 1 else z3.And(clauses)
 
-    def exclude(self, assignment: paynt.parameter_space.parameter_space.ParameterSpace) -> Any:
-        """A clause ruling out exactly this one concrete assignment -- used by the optimality loop to force Z3 to look elsewhere after recording assignment as
-        the new best, since nothing else about the Z3-level formula changes when only the theory's threshold tightens."""
-        assert assignment.size == 1, "exclude() expects a single concrete assignment"
-        equalities = [self.variables[parameter] == self.value(assignment.parameter_options(parameter)[0]) for parameter in range(assignment.num_parameters)]
+    def exclude(self, assignment: paynt.parameter_space.parameter_space.ParameterSpace, parameters: Iterable[int] | None = None) -> Any:
+        """A clause ruling out assignment's options of parameters (by default all of them, a single concrete assignment) -- used by the optimality loop to force
+        Z3 to look elsewhere after recording assignment as the new best, since nothing else about the Z3-level formula changes when only the theory's threshold
+        tightens."""
+        if parameters is None:
+            parameters = range(assignment.num_parameters)
+        equalities = []
+        for parameter in parameters:
+            options = assignment.parameter_options(parameter)
+            assert len(options) == 1, "exclude() expects every excluded parameter fixed"
+            equalities.append(self.variables[parameter] == self.value(options[0]))
         conjunction = equalities[0] if len(equalities) == 1 else z3.And(equalities)
         return z3.Not(conjunction)
 
