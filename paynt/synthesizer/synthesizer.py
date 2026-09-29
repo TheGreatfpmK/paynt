@@ -30,13 +30,22 @@ class ParameterSpaceEvaluation:
 class Synthesizer:
     @staticmethod
     def for_method(colored_mdp: paynt.colored_mdp.ColoredMdp, task: paynt.task.SynthesisTask, method: str) -> Synthesizer:
-        """Feature-agnostic dispatch: knows only the generic algorithms, never imports a specific feature package."""
+        """Feature-agnostic dispatch: knows only the generic algorithms, never imports a specific feature package.
+
+        AR and Hybrid are rejected for a colored MDP with a general coloring (see ColoredMdp.has_general_coloring).
+        """
         # hiding imports here to avoid mutual top-level imports
         import paynt.synthesizer.synthesizer_onebyone
         import paynt.synthesizer.synthesizer_ar
         import paynt.synthesizer.synthesizer_cegis
         import paynt.synthesizer.synthesizer_hybrid
         import paynt.synthesizer.smpmc
+
+        if colored_mdp.has_general_coloring and method in ("ar", "hybrid"):
+            raise ValueError(
+                f"method {method!r} does not support a colored MDP with a general coloring: its scheduler selection and splitting need the coloring's "
+                "(parameter, option) pairs. Use one of: onebyone, cegis, smpmc"
+            )
 
         if method == "onebyone":
             return paynt.synthesizer.synthesizer_onebyone.SynthesizerOneByOne(colored_mdp, task)

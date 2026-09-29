@@ -11,7 +11,9 @@ of molehill's bespoke fastmole/MatrixGenerator and modelchecker.py:
     AR already uses for its own primary/secondary bounds;
   - the conflict-minimization step (paper's Theorem 6: drop parameters not reachable in C[eta]) uses
     coloring.getStateToHoles() unioned over the induced sub-MDP's reachable states, rather than porting
-    molehill's own (partly dead-code) binary-search minimizer.
+    molehill's own (partly dead-code) binary-search minimizer. For a general coloring those static per-state
+    supports are useless (in a decision tree every state mentions every parameter), so it asks the coloring
+    which parameters actually excluded a choice at the reachable states instead: ColoringGeneral.relevantParameters.
 """
 
 from __future__ import annotations
@@ -24,6 +26,7 @@ import payntbind.synthesis
 import stormpy
 
 import paynt.colored_mdp
+import paynt.parameter_space.parameter_space
 import paynt.specification.property
 import paynt.specification.property_result
 import paynt.synthesizer.smpmc.cache
@@ -101,8 +104,8 @@ class ColoredMdpTheory:
         self.stat = stat
         # kappa restricted to "which parameters are relevant at this state", unioned over an induced
         # sub-MDP's reachable states to minimize a conflict (Theorem 6) -- one BitVector of parameter
-        # indices per underlying-MDP state
-        self.state_to_parameters: list[Any] = colored_mdp.coloring.getStateToHoles()
+        # indices per underlying-MDP state. Only for standard colorings: see relevant_parameters().
+        self.state_to_parameters: list[Any] | None = None if colored_mdp.has_general_coloring else colored_mdp.coloring.getStateToHoles()
         self.cache = paynt.synthesizer.smpmc.cache.PartialModelCache()
         # bumped by the optimality loop (synthesizer.py) each time the threshold tightens, so cached
         # verdicts computed under a looser threshold that may no longer hold aren't wrongly reused -- see
@@ -232,9 +235,7 @@ class ColoredMdpTheory:
 
         # refuted: minimize the conflict by dropping every fixed parameter that isn't reachable (hence
         # irrelevant) in the induced sub-MDP
-        relevant_parameters: set[int] = set()
-        for state in sub_mdp.underlying_mdp_state_map:
-            relevant_parameters.update(self.state_to_parameters[state])
+        relevant_parameters = self.relevant_parameters(eta, sub_mdp)
         conflict_parameters = [parameter for parameter in fixed if parameter in relevant_parameters]
 
         if self.stat is not None:
@@ -261,6 +262,19 @@ class ColoredMdpTheory:
         if polarity is False:
             self._record_worst_case(fixed, result.value, exact)
         return TheoryResult(conflict_parameters, result.value)
+
+    def relevant_parameters(self, eta: paynt.parameter_space.parameter_space.ParameterSpace, sub_mdp: Any) -> set[int]:
+        """The parameters the sub-MDP C[eta] depends on (Theorem 6): fixing any other parameter differently cannot change it, so a conflict may drop them."""
+        states = sub_mdp.underlying_mdp_state_map
+        if self.colored_mdp.has_general_coloring:
+            # Ask the coloring which parameters actually excluded a choice at the reachable states under eta. Widening the others cannot add a choice there,
+            # so the sub-MDP -- and with it the refutation -- is unchanged (ColoringGeneral.relevantParameters).
+            return set(self.colored_mdp.coloring.relevantParameters(eta.native, list(states)))
+        assert self.state_to_parameters is not None
+        relevant: set[int] = set()
+        for state in states:
+            relevant.update(self.state_to_parameters[state])
+        return relevant
 
     def _record_worst_case(self, fixed: dict[int, int], value: Any, exact: bool) -> None:
         """Account a refuted `not viable` literal, whose region's worst case is (bounded by) value, to its policy -- if the policy is fully fixed."""

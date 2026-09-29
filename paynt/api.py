@@ -54,8 +54,13 @@ def get_synthesizer(
     if feature_kind == "dt":
         from paynt.dt import DtSynthesizer
         from paynt.dt.dtnest import DtNest
+        from paynt.dt._utils import DT_INNER_METHODS
 
-        return DtNest(colored_mdp_factory, task) if dtnest else DtSynthesizer(colored_mdp_factory, task)
+        if method not in DT_INNER_METHODS:
+            raise ValueError(f"decision-tree synthesis supports --method {DT_INNER_METHODS}, got {method!r}")
+        if dtnest and method != "ar":
+            raise ValueError(f"--dtnest does not support --method {method!r} yet -- it always uses AR over ColoringSmt")
+        return DtNest(colored_mdp_factory, task) if dtnest else DtSynthesizer(colored_mdp_factory, task, method=method)
 
     if feature_kind == "pomdp" and fsc_synthesis:
         import paynt.pomdp

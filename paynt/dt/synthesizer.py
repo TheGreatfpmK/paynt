@@ -14,7 +14,7 @@ import paynt.model.model
 import paynt.dt.result
 from paynt.dt.synthesizer_ar_dt import SynthesizerARDt
 
-from ._utils import simplify_tree
+from ._utils import make_inner_synthesizer, simplify_tree
 
 import payntbind
 
@@ -67,11 +67,13 @@ def _run_dtpaynt(
 
 
 class DtSynthesizer:
-    """
-    Outer driver: repeatedly re-unfolds the decision tree at different depths (DtColoredMdpFactory.reset_tree
-    tries a fresh depth/coloring each time, unlike the FSC-unfolding factories' memory-size growth) and runs
-    SynthesizerARDt -- a fresh inner AR engine constructed for each depth -- against each unfolding, keeping
-    the best tree found so far across depths.
+    """Outer driver: repeatedly re-unfolds the decision tree at different depths (DtColoredMdpFactory.reset_tree tries a fresh depth/coloring each time, unlike
+    the FSC-unfolding factories' memory-size growth) and runs an inner search engine -- a fresh instance constructed for each depth -- against each unfolding,
+    keeping the best tree found so far across depths.
+
+    :param method: the inner engine -- "ar" (default), SynthesizerARDt over ColoringSmt, dtpaynt's own unchanged default path; or "smpmc", SynthesizerSMPMC over
+        the tree's ColoringGeneral (see paynt.dt.coloring_general). map_scheduler always uses ColoringSmt/SynthesizerARDt regardless of this setting (see its
+        own docstring).
     """
 
     def __init__(
@@ -79,9 +81,11 @@ class DtSynthesizer:
         colored_mdp_factory: paynt.dt.factory.DtColoredMdpFactory,
         task: paynt.task.SynthesisTask,
         initial_depth: int | None = None,
+        method: str = "ar",
     ):
         self.colored_mdp_factory = colored_mdp_factory
         self.task = task
+        self.method = method
         # build_task is Optional at the type level (a factory can be constructed before its DtTask is known),
         # but DtSynthesizer always needs one already attached by construction time; cached here since
         # run()/synthesize_tree_sequence read DT-specific fields constantly.
@@ -91,13 +95,13 @@ class DtSynthesizer:
         # build_task's own depth; callers only needing cheap, depth-invariant inspection (e.g. DtNest's
         # subtree recursion) pass initial_depth=0 to avoid building at a larger, more expensive depth than
         # necessary -- whatever gets built here is discarded and rebuilt from depth 0 once synthesis runs.
-        self.colored_mdp = colored_mdp_factory.reset_tree(initial_depth if initial_depth is not None else self.build_task.tree_depth)
+        self.colored_mdp = colored_mdp_factory.reset_tree(initial_depth if initial_depth is not None else self.build_task.tree_depth, general=(method != "ar"))
         self.best_tree: paynt.dt.decision_tree.DecisionTree | None = None
         self.best_tree_value: Any = None
 
     @property
     def method_name(self) -> str:
-        return "AR (decision tree)"
+        return "AR (decision tree)" if self.method == "ar" else f"{self.method} (decision tree)"
 
     def compute_normalized_value(self, value: float, opt: float, random: float) -> float:
         return (value - random) / (opt - random) if opt - random != 0 else 1.0
@@ -122,8 +126,8 @@ class DtSynthesizer:
         logger.info(f"exported decision tree string to {tree_string_filename}")
 
     def synthesize_tree(self, depth: int, timeout: int | None = None) -> None:
-        self.colored_mdp = self.colored_mdp_factory.reset_tree(depth)
-        synthesizer = SynthesizerARDt(self.colored_mdp, self.task)
+        self.colored_mdp = self.colored_mdp_factory.reset_tree(depth, general=(self.method != "ar"))
+        synthesizer = make_inner_synthesizer(self.method, self.colored_mdp, self.task)
         synthesizer.synthesize(keep_optimum=True, timeout=timeout)
         if synthesizer.best_assignment is not None:
             info = cast(paynt.dt._utils.DtInfo, self.colored_mdp.feature_info)
@@ -153,9 +157,9 @@ class DtSynthesizer:
         depth_timeout = overall_timeout / 2 / (max_depth - 1) if max_depth > 1 else overall_timeout
         best_assignment: Any = None
         for depth in range(max_depth):
-            self.colored_mdp = self.colored_mdp_factory.reset_tree(depth)
+            self.colored_mdp = self.colored_mdp_factory.reset_tree(depth, general=(self.method != "ar"))
             info = cast(paynt.dt._utils.DtInfo, self.colored_mdp.feature_info)
-            synthesizer = SynthesizerARDt(self.colored_mdp, self.task)
+            synthesizer = make_inner_synthesizer(self.method, self.colored_mdp, self.task)
             best_assignment_old = best_assignment
 
             parameter_space = self.colored_mdp.parameter_space

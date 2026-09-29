@@ -18,6 +18,7 @@ import paynt.task
 import paynt.parameter_space.parameter_space
 import paynt.model.model
 import paynt.synthesizer.search_node
+import paynt.utils.coloring
 
 import logging
 
@@ -40,7 +41,7 @@ class ColoredMdp:
         self.underlying_mdp = underlying_mdp
         # V: the constrained parameter space
         self.parameter_space = parameter_space
-        # kappa: raw payntbind coloring object (Coloring or ColoringSmt); no Python wrapper exists for this
+        # kappa: raw payntbind coloring object (Coloring, ColoringSmt or ColoringGeneral); no Python wrapper exists for this
         self.coloring = coloring
         self.use_exact = use_exact
         # discriminator used by dispatch code to pick the right feature package without an isinstance check
@@ -52,6 +53,16 @@ class ColoredMdp:
         # internal plumbing needed by build()/scheduler_selection() below, not part of the public contract
         self.subsystem_builder_options = paynt.model.model.SubmodelBuilder.default_builder_options()
         self.choice_destinations = paynt.model.model.ModelIndex.compute_choice_destinations(underlying_mdp, use_exact)
+
+    @property
+    def has_general_coloring(self) -> bool:
+        """Whether kappa is a payntbind ColoringGeneral (an arbitrary formula per choice, see paynt.utils.coloring_builder) rather than a coloring given by
+        explicit (parameter, option) pairs.
+
+        Operations that read those pairs back from the coloring are unavailable for a general coloring, e.g. scheduler_selection (they fail through
+        paynt.utils.coloring.require_pair_list_coloring).
+        """
+        return paynt.utils.coloring.is_general_coloring(self.coloring)
 
     def build(
         self, parameter_space: paynt.parameter_space.parameter_space.ParameterSpace, parent_selected_choices: Any = None
@@ -88,7 +99,10 @@ class ColoredMdp:
 
         For "posmg", unreachable choices are kept rather than discarded (unlike every other feature) since the induced model must still be verified as a game,
         not a plain MDP.
+
+        Not available for a general coloring (see has_general_coloring), which has no per-parameter option lists to read back.
         """
+        paynt.utils.coloring.require_pair_list_coloring(self.coloring, "generic AR and Hybrid (scheduler_selection)", "use --method onebyone, cegis or smpmc")
         assert scheduler.memoryless and scheduler.deterministic
         discard_unreachable_choices = self.feature_kind != "posmg"
         state_to_choice = paynt.model.model.ModelIndex.scheduler_to_state_to_choice(

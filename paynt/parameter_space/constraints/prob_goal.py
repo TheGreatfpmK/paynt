@@ -5,7 +5,7 @@ over per-state reachability/min-step variables rather than via a Storm model-che
 *structural* property of the colored MDP itself, independent of any specific scheduler: even a fully
 fixed parameter assignment can leave a state with more than one available action (an unlabelled/uncolored
 choice is always available regardless of parameter values, alongside any colored ones -- see
-payntbind/src/synthesis/quotient/Coloring.h's selectCompatibleChoices), so "every action makes progress"
+payntbind/src/synthesis/coloring/Coloring.h's selectCompatibleChoices), so "every action makes progress"
 (prob1) and "some action makes progress" (prob0) remain genuinely different constraints even after every
 parameter is pinned down. That is exactly what the z3.And/z3.Or choice below distinguishes.
 
@@ -21,6 +21,7 @@ from typing import Any
 import z3
 
 import paynt.model.model
+import paynt.utils.coloring
 from paynt.parameter_space.constraints.constraint import Constraint, ConstraintContext
 
 import logging
@@ -37,6 +38,7 @@ class ProbGoalConstraint(Constraint):
 
     def build(self, ctx: ConstraintContext) -> list[Any]:
         colored_mdp = ctx.colored_mdp
+        paynt.utils.coloring.require_pair_list_coloring(colored_mdp.coloring, "the prob0/prob1 constraints", "use another --constraint")
         model = colored_mdp.underlying_mdp
         transition_matrix = model.transition_matrix
         choice_to_assignment = colored_mdp.coloring.getChoiceToAssignment()
