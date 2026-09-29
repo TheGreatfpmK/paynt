@@ -97,6 +97,9 @@ class DtColoredMdpFactory:
     def reset_tree(self, depth: int, enable_harmonization: bool = True, general: bool = False) -> paynt.colored_mdp.ColoredMdp:
         """Produce a ColoredMdp at the given tree depth, discarding any previous tree and coloring.
 
+        :param enable_harmonization: whether ColoringSmt's areChoicesConsistent also proposes a split (harmonization) for an inconsistent scheduler. Only AR
+            reads that split; a caller that merely wants the verdict (mapping a scheduler) turns it off, which spares the coloring the work of computing it. The
+            general coloring never proposes one, so it ignores this.
         :param general: if True, build the tree's coloring as a payntbind.synthesis.ColoringGeneral (see paynt.dt.coloring_general.decision_tree_coloring)
             instead of the default ColoringSmt. Everything else about the produced ColoredMdp -- its ParameterSpace, DtInfo, feature_kind -- is unaffected: the
             two colorings are built from identical inputs and expose an identical parameter layout (see decision_tree_coloring's own docstring), so dtpaynt's

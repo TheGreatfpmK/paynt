@@ -46,6 +46,10 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+#: The highest action index that can be unavailable at a state: the actions unavailable at a state are kept in one signed 64-bit data word (see
+#: ColoringBuilder.in_bits), whose sign bit is left out.
+_MAX_UNAVAILABLE_ACTION_INDEX = 62
+
 
 def _state_option_indices(
     relevant_state_valuations: list[list[int]], state_is_relevant_bv: Any, variables: list[paynt.dt.decision_tree.DtVariable]
@@ -98,7 +102,17 @@ def decision_tree_coloring(
         for choice in range(row_groups[state], row_groups[state + 1]):
             state_available_mask[state] |= 1 << choice_to_action[choice]
     all_actions_mask = (1 << num_actions) - 1
-    state_unavailable_mask = [(~mask) & all_actions_mask for mask in state_available_mask]
+    # an irrelevant state is never evaluated, and the don't-care action only exists at relevant states: its word stays empty, or that action would count
+    # as unavailable there
+    state_unavailable_mask = [((~mask) & all_actions_mask) if state_is_relevant_bv[state] else 0 for state, mask in enumerate(state_available_mask)]
+    if dont_care_defined:
+        highest_unavailable = max((mask.bit_length() for mask in state_unavailable_mask), default=0) - 1
+        if highest_unavailable > _MAX_UNAVAILABLE_ACTION_INDEX:
+            raise ValueError(
+                f"the general coloring of decision trees keeps the actions unavailable at a state in one 64-bit word, which holds action indices up to "
+                f"{_MAX_UNAVAILABLE_ACTION_INDEX}, but action {action_labels[highest_unavailable]!r} (index {highest_unavailable} of {num_actions}) is "
+                "unavailable at some state: use --method ar for this model"
+            )
 
     # Parameters are allocated in the exact order ColoringSmt's createHoles assigns hole ids: a pre-order,
     # true-child-first walk of the tree, allocating (decision, then one threshold per variable) at an inner node, or

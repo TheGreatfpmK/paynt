@@ -13,8 +13,11 @@ import random
 import pytest
 
 import paynt.api
+import paynt.model.model
 import paynt.parser.sketch
+import paynt.dt.api
 import paynt.dt.synthesizer
+import paynt.dt.task
 import paynt.synthesizer.smpmc.checker
 from helpers.helper import get_sketch_paths
 
@@ -64,6 +67,18 @@ class TestApiRouting:
         factory, task = paynt.parser.sketch.Sketch.load_sketch(sketch_path, props_path)
         with pytest.raises(ValueError, match="dtnest"):
             paynt.api.get_synthesizer(factory, task, method="smpmc", dtnest=True)
+
+    def test_mapping_a_scheduler_rejects_method_smpmc(self):
+        """What --tree-map-scheduler sets: a scheduler file to map.
+
+        SMPMC has nothing to search there.
+        """
+        sketch_path, props_path = get_sketch_paths("tests/dt-orchard")
+        factory, task = paynt.parser.sketch.Sketch.load_sketch(sketch_path, props_path)
+        factory.build_task.scheduler_path = "scheduler.json"
+        with pytest.raises(ValueError, match="mapping a scheduler to a tree does not support method 'smpmc'"):
+            paynt.api.get_synthesizer(factory, task, method="smpmc")
+        assert paynt.api.get_synthesizer(factory, task, method="ar").method == "ar"
 
     def test_a_generic_method_on_a_dt_sketch_is_rejected_with_a_clear_error(self):
         sketch_path, props_path = get_sketch_paths("tests/dt-orchard")
@@ -148,3 +163,54 @@ class TestConflictsOnTrees:
                 result = theory._model_check(colored_mdp.build_assignment(extension), alt=(polarity is False))
                 assert result.sat is not polarity, f"extension of conflict {sorted(conflict)} is not refuted"
         assert smaller > 0, "no refutation had a conflict smaller than the fixed parameters: the check proves nothing about minimization"
+
+
+def load(project):
+    sketch_path, props_path = get_sketch_paths(project)
+    return paynt.parser.sketch.Sketch.load_sketch(sketch_path, props_path)
+
+
+def map_optimal_scheduler(project, max_depth, method="ar"):
+    """Map Storm's optimal scheduler of the project's MDP to a tree of at most max_depth, through the library entry point."""
+    factory, task = load(project)
+    scheduler = paynt.model.model.Mdp(factory.underlying_mdp).model_check_property(task.get_property()).result.scheduler
+    build_task = paynt.dt.task.DtTask(tree_depth=max_depth)
+    build_task.set_scheduler_to_map(scheduler)
+    return paynt.dt.api.synthesize(factory, task, build_task, method=method)
+
+
+class TestMapScheduler:
+    """Mapping a scheduler to a tree is one satisfiability query per depth, answered by ColoringSmt; there is nothing for SMPMC to search, so it is refused.
+
+    That the tree makes exactly the scheduler's choices is checked where the query is answered, see TestAreChoicesConsistentMatchesColoringSmt.
+    """
+
+    def test_the_optimal_scheduler_of_the_maze_is_mapped_to_a_tree_of_depth_3(self):
+        result = map_optimal_scheduler("tests/dt-maze", 4)
+        assert result.success
+        assert result.tree.get_depth() == 3
+        assert len(result.tree.collect_nonterminals()) == 5
+        assert result.value == pytest.approx(6.889153192908649, rel=1e-6)
+
+    @pytest.mark.parametrize(("project", "max_depth"), [("tests/dt-maze", 2), ("tests/dt-orchard", 2)])
+    def test_no_tree_is_found_when_the_optimal_scheduler_needs_a_deeper_one(self, project, max_depth):
+        assert not map_optimal_scheduler(project, max_depth).success
+
+    def test_method_smpmc_is_refused(self):
+        with pytest.raises(ValueError, match="mapping a scheduler to a tree does not support method 'smpmc'"):
+            map_optimal_scheduler("tests/dt-maze", 4, "smpmc")
+
+    def test_the_method_is_checked(self):
+        factory, task = load("tests/dt-maze")
+        with pytest.raises(ValueError, match="decision-tree synthesis supports"):
+            paynt.dt.synthesizer.DtSynthesizer(factory, task, method="onebyone")
+
+
+class TestLibraryEntryPointTakesTheMethod:
+    def test_synthesizing_trees_through_paynt_dt_api_with_smpmc(self):
+        factory, task = load("tests/dt-maze")
+        smpmc = paynt.dt.api.synthesize(factory, task, paynt.dt.task.DtTask(tree_depth=1), use_solver="dtpaynt", method="smpmc")
+        factory, task = load("tests/dt-maze")
+        ar = paynt.dt.api.synthesize(factory, task, paynt.dt.task.DtTask(tree_depth=1), use_solver="dtpaynt")
+        assert smpmc.success and ar.success
+        assert smpmc.value == pytest.approx(ar.value, abs=1e-6)

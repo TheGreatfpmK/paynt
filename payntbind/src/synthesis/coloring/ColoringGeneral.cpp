@@ -5,7 +5,6 @@
 
 #include <algorithm>
 #include <map>
-#include <set>
 
 namespace synthesis {
 
@@ -28,8 +27,7 @@ ColoringGeneral::ColoringGeneral(
 ) : row_groups(row_groups), num_parameters(num_parameters),
     node_a(node_a), node_b(node_b), node_c(node_c), option_sets(option_sets),
     choice_root(choice_root), state_data(state_data), choice_data(choice_data),
-    state_is_relevant(state_is_relevant_arg.size() == row_groups.size()-1 ? state_is_relevant_arg : BitVector(row_groups.size()-1,true)),
-    harm_var(ctx)
+    state_is_relevant(state_is_relevant_arg.size() == row_groups.size()-1 ? state_is_relevant_arg : BitVector(row_groups.size()-1,true))
 {
     STORM_LOG_THROW(
         node_a.size() == node_op_raw.size() and node_b.size() == node_op_raw.size() and node_c.size() == node_op_raw.size(),
@@ -51,12 +49,6 @@ ColoringGeneral::ColoringGeneral(
         node_op.push_back(static_cast<NodeOp>(op));
     }
 
-    choice_to_state.resize(numChoices());
-    for(uint64_t state = 0; state < numStates(); ++state) {
-        for(uint64_t choice = row_groups[state]; choice < row_groups[state+1]; ++choice) {
-            choice_to_state[choice] = state;
-        }
-    }
     for(auto root: choice_root) {
         STORM_LOG_THROW(root < (int32_t)numNodes(), storm::exceptions::UnexpectedException, "choice_root references an invalid node");
     }
@@ -135,18 +127,11 @@ ColoringGeneral::ColoringGeneral(
     query_tri.assign(numNodes(),Tri::U); state_tri.assign(numNodes(),Tri::U); choice_tri.assign(numNodes(),Tri::U);
     query_iv.assign(numNodes(),Interval{0,0}); state_iv.assign(numNodes(),Interval{0,0}); choice_iv.assign(numNodes(),Interval{0,0});
 
-    // persistent Z3 state for areChoicesConsistent/exactSat (see the header) -- built once, here
+    // Z3 constants for areChoicesConsistent/exactSat (see the header) -- built once, here
     param_vars.reserve(num_parameters);
-    param_vars_harm.reserve(num_parameters);
     for(uint64_t p = 0; p < num_parameters; ++p) {
         param_vars.push_back(ctx.int_const(("p" + std::to_string(p)).c_str()));
-        param_vars_harm.push_back(ctx.int_const(("ph" + std::to_string(p)).c_str()));
     }
-    harm_var = ctx.int_const("__harm__");
-    choice_formula_built.assign(numChoices(), false);
-    choice_formula_harm_built.assign(numChoices(), false);
-    choice_formula.assign(numChoices(), ctx.bool_val(false));
-    choice_formula_harm.assign(numChoices(), ctx.bool_val(false));
 }
 
 std::shared_ptr<ColoringGeneral> ColoringGeneral::fromColoring(
@@ -609,13 +594,7 @@ z3::expr ColoringGeneral::buildTerm(int32_t node, Z3BuildContext const& bc) cons
     int32_t a = (int32_t)a64, b = node_b[node], c = node_c[node];
     switch(op) {
         case NodeOp::ConstTerm: return bc.ctx.int_val((int64_t)a64);
-        case NodeOp::ParamTerm: {
-            uint64_t p = (uint64_t)a64;
-            if(bc.harm_var != nullptr) {
-                return z3::ite(*bc.harm_var == bc.ctx.int_val((int64_t)p), (*bc.param_vars_harm)[p], bc.param_vars[p]);
-            }
-            return bc.param_vars[p];
-        }
+        case NodeOp::ParamTerm: return bc.param_vars[(uint64_t)a64];
         case NodeOp::StateColTerm: return bc.ctx.int_val((int64_t)(*bc.state_row)[(uint64_t)a64]);
         case NodeOp::ChoiceColTerm: return bc.ctx.int_val((int64_t)(*bc.choice_row)[(uint64_t)a64]);
         case NodeOp::AddTerm: return buildTerm(a,bc) + buildTerm(b,bc);
@@ -698,35 +677,16 @@ bool ColoringGeneral::exactSat(
     for(uint64_t p: node_support[node]) {
         solver.add(domainConstraint(p,param_vars[p],family,ctx));
     }
-    Z3BuildContext bc{ctx, param_vars, &state_row, &choice_row, nullptr, nullptr};
+    Z3BuildContext bc{ctx, param_vars, &state_row, &choice_row};
     solver.add(buildFormula(node,bc));
     return solver.check() == z3::sat;
-}
-
-z3::expr const& ColoringGeneral::getChoiceFormula(uint64_t choice, bool harmonizing) {
-    uint64_t state = choice_to_state[choice];
-    int32_t root = choice_root[choice];
-    if(harmonizing) {
-        if(not choice_formula_harm_built[choice]) {
-            Z3BuildContext bc{ctx, param_vars, &state_data[state], &choice_data[choice], &harm_var, &param_vars_harm};
-            choice_formula_harm[choice] = buildFormula(root,bc);
-            choice_formula_harm_built[choice] = true;
-        }
-        return choice_formula_harm[choice];
-    }
-    if(not choice_formula_built[choice]) {
-        Z3BuildContext bc{ctx, param_vars, &state_data[state], &choice_data[choice], nullptr, nullptr};
-        choice_formula[choice] = buildFormula(root,bc);
-        choice_formula_built[choice] = true;
-    }
-    return choice_formula[choice];
 }
 
 // ==================================================================================================================
 // areChoicesConsistent
 // ==================================================================================================================
 
-std::vector<std::vector<uint64_t>> ColoringGeneral::extractAssignment(z3::model const& model, std::vector<z3::expr> const& param_vars) const {
+std::vector<std::vector<uint64_t>> ColoringGeneral::extractAssignment(z3::model const& model) const {
     std::vector<std::vector<uint64_t>> result(num_parameters);
     for(uint64_t p = 0; p < num_parameters; ++p) {
         int64_t v = model.eval(param_vars[p]).get_numeral_int64();
@@ -735,140 +695,24 @@ std::vector<std::vector<uint64_t>> ColoringGeneral::extractAssignment(z3::model 
     return result;
 }
 
-std::vector<std::vector<uint64_t>> ColoringGeneral::bisectionHint(BitVector const& choices, Family const& family) const {
-    std::vector<std::vector<uint64_t>> result(num_parameters);
-    for(uint64_t p = 0; p < num_parameters; ++p) {
-        result[p] = {family.holeOptions(p).front()};
-    }
-    BitVector involved(num_parameters,false);
-    for(uint64_t state = 0; state < numStates(); ++state) {
-        if(not state_is_relevant[state]) continue;
-        for(uint64_t choice = row_groups[state]; choice < row_groups[state+1]; ++choice) {
-            if(not choices[choice] or choice_root[choice] < 0) continue;
-            involved |= node_support[choice_root[choice]];
-        }
-    }
-    for(uint64_t p: involved) {
-        if(family.holeNumOptions(p) >= 2) {
-            auto const& opts = family.holeOptions(p);
-            result[p] = {opts.front(), opts[opts.size()/2] == opts.front() ? opts.back() : opts[opts.size()/2]};
-            return result;
-        }
-    }
-    // fall-through fallback: any parameter with >= 2 options at all
-    for(uint64_t p = 0; p < num_parameters; ++p) {
-        if(family.holeNumOptions(p) >= 2) {
-            auto const& opts = family.holeOptions(p);
-            result[p] = {opts.front(), opts[opts.size()/2] == opts.front() ? opts.back() : opts[opts.size()/2]};
-            return result;
-        }
-    }
-    return std::vector<std::vector<uint64_t>>(num_parameters); // nothing left to split -- caller must treat as UNSAT/empty
-}
-
 std::pair<bool,std::vector<std::vector<uint64_t>>> ColoringGeneral::areChoicesConsistent(BitVector const& choices, Family const& family) {
     this->family = &family;
     z3::solver solver(ctx);
     for(uint64_t p = 0; p < num_parameters; ++p) {
         solver.add(domainConstraint(p,param_vars[p],family,ctx));
-        solver.add(domainConstraint(p,param_vars_harm[p],family,ctx));
     }
-
-    auto labelOf = [](uint64_t choice) { return "c" + std::to_string(choice); };
-
-    // pass 1: every selected, relevant, colored choice at once -- each choice's own (state,choice)-instantiated
-    // formula is cached (getChoiceFormula), so only the family's domain constraints above are rebuilt per call
-    solver.push();
     for(uint64_t state = 0; state < numStates(); ++state) {
         if(not state_is_relevant[state]) continue;
         for(uint64_t choice = row_groups[state]; choice < row_groups[state+1]; ++choice) {
             if(not choices[choice] or choice_root[choice] < 0) continue;
-            solver.add(getChoiceFormula(choice,false), labelOf(choice).c_str());
+            Z3BuildContext bc{ctx, param_vars, &state_data[state], &choice_data[choice]};
+            solver.add(buildFormula(choice_root[choice],bc));
         }
     }
     if(solver.check() == z3::sat) {
-        auto model = solver.get_model();
-        solver.pop();
-        return {true, extractAssignment(model,param_vars)};
+        return {true, extractAssignment(solver.get_model())};
     }
-    solver.pop();
-
-    if(not enable_harmonization) {
-        return {false, std::vector<std::vector<uint64_t>>(num_parameters)};
-    }
-    STORM_LOG_THROW(
-        state_exploration_enabled, storm::exceptions::UnexpectedException,
-        "areChoicesConsistent's harmonization pass requires enableStateExploration (matches ColoringSmt's own requirement)"
-    );
-
-    // pass 2: BFS-localized unsat core along reachable states (mirrors ColoringSmt::areChoicesConsistent)
-    solver.push();
-    std::queue<uint64_t> unexplored;
-    BitVector state_reached(numStates(),false);
-    unexplored.push(initial_state);
-    state_reached.set(initial_state,true);
-    bool consistent = true;
-    while(consistent) {
-        STORM_LOG_THROW(not unexplored.empty(), storm::exceptions::UnexpectedException, "all states explored but the family remains UNSAT");
-        uint64_t state = unexplored.front(); unexplored.pop();
-        for(uint64_t choice = row_groups[state]; choice < row_groups[state+1]; ++choice) {
-            if(not choices[choice]) continue;
-            if(state_is_relevant[state] and choice_root[choice] >= 0) {
-                solver.add(getChoiceFormula(choice,false), labelOf(choice).c_str());
-                consistent = solver.check() == z3::sat;
-            }
-            visitChoice(choice,state_reached,unexplored);
-            break;
-        }
-    }
-    z3::expr_vector unsat_core_expr = solver.unsat_core();
-    solver.pop();
-
-    std::set<uint64_t> critical_states;
-    for(z3::expr e: unsat_core_expr) {
-        std::string name = e.decl().name().str();
-        if(name.size() > 1 and name[0] == 'c') {
-            uint64_t choice = std::stoull(name.substr(1));
-            critical_states.insert(choice_to_state[choice]);
-        }
-    }
-
-    // pass 3: harmonize the critical states' choices -- every ParamTerm may use a copy when harm_var points at it
-    solver.push();
-    for(uint64_t state: critical_states) {
-        for(uint64_t choice = row_groups[state]; choice < row_groups[state+1]; ++choice) {
-            if(not choices[choice] or choice_root[choice] < 0) continue;
-            solver.add(getChoiceFormula(choice,true), labelOf(choice).c_str());
-        }
-    }
-    solver.add(harm_var >= 0 and harm_var < (int)num_parameters, "harm_domain");
-    bool harmonized_sat = solver.check() == z3::sat;
-    std::vector<std::vector<uint64_t>> harmonized_result;
-    bool harmonized_useful = false;
-    if(harmonized_sat) {
-        auto model = solver.get_model();
-        uint64_t hh = model.eval(harm_var).get_numeral_uint64();
-        harmonized_result = extractAssignment(model,param_vars);
-        int64_t v1 = harmonized_result[hh][0];
-        int64_t v2 = model.eval(param_vars_harm[hh]).get_numeral_int64();
-        if(v2 != v1) {
-            harmonized_result[hh] = v1 < v2 ? std::vector<uint64_t>{(uint64_t)v1,(uint64_t)v2} : std::vector<uint64_t>{(uint64_t)v2,(uint64_t)v1};
-            harmonized_useful = true;
-        }
-        // else: degenerate witness -- Z3 picked an H whose harmonized copy happens to coincide with its primary
-        // value. Nothing forces them to differ (h' is unconstrained whenever the primary alone already satisfies
-        // every *critical-core* constraint mentioning h, which can happen even though the full choice set is UNSAT,
-        // since the core is a strict subset of it). That gives no real two-option split (and callers require
-        // exactly two *distinct* options -- see ColoredMdp.are_choices_consistent's own assertion), so it's treated
-        // the same as "even harmonization didn't help": fall through to the bisection hint below.
-    }
-    solver.pop();
-    if(harmonized_useful) {
-        return {false, harmonized_result};
-    }
-
-    // last resort: never throw -- offer a bisection hint instead of ColoringSmt's hard failure
-    return {false, bisectionHint(choices,family)};
+    return {false, std::vector<std::vector<uint64_t>>(num_parameters)};
 }
 
 }

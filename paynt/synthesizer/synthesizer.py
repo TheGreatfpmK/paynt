@@ -81,6 +81,12 @@ class Synthesizer:
             return True
         return False
 
+    def time_remaining(self) -> float | None:
+        """Seconds until time_limit_reached() turns true (negative once it has), or None if there is no time limit."""
+        synthesis_remaining = None if self.synthesis_timer is None else self.synthesis_timer.time_remaining()
+        limits = [remaining for remaining in (synthesis_remaining, paynt.utils.timer.GlobalTimer.time_remaining()) if remaining is not None]
+        return min(limits) if limits else None
+
     def memory_limit_reached(self) -> bool:
         if paynt.utils.timer.GlobalMemoryLimit.limit_reached():
             logger.info("memory limit reached, aborting...")

@@ -426,6 +426,5 @@ void bindings_coloring(py::module& m) {
         .def("getStateToHoles", &synthesis::ColoringGeneral::getStateToHoles)
         .def("relevantParameters", &synthesis::ColoringGeneral::relevantParameters)
         .def("areChoicesConsistent", &synthesis::ColoringGeneral::areChoicesConsistent)
-        .def_readwrite("enable_harmonization", &synthesis::ColoringGeneral::enable_harmonization)
         ;
 }

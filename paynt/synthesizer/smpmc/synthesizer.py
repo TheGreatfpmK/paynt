@@ -16,6 +16,7 @@ universally quantified environment. An optimality objective then optimizes the w
 
 from __future__ import annotations
 
+import math
 import re
 from typing import Any
 
@@ -38,6 +39,11 @@ import paynt.task
 import logging
 
 logger = logging.getLogger(__name__)
+
+#: Z3's timeout parameter is an unsigned 32-bit number of milliseconds
+_MAX_Z3_TIMEOUT_MS = 2**32 - 1
+#: what solver.reason_unknown() says when check() ran into the timeout set by SynthesizerSMPMC._limit_solver_time
+_TIMEOUT_REASONS = ("timeout", "canceled")
 
 
 class SynthesizerSMPMC(paynt.synthesizer.synthesizer.Synthesizer):
@@ -115,11 +121,16 @@ class SynthesizerSMPMC(paynt.synthesizer.synthesizer.Synthesizer):
         solver, _propagator = new_solver()
         optimality = self.task.specification.optimality
         while not self.resource_limit_reached():
+            self._limit_solver_time(solver)
             result = solver.check()
             if result == z3.unsat:
                 break
             if result == z3.unknown:
-                logger.warning(f"SMPMC returned unknown: {solver.reason_unknown()}")
+                if solver.reason_unknown() in _TIMEOUT_REASONS:
+                    # the best assignment found so far stands, exactly as when the limit is reached between two checks
+                    logger.info("time limit reached, aborting...")
+                else:
+                    logger.warning(f"SMPMC returned unknown: {solver.reason_unknown()}")
                 break
 
             assignment = encoding.extract_assignment(solver.model(), node.parameter_space, self.forall_parameters)
@@ -165,6 +176,17 @@ class SynthesizerSMPMC(paynt.synthesizer.synthesizer.Synthesizer):
 
         self.explored = node.parameter_space.size
         return self.best_assignment
+
+    def _limit_solver_time(self, solver: Any) -> None:
+        """Make the next solver.check() give up, answering unknown, once the time limit is reached.
+
+        One check() is Z3's whole search, theory calls included, and can run for minutes: testing the limit between two checks is not enough. Z3 notices the
+        timeout as soon as the theory callback in progress returns, so a check() overruns the limit by about that callback (a model check of the sub-MDP, which
+        cannot be interrupted) rather than by the rest of the search.
+        """
+        remaining = self.time_remaining()
+        if remaining is not None:
+            solver.set("timeout", min(max(math.ceil(remaining * 1000), 1), _MAX_Z3_TIMEOUT_MS))
 
     def _worst_case_of(
         self,

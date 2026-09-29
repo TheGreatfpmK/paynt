@@ -152,3 +152,39 @@ class TestColoringErrors:
         x = z3.Real("x")  # a sort this DSL doesn't support at all
         with pytest.raises(ValueError):
             builder.template(z3.And(p == 0, x > 0))
+
+
+class TestDataColumnRange:
+    """A data column holds signed 64-bit integers: anything wider is refused with a clear error, instead of pybind's opaque TypeError at build()."""
+
+    @pytest.mark.parametrize("value", [2**63, -(2**63) - 1, 2**64, 1 << 70])
+    def test_a_value_that_does_not_fit_is_refused(self, value):
+        builder = paynt.utils.coloring_builder.ColoringBuilder([0, 1, 2], 1)
+        with pytest.raises(ValueError, match=r"state_column value .* at index 1 does not fit in a signed 64-bit integer"):
+            builder.state_column([0, value])
+        with pytest.raises(ValueError, match=r"choice_column value .* at index 0 does not fit in a signed 64-bit integer"):
+            builder.choice_column([value, 0])
+
+    def test_the_extreme_values_that_do_fit_are_accepted(self):
+        builder = paynt.utils.coloring_builder.ColoringBuilder([0, 2], 1)
+        p = builder.parameters[0]
+        highest = builder.state_column([2**63 - 1])
+        lowest = builder.choice_column([-(2**63), 0])
+        builder.color(0, builder.template(z3.And(p == 0, lowest < highest)))
+        builder.color(1, builder.template(p == 1))
+        builder.build()
+
+    def test_a_refused_column_leaves_no_trace_in_the_builder(self):
+        parameter_space = make_parameter_space([[0, 1]])
+        builder = paynt.utils.coloring_builder.ColoringBuilder([0, 2], 1)
+        p = builder.parameters[0]
+        with pytest.raises(ValueError):
+            builder.state_column([2**63])
+        x = builder.state_column([1])  # the first column that exists: had the refused one been registered, x would name a column of another state's data
+        builder.color(0, builder.template(p == x))
+        builder.color(1, builder.template(p != x))
+        coloring = builder.build()
+        family = parameter_space.copy()
+        family.parameter_set_options(0, [1])
+        selection = coloring.selectCompatibleChoices(family.native)
+        assert [selection[choice] for choice in range(2)] == [True, False]

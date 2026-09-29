@@ -14,7 +14,7 @@ import paynt.model.model
 import paynt.dt.result
 from paynt.dt.synthesizer_ar_dt import SynthesizerARDt
 
-from ._utils import make_inner_synthesizer, simplify_tree
+from ._utils import DT_INNER_METHODS, make_inner_synthesizer, simplify_tree
 
 import payntbind
 
@@ -33,11 +33,13 @@ def _choose_solver_for_dt_task(build_task: paynt.dt.task.DtTask) -> str:
 
 
 def _run_dt_map_scheduler(
-    cmdp_factory_dt: paynt.dt.factory.DtColoredMdpFactory, task: paynt.task.SynthesisTask, scheduler: Any, tree_depth: int
+    cmdp_factory_dt: paynt.dt.factory.DtColoredMdpFactory, task: paynt.task.SynthesisTask, scheduler: Any, tree_depth: int, method: str = "ar"
 ) -> paynt.dt.result.DtResult:
     """Helper function to map a scheduler to a decision tree using the DTMap algorithm.
 
     Returns a tuple (success, decision_tree).
+
+    :param method: see DtSynthesizer; only "ar" maps a scheduler
     """
     state_to_choice = payntbind.synthesis.schedulerToStateToGlobalChoice(
         scheduler, cmdp_factory_dt.underlying_mdp, list(range(cmdp_factory_dt.underlying_mdp.nr_choices))
@@ -47,7 +49,7 @@ def _run_dt_map_scheduler(
     )
     choices = paynt.model.model.ModelIndex.state_to_choice_to_choices(cmdp_factory_dt.underlying_mdp, state_to_choice)
 
-    dt_synthesizer = DtSynthesizer(cmdp_factory_dt, task)
+    dt_synthesizer = DtSynthesizer(cmdp_factory_dt, task, method=method)
     dt_synthesizer.map_scheduler(choices, tree_depth=tree_depth)
 
     simplify_tree(dt_synthesizer.best_tree, dt_synthesizer.colored_mdp.feature_info)
@@ -56,9 +58,9 @@ def _run_dt_map_scheduler(
 
 
 def _run_dtpaynt(
-    cmdp_factory_dt: paynt.dt.factory.DtColoredMdpFactory, task: paynt.task.SynthesisTask, tree_depth: int, timeout: int | None = None
+    cmdp_factory_dt: paynt.dt.factory.DtColoredMdpFactory, task: paynt.task.SynthesisTask, tree_depth: int, timeout: int | None = None, method: str = "ar"
 ) -> paynt.dt.result.DtResult:
-    dt_synthesizer = DtSynthesizer(cmdp_factory_dt, task)
+    dt_synthesizer = DtSynthesizer(cmdp_factory_dt, task, method=method)
     dt_synthesizer.synthesize_tree(tree_depth, timeout=timeout)
 
     simplify_tree(dt_synthesizer.best_tree, dt_synthesizer.colored_mdp.feature_info)
@@ -72,8 +74,7 @@ class DtSynthesizer:
     keeping the best tree found so far across depths.
 
     :param method: the inner engine -- "ar" (default), SynthesizerARDt over ColoringSmt, dtpaynt's own unchanged default path; or "smpmc", SynthesizerSMPMC over
-        the tree's ColoringGeneral (see paynt.dt.coloring_general). map_scheduler always uses ColoringSmt/SynthesizerARDt regardless of this setting (see its
-        own docstring).
+        the tree's ColoringGeneral (see paynt.dt.coloring_general). Mapping a scheduler (map_scheduler) supports only "ar".
     """
 
     def __init__(
@@ -83,6 +84,8 @@ class DtSynthesizer:
         initial_depth: int | None = None,
         method: str = "ar",
     ):
+        if method not in DT_INNER_METHODS:
+            raise ValueError(f"decision-tree synthesis supports method {DT_INNER_METHODS}, got {method!r}")
         self.colored_mdp_factory = colored_mdp_factory
         self.task = task
         self.method = method
@@ -91,6 +94,8 @@ class DtSynthesizer:
         # run()/synthesize_tree_sequence read DT-specific fields constantly.
         assert colored_mdp_factory.build_task is not None
         self.build_task: paynt.dt.task.DtTask = colored_mdp_factory.build_task
+        if method != "ar" and (self.build_task.scheduler_path is not None or self.build_task.has_scheduler_to_map):
+            raise ValueError(f"mapping a scheduler to a tree does not support method {method!r}: it maps through ColoringSmt, use method 'ar'")
         # the factory never builds automatically -- request the initial tree explicitly. Defaults to
         # build_task's own depth; callers only needing cheap, depth-invariant inspection (e.g. DtNest's
         # subtree recursion) pass initial_depth=0 to avoid building at a larger, more expensive depth than
@@ -212,6 +217,11 @@ class DtSynthesizer:
                 break
 
     def map_scheduler(self, scheduler_choices: Any, tree_depth: int | None = None) -> None:
+        """Find the shallowest tree, up to tree_depth, that makes exactly the given scheduler's choices.
+
+        Each depth is one satisfiability query, whether some tree of that depth is consistent with the scheduler, answered by ColoringSmt (through
+        SynthesizerARDt, which also checks the tree found). There is no search, so no inner engine other than AR is involved.
+        """
         if tree_depth is None:
             tree_depth = self.build_task.tree_depth
         for depth in range(tree_depth + 1):

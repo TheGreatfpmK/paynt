@@ -57,6 +57,19 @@ NodeOp = payntbind.synthesis.ColoringGeneralNodeOp
 # a marker function used purely as syntax: never handed to a solver, only ever pattern-matched by the walker below
 _IN_BITS_FUNC = z3.Function("__paynt_coloring_builder_in_bits__", z3.IntSort(), z3.IntSort(), z3.BoolSort())
 
+_INT64_MIN = -(2**63)
+_INT64_MAX = 2**63 - 1
+
+
+def _check_fits_int64(values: list[int], kind: str) -> None:
+    """Data columns reach the engine as signed 64-bit integers: refuse a wider value here, rather than letting pybind fail on it with an opaque TypeError."""
+    if values and (min(values) < _INT64_MIN or max(values) > _INT64_MAX):
+        index = next(index for index, value in enumerate(values) if not _INT64_MIN <= value <= _INT64_MAX)
+        raise ValueError(
+            f"{kind} value {values[index]} at index {index} does not fit in a signed 64-bit integer, which is what a data column holds "
+            "(so an in_bits mask can address options 0..63, bit 63 being the sign bit)"
+        )
+
 
 class _NodeTable:
     """Hash-consed flat node table (ColoringGeneral's constructor format), shared by every template of one builder."""
@@ -346,6 +359,7 @@ class ColoringBuilder:
         """A per-state data column (one integer per state, in state order), usable as a z3py Int term."""
         if len(values) != self.num_states:
             raise ValueError(f"state_column expects {self.num_states} values, got {len(values)}")
+        _check_fits_int64(values, "state_column")
         column = len(self._state_col_by_name)
         name = f"__state_col_{column}__"
         self._state_col_by_name[name] = column
@@ -357,6 +371,7 @@ class ColoringBuilder:
         """A per-choice data column (one integer per choice, in choice order), usable as a z3py Int term."""
         if len(values) != self.num_choices:
             raise ValueError(f"choice_column expects {self.num_choices} values, got {len(values)}")
+        _check_fits_int64(values, "choice_column")
         column = len(self._choice_col_by_name)
         name = f"__choice_col_{column}__"
         self._choice_col_by_name[name] = column

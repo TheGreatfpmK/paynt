@@ -7,13 +7,16 @@ and those engines must agree on feasibility.
 from __future__ import annotations
 
 import logging
+import time
 
 import pytest
 
 import paynt.parser.sketch
 import paynt.synthesizer.smpmc
+import paynt.synthesizer.smpmc.checker
 import paynt.synthesizer.synthesizer
 import paynt.synthesizer.synthesizer_ar
+import paynt.utils.timer
 
 from helpers.helper import get_sketch_paths
 
@@ -89,3 +92,96 @@ class TestSmpmcOnFamilyModel:
         onebyone_result = paynt.synthesizer.synthesizer.Synthesizer.for_method(onebyone_factory.build(), onebyone_task, "onebyone").run()
 
         assert smpmc_result.success == onebyone_result.success
+
+
+class RecordingSolver:
+    """Stands in for a z3.Solver where only the parameters set on it matter."""
+
+    def __init__(self):
+        self.settings = []
+
+    def set(self, name, value):
+        self.settings.append((name, value))
+
+
+class TestLimitSolverTime:
+    """The time left is what Z3 is told to give up after: milliseconds, at least one, at most what an unsigned 32-bit number holds."""
+
+    @staticmethod
+    def timeout_set_for(smpmc_tiny_colored_mdp, smpmc_tiny_task, limit):
+        synthesizer = paynt.synthesizer.smpmc.SynthesizerSMPMC(smpmc_tiny_colored_mdp, smpmc_tiny_task)
+        synthesizer.synthesis_timer = paynt.utils.timer.Timer(limit)
+        synthesizer.synthesis_timer.start()
+        solver = RecordingSolver()
+        synthesizer._limit_solver_time(solver)
+        return solver.settings
+
+    def test_passes_the_remaining_time_in_milliseconds(self, smpmc_tiny_colored_mdp, smpmc_tiny_task):
+        [(name, milliseconds)] = self.timeout_set_for(smpmc_tiny_colored_mdp, smpmc_tiny_task, 10)
+        assert name == "timeout"
+        assert 9000 < milliseconds <= 10000
+
+    def test_sets_nothing_without_a_time_limit(self, smpmc_tiny_colored_mdp, smpmc_tiny_task, monkeypatch):
+        monkeypatch.setattr(paynt.utils.timer.GlobalTimer, "global_timer", None)
+        assert self.timeout_set_for(smpmc_tiny_colored_mdp, smpmc_tiny_task, None) == []
+
+    def test_a_limit_already_reached_still_gives_z3_a_timeout(self, smpmc_tiny_colored_mdp, smpmc_tiny_task):
+        """Zero would mean no timeout at all to Z3."""
+        assert self.timeout_set_for(smpmc_tiny_colored_mdp, smpmc_tiny_task, -5) == [("timeout", 1)]
+
+    def test_a_huge_limit_is_capped_to_what_z3_accepts(self, smpmc_tiny_colored_mdp, smpmc_tiny_task):
+        assert self.timeout_set_for(smpmc_tiny_colored_mdp, smpmc_tiny_task, 10**9) == [("timeout", 2**32 - 1)]
+
+
+class TestSmpmcTimeLimit:
+    """A time limit stops the solver itself: one solver.check() is Z3's whole search, theory calls included, so it can run for minutes, and testing the limit
+    only between two checks is not enough.
+
+    Each theory call is slowed down, so that the searches below take many seconds whatever the machine.
+    """
+
+    @pytest.fixture(autouse=True)
+    def slow_theory(self, monkeypatch):
+        check = paynt.synthesizer.smpmc.checker.ColoredMdpTheory.check
+
+        def slow_check(self, fixed, polarity):
+            time.sleep(0.002)
+            return check(self, fixed, polarity)
+
+        monkeypatch.setattr(paynt.synthesizer.smpmc.checker.ColoredMdpTheory, "check", slow_check)
+
+    @staticmethod
+    def maze_synthesizer():
+        """SMPMC on the decision trees of depth 2 of tests/dt-maze (Rmin): the optimum, 20.948..., takes some 20 000 theory calls to find and prove, a first
+        tree only a couple."""
+        sketch_path, props_path = get_sketch_paths("tests/dt-maze")
+        factory, task = paynt.parser.sketch.Sketch.load_sketch(sketch_path, props_path)
+        return paynt.synthesizer.smpmc.SynthesizerSMPMC(factory.reset_tree(2, general=True), task)
+
+    def test_the_limit_ends_a_single_check_that_would_run_for_much_longer(self, caplog):
+        """Seeded just below the optimum, nothing is left to find and the whole search is one solver.check() ending in unsat: some 9 500 theory calls, half a
+        minute here without the limit."""
+        synthesizer = self.maze_synthesizer()
+        started = time.perf_counter()
+        with caplog.at_level(logging.INFO):
+            synthesizer.synthesize(optimum_threshold=20.9, timeout=0.5)
+        assert time.perf_counter() - started < 5
+        assert any("time limit reached" in record.message for record in caplog.records)
+        assert not any("returned unknown" in record.message for record in caplog.records)
+
+    def test_the_best_assignment_found_before_the_limit_stands(self):
+        synthesizer = self.maze_synthesizer()
+        synthesizer.synthesize(keep_optimum=True, timeout=1)
+        assert synthesizer.best_assignment is not None
+        # Rmin: a tree worse than the optimum, since the search was cut short
+        assert synthesizer.best_assignment_value > 20.95
+
+    def test_a_robust_search_is_stopped_by_the_limit_too(self, rocks_colored_mdp, rocks_task):
+        """There Z3 also runs the theory in quantifier-instantiation sub-contexts, and starts over with a new solver after each improvement."""
+        rocks_task.constraint_name = "exists_forall"
+        rocks_task.forall_pattern = None
+        rocks_task.verify_robust = False
+        synthesizer = paynt.synthesizer.smpmc.SynthesizerSMPMC(rocks_colored_mdp, rocks_task)
+        started = time.perf_counter()
+        synthesizer.synthesize(timeout=0.5)
+        assert time.perf_counter() - started < 5

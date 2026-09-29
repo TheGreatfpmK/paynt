@@ -98,7 +98,7 @@ public:
 
     /**
      * Enable reachability-restricted selection (BFS from initial_state via choice_destinations), matching
-     * ColoringSmt::enableStateExploration. Also required for the BFS-localized unsat core in areChoicesConsistent.
+     * ColoringSmt::enableStateExploration.
      */
     void enableStateExploration(uint64_t initial_state, std::vector<std::vector<uint64_t>> const& choice_destinations);
 
@@ -135,22 +135,18 @@ public:
     BitVector relevantParameters(Family const& family, std::vector<uint64_t> const& states);
 
     /**
-     * Verify whether the given choices have a common satisfying parameter assignment (within the given family).
-     * Same contract as ColoringSmt::areChoicesConsistent, except it never throws: if even the harmonized unsat
-     * core is UNSAT, a bisection hint (two options on one parameter, one option elsewhere) is returned instead of
-     * ColoringSmt's hard failure.
-     * @return (A,B): A iff the choice selection is consistent; if A holds, B is a satisfying assignment (one
-     *   option per parameter); otherwise, if harmonization is enabled, B is a harmonized or bisection hint (one
-     *   option per parameter, two sorted distinct options on exactly one parameter); otherwise B is empty.
+     * Verify whether the given choices have a common satisfying parameter assignment (within the given family), i.e.
+     * whether the conjunction of their colors is satisfiable. Choices at irrelevant states and uncolored choices
+     * impose nothing. This is ColoringSmt::areChoicesConsistent without harmonization: no split is proposed for an
+     * inconsistent choice set.
+     * @return (A,B): A iff the choices are consistent; if A holds, B is a satisfying assignment (one option per
+     *   parameter); otherwise B is empty (an empty list per parameter).
      */
     std::pair<bool,std::vector<std::vector<uint64_t>>> areChoicesConsistent(BitVector const& choices, Family const& family);
-
-    bool enable_harmonization = true;
 
 protected:
 
     const std::vector<uint64_t> row_groups;
-    std::vector<uint64_t> choice_to_state;
     uint64_t numStates() const;
     uint64_t numChoices() const;
     const uint64_t num_parameters;
@@ -212,30 +208,16 @@ protected:
 
     // -- exact (Z3) mode and areChoicesConsistent ----------------------------------------------------------------
 
-    // One persistent Z3 context/parameter constants for the object's whole lifetime (built once, in the
-    // constructor): unlike the family's domain constraints (which change every query), a choice's own compiled
-    // formula is entirely invariant across calls (same node table, same data), so it is built at most once per
-    // choice and cached forever -- see choice_formula(_harm) below. This is what actually makes areChoicesConsistent
-    // usable as an AR inner loop: rebuilding every choice's formula (and a fresh context) on every single call, as a
-    // naive per-call translation would, is the dominant cost by roughly two orders of magnitude in practice.
+    // One Z3 context and one integer constant per parameter, for the object's whole lifetime (built once, in the
+    // constructor); the family's domain constraints and the choices' formulas are added per query.
     z3::context ctx;
     std::vector<z3::expr> param_vars;
-    std::vector<z3::expr> param_vars_harm;
-    z3::expr harm_var;
-    std::vector<bool> choice_formula_built;
-    std::vector<bool> choice_formula_harm_built;
-    std::vector<z3::expr> choice_formula;      // lazily built, primary (non-harmonizing) encoding
-    std::vector<z3::expr> choice_formula_harm; // lazily built, harmonizing encoding (ParamTerm may use its copy)
-    z3::expr const& getChoiceFormula(uint64_t choice, bool harmonizing);
 
     struct Z3BuildContext {
         z3::context& ctx;
         std::vector<z3::expr> const& param_vars;
         std::vector<int64_t> const* state_row;
         std::vector<int64_t> const* choice_row;
-        // harmonization: when set, every ParamTerm(p) builds as ite(harm_var == p, param_vars_harm[p], param_vars[p])
-        z3::expr const* harm_var = nullptr;
-        std::vector<z3::expr> const* param_vars_harm = nullptr;
     };
     z3::expr buildTerm(int32_t node, Z3BuildContext const& bc) const;
     z3::expr buildFormula(int32_t node, Z3BuildContext const& bc) const;
@@ -246,8 +228,7 @@ protected:
     // against the row explicitly passed in via Z3BuildContext, independent of current_state/current_choice.
     int64_t constTermValue(int32_t node, std::vector<int64_t> const& state_row, std::vector<int64_t> const& choice_row) const;
 
-    std::vector<std::vector<uint64_t>> extractAssignment(z3::model const& model, std::vector<z3::expr> const& param_vars) const;
-    std::vector<std::vector<uint64_t>> bisectionHint(BitVector const& choices, Family const& family) const;
+    std::vector<std::vector<uint64_t>> extractAssignment(z3::model const& model) const;
 
 };
 
