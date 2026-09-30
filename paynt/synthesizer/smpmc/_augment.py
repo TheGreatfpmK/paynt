@@ -15,7 +15,7 @@ from typing import Any
 import payntbind
 
 import paynt.colored_mdp
-import paynt.utils.coloring
+import paynt.utils.error_handling
 
 
 def _state_names(mdp: Any) -> list[str]:
@@ -73,7 +73,7 @@ def add_policy_parameters(colored_mdp: paynt.colored_mdp.ColoredMdp) -> tuple[pa
     """:returns: (the policy-augmented ColoredMdp, indices of the original environment parameters)
     :raises ValueError: unless each environment enables exactly one choice of each action of a state"""
     assert colored_mdp.feature_kind == "family", "policy parameters can only be added to an MDP family"
-    paynt.utils.coloring.require_pair_list_coloring(colored_mdp.coloring, "robust synthesis over an MDP family (adding policy parameters)")
+    paynt.utils.error_handling.require_pair_list_coloring(colored_mdp.coloring, "robust synthesis over an MDP family (adding policy parameters)")
     info = colored_mdp.feature_info
     mdp = colored_mdp.underlying_mdp
     parameter_space = colored_mdp.parameter_space.copy()

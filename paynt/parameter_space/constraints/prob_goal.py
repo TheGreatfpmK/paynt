@@ -21,7 +21,7 @@ from typing import Any
 import z3
 
 import paynt.model.model
-import paynt.utils.coloring
+import paynt.utils.error_handling
 from paynt.parameter_space.constraints.constraint import Constraint, ConstraintContext
 
 import logging
@@ -38,7 +38,7 @@ class ProbGoalConstraint(Constraint):
 
     def build(self, ctx: ConstraintContext) -> list[Any]:
         colored_mdp = ctx.colored_mdp
-        paynt.utils.coloring.require_pair_list_coloring(colored_mdp.coloring, "the prob0/prob1 constraints", "use another --constraint")
+        paynt.utils.error_handling.require_pair_list_coloring(colored_mdp.coloring, "the prob0/prob1 constraints", "use another --constraint")
         model = colored_mdp.underlying_mdp
         transition_matrix = model.transition_matrix
         choice_to_assignment = colored_mdp.coloring.getChoiceToAssignment()

@@ -23,9 +23,10 @@ class FakeTheory:
     def __init__(self):
         self.calls: list[tuple[dict, bool]] = []
         self.first_full_assignment_checked = False
-        # the parts of ColoredMdpTheory's state SmpmcPropagator watches (see SmpmcPropagator._theory_state)
+        # the parts of ColoredMdpTheory's state SmpmcPropagator watches (see SmpmcPropagator._theory_state), and whether the time limit is reached
         self.mc_calls = 0
         self.epoch = 0
+        self.time_is_up = lambda: False
 
     def check(self, fixed: dict, polarity: bool):
         self.calls.append((dict(fixed), polarity))
@@ -104,6 +105,38 @@ class TestExistentialSearch:
             if model[p0].as_long() + model[p1].as_long() + model[p2].as_long() < 3:
                 bad += 1
         assert bad == 0
+
+
+class TestTimeIsUp:
+    """Once the theory says the time limit is reached, the propagator stops the running search at its next callback, and does not consult the theory any more.
+
+    (SmpmcPropagator._interrupt_if_time_is_up)
+    """
+
+    def test_the_search_stops_without_consulting_the_theory(self):
+        solver, _vars, theory = _build_solver(width=3, p0_max=1, p1_max=1, p2_max=0)
+        theory.time_is_up = lambda: True
+        result = solver.check()
+        # never a refutation (the search was cut off), and a sat here would be an unchecked candidate: the synthesizer discards what comes back past the limit
+        assert result != z3.unsat
+        assert theory.calls == []
+
+    def test_the_search_stops_when_the_time_runs_out_in_the_middle_of_it(self):
+        solver, _vars, theory = _build_solver(width=3, p0_max=1, p1_max=1, p2_max=0)
+        theory.time_is_up = lambda: len(theory.calls) >= 2
+        solver.check()
+        assert len(theory.calls) == 2
+
+    def test_a_search_stopped_that_way_leaves_the_next_one_alone(self):
+        """An interrupt sent while no check() runs would leave the context cancelled, and the next solver with a propagator would answer sat at once."""
+        solver, _vars, theory = _build_solver(width=3, p0_max=1, p1_max=1, p2_max=0)
+        theory.time_is_up = lambda: True
+        solver.check()
+        solver, (p0, p1, p2), theory = _build_solver(width=3, p0_max=3, p1_max=1, p2_max=0)
+        assert solver.check() == z3.sat
+        model = solver.model()
+        assert model[p0].as_long() + model[p1].as_long() + model[p2].as_long() >= 3
+        assert len(theory.calls) > 0
 
 
 class TestChecksAFullAssignmentFirst:
@@ -201,9 +234,10 @@ class RobustFakeTheory:
     def __init__(self):
         self.calls: list[tuple[dict, bool]] = []
         self.first_full_assignment_checked = False
-        # the parts of ColoredMdpTheory's state SmpmcPropagator watches (see SmpmcPropagator._theory_state)
+        # the parts of ColoredMdpTheory's state SmpmcPropagator watches (see SmpmcPropagator._theory_state), and whether the time limit is reached
         self.mc_calls = 0
         self.epoch = 0
+        self.time_is_up = lambda: False
 
     def check(self, fixed: dict, polarity: bool):
         self.calls.append((dict(fixed), polarity))

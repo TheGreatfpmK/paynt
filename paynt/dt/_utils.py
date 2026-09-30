@@ -12,6 +12,7 @@ import paynt.colored_mdp
 import paynt.dt.decision_tree
 import paynt.model.model
 import paynt.task
+import paynt.utils.error_handling
 
 import logging
 
@@ -156,13 +157,14 @@ def make_inner_synthesizer(method: str, colored_mdp: paynt.colored_mdp.ColoredMd
 
     :param method: "ar" (SynthesizerARDt, over ColoringSmt) or "smpmc" (SynthesizerSMPMC, over the tree's ColoringGeneral, see paynt.dt.coloring_general)
     """
+    paynt.utils.error_handling.require_supported_method(method, DT_INNER_METHODS, "decision-tree synthesis")
     # hiding imports here to avoid mutual top-level imports (mirroring Synthesizer.for_method)
     if method == "ar":
         from paynt.dt.synthesizer_ar_dt import SynthesizerARDt
 
         return SynthesizerARDt(colored_mdp, task)
     if method == "smpmc":
-        import paynt.synthesizer.smpmc
+        from paynt.synthesizer.smpmc import SynthesizerSMPMC
 
-        return paynt.synthesizer.smpmc.SynthesizerSMPMC(colored_mdp, task)
-    raise ValueError(f"invalid inner method for decision-tree synthesis: {method!r} (expected one of {DT_INNER_METHODS})")
+        return SynthesizerSMPMC(colored_mdp, task)
+    raise AssertionError(f"DT_INNER_METHODS has a method that make_inner_synthesizer does not build: {method!r}")

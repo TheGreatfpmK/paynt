@@ -42,8 +42,9 @@ logger = logging.getLogger(__name__)
 
 #: Z3's timeout parameter is an unsigned 32-bit number of milliseconds
 _MAX_Z3_TIMEOUT_MS = 2**32 - 1
-#: what solver.reason_unknown() says when check() ran into the timeout set by SynthesizerSMPMC._limit_solver_time
-_TIMEOUT_REASONS = ("timeout", "canceled")
+#: what solver.reason_unknown() says when check() was stopped by the timeout set by SynthesizerSMPMC._limit_solver_time, or interrupted by the theory
+#: (ColoredMdpTheory.time_is_up)
+_TIMEOUT_REASONS = ("timeout", "canceled", "interrupted")
 
 
 class SynthesizerSMPMC(paynt.synthesizer.synthesizer.Synthesizer):
@@ -91,6 +92,7 @@ class SynthesizerSMPMC(paynt.synthesizer.synthesizer.Synthesizer):
     def synthesize_one(self, node: paynt.synthesizer.search_node.SearchNode) -> paynt.parameter_space.parameter_space.ParameterSpace | None:
         encoding = paynt.synthesizer.smpmc.encoding.ParameterBitVecEncoding(node.parameter_space)
         theory = paynt.synthesizer.smpmc.checker.ColoredMdpTheory(self.colored_mdp, self.prop, self.stat, self.forall_parameters)
+        theory.time_is_up = self._time_is_up
 
         sorts = [variable.sort() for variable in encoding.variables]
         viable = z3.PropagateFunction("viable", *sorts, z3.BoolSort())
@@ -123,7 +125,15 @@ class SynthesizerSMPMC(paynt.synthesizer.synthesizer.Synthesizer):
         while not self.resource_limit_reached():
             self._limit_solver_time(solver)
             result = solver.check()
+            if theory.failure is not None:
+                raise theory.failure
             if result == z3.unsat:
+                break
+            if self._time_is_up():
+                # The limit ran out during this check(), which was stopped by it: what it returns is not to be trusted -- z3 can answer sat, with a partial
+                # model, when it is stopped just as the search ends. The best assignment found so far stands, exactly as when the limit is reached between two
+                # checks.
+                logger.info("time limit reached, aborting...")
                 break
             if result == z3.unknown:
                 if solver.reason_unknown() in _TIMEOUT_REASONS:
@@ -177,12 +187,19 @@ class SynthesizerSMPMC(paynt.synthesizer.synthesizer.Synthesizer):
         self.explored = node.parameter_space.size
         return self.best_assignment
 
+    def _time_is_up(self) -> bool:
+        remaining = self.time_remaining()
+        return remaining is not None and remaining <= 0
+
     def _limit_solver_time(self, solver: Any) -> None:
         """Make the next solver.check() give up, answering unknown, once the time limit is reached.
 
-        One check() is Z3's whole search, theory calls included, and can run for minutes: testing the limit between two checks is not enough. Z3 notices the
-        timeout as soon as the theory callback in progress returns, so a check() overruns the limit by about that callback (a model check of the sub-MDP, which
-        cannot be interrupted) rather than by the rest of the search.
+        One check() is Z3's whole search, theory calls included, and can run for minutes: testing the limit between two checks is not enough. Z3's `timeout`
+        parameter is the backstop, but it fires late, by some 4% of the limit (measured: +1.2 s on a 30 s limit, +10 s on 300 s, in pure z3py on a hard SAT
+        problem as well as in this search, which carried on for all that time). So the theory, which Z3 calls at every decision, asks _time_is_up() as well and
+        interrupts the search itself (see SmpmcPropagator): that is prompt, and only ever done while a check() is running. A Z3_interrupt sent when none is
+        (from another thread, say) is not merely lost: it leaves the context cancelled, and the next check() of a solver with a propagator answers sat at once,
+        with an empty model. What is left is the theory callback in progress: a model check of the sub-MDP, which cannot be interrupted.
         """
         remaining = self.time_remaining()
         if remaining is not None:
@@ -225,6 +242,7 @@ class SynthesizerSMPMC(paynt.synthesizer.synthesizer.Synthesizer):
             success=result.success,
             value=result.value,
             assignment=result.assignment,
+            selected_choices=result.selected_choices,
             robust_assignment=self.robust_assignment,
             robust_verified=robust_verified,
         )

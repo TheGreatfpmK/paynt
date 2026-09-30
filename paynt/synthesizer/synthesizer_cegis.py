@@ -6,6 +6,7 @@ import paynt.colored_mdp
 import paynt.task
 import paynt.synthesizer.search_node
 import paynt.synthesizer.synthesizer
+import paynt.synthesizer.conflict_generator.auto
 import paynt.synthesizer.conflict_generator.dtmc
 import paynt.synthesizer.conflict_generator.mdp
 import paynt.parameter_space.parameter_space
@@ -40,8 +41,8 @@ class SynthesizerCEGIS(paynt.synthesizer.synthesizer.Synthesizer):
                 colored_mdp, task
             )
         else:
-            # default conflict generator
-            conflict_generator = paynt.synthesizer.conflict_generator.dtmc.ConflictGeneratorDtmc(colored_mdp, task)
+            # default conflict generator: the DTMC one, unless the model of an assignment still has nondeterminism
+            conflict_generator = paynt.synthesizer.conflict_generator.auto.ConflictGeneratorAuto(colored_mdp, task)
         return conflict_generator
 
     @property

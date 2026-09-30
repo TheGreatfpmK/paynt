@@ -14,6 +14,7 @@ import pytest
 import paynt.parser.sketch
 import paynt.synthesizer.smpmc
 import paynt.synthesizer.smpmc.checker
+import paynt.synthesizer.smpmc.synthesizer
 import paynt.synthesizer.synthesizer
 import paynt.synthesizer.synthesizer_ar
 import paynt.utils.timer
@@ -133,6 +134,42 @@ class TestLimitSolverTime:
         assert self.timeout_set_for(smpmc_tiny_colored_mdp, smpmc_tiny_task, 10**9) == [("timeout", 2**32 - 1)]
 
 
+class TestTimeIsUp:
+    """What the theory asks at every Z3 callback: is the time limit reached."""
+
+    @staticmethod
+    def synthesizer_with_limit(smpmc_tiny_colored_mdp, smpmc_tiny_task, limit):
+        synthesizer = paynt.synthesizer.smpmc.SynthesizerSMPMC(smpmc_tiny_colored_mdp, smpmc_tiny_task)
+        synthesizer.synthesis_timer = paynt.utils.timer.Timer(limit)
+        synthesizer.synthesis_timer.start()
+        return synthesizer
+
+    def test_is_false_while_time_is_left(self, smpmc_tiny_colored_mdp, smpmc_tiny_task):
+        assert not self.synthesizer_with_limit(smpmc_tiny_colored_mdp, smpmc_tiny_task, 60)._time_is_up()
+
+    def test_is_true_once_the_limit_is_reached(self, smpmc_tiny_colored_mdp, smpmc_tiny_task):
+        assert self.synthesizer_with_limit(smpmc_tiny_colored_mdp, smpmc_tiny_task, -1)._time_is_up()
+
+    def test_is_false_without_a_time_limit(self, smpmc_tiny_colored_mdp, smpmc_tiny_task, monkeypatch):
+        monkeypatch.setattr(paynt.utils.timer.GlobalTimer, "global_timer", None)
+        assert not self.synthesizer_with_limit(smpmc_tiny_colored_mdp, smpmc_tiny_task, None)._time_is_up()
+
+    def test_is_what_the_theory_asks(self, smpmc_tiny_colored_mdp, smpmc_tiny_task, monkeypatch):
+        """The synthesizer hands it to the theory when it sets the search up."""
+        synthesizer = paynt.synthesizer.smpmc.SynthesizerSMPMC(smpmc_tiny_colored_mdp, smpmc_tiny_task)
+        created = []
+        real_theory = paynt.synthesizer.smpmc.checker.ColoredMdpTheory
+
+        class Recording(real_theory):
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, **kwargs)
+                created.append(self)
+
+        monkeypatch.setattr(paynt.synthesizer.smpmc.checker, "ColoredMdpTheory", Recording)
+        synthesizer.synthesize()
+        assert created and created[0].time_is_up == synthesizer._time_is_up
+
+
 class TestSmpmcTimeLimit:
     """A time limit stops the solver itself: one solver.check() is Z3's whole search, theory calls included, so it can run for minutes, and testing the limit
     only between two checks is not enough.
@@ -168,6 +205,24 @@ class TestSmpmcTimeLimit:
         assert time.perf_counter() - started < 5
         assert any("time limit reached" in record.message for record in caplog.records)
         assert not any("returned unknown" in record.message for record in caplog.records)
+
+    def test_the_theory_stops_the_search_without_z3s_timeout(self, caplog, monkeypatch):
+        """Z3's own timeout is the backstop and fires late; the theory interrupts at the first callback past the limit."""
+        monkeypatch.setattr(paynt.synthesizer.smpmc.SynthesizerSMPMC, "_limit_solver_time", lambda self, solver: None)
+        synthesizer = self.maze_synthesizer()
+        started = time.perf_counter()
+        with caplog.at_level(logging.INFO):
+            synthesizer.synthesize(optimum_threshold=20.9, timeout=0.5)
+        assert time.perf_counter() - started < 3
+        assert any("time limit reached" in record.message for record in caplog.records)
+        assert not any("returned unknown" in record.message for record in caplog.records)
+
+    def test_a_search_stopped_by_the_limit_leaves_the_next_one_alone(self, smpmc_tiny_colored_mdp, smpmc_tiny_task):
+        """A Z3_interrupt sent while no check() is running would leave the context cancelled, so that the next solver with a propagator answered sat at once,
+        with an empty model."""
+        self.maze_synthesizer().synthesize(optimum_threshold=20.9, timeout=0.3)
+        result = paynt.synthesizer.smpmc.SynthesizerSMPMC(smpmc_tiny_colored_mdp, smpmc_tiny_task).run()
+        assert result.success is True
 
     def test_the_best_assignment_found_before_the_limit_stands(self):
         synthesizer = self.maze_synthesizer()

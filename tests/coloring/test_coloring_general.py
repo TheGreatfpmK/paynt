@@ -136,7 +136,7 @@ class TestGenericEnginesRejectAGeneralColoring:
     @pytest.mark.parametrize("method", ["ar", "hybrid"])
     def test_for_method_rejects_ar_based_methods(self, method):
         colored_mdp, task = load_colored_mdp("tests/smpmc-tiny")
-        with pytest.raises(ValueError, match="general coloring"):
+        with pytest.raises(NotImplementedError, match=f"cannot use a general coloring for method '{method}'.*use --method onebyone, cegis or smpmc"):
             paynt.synthesizer.synthesizer.Synthesizer.for_method(general_colored_mdp(colored_mdp), task, method)
 
     @pytest.mark.parametrize("method", ["onebyone", "cegis", "smpmc"])

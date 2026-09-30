@@ -113,7 +113,26 @@ class SmpmcPropagator(z3.UserPropagateBase):
         checked, and when the optimality threshold tightens."""
         return (self.theory.mc_calls, self.theory.first_full_assignment_checked, self.theory.epoch)
 
+    def _interrupt_if_time_is_up(self) -> bool:
+        """Z3 calls back at every decision, which is a far better clock than its own timeout parameter (that fires late).
+
+        Interrupting here is safe, as a check() is running (an interrupt sent while none is leaves the context cancelled).
+
+        :returns: whether the search was interrupted
+        """
+        if not self.theory.time_is_up():
+            return False
+        z3.Z3_interrupt(self.ctx_ref())
+        if self.ctx_ref().value != self.owner_ctx.ref().value:
+            # a fresh() propagator, run by an MBQI round in a sub-context: stop the search that started the round as well
+            z3.Z3_interrupt(self.owner_ctx.ref())
+        return True
+
     def push(self) -> None:
+        if self._interrupt_if_time_is_up():
+            self.scopes.append(len(self.trail))
+            self.scope_states.append(None)
+            return
         mark = len(self.trail)
         # Nothing fixed since the enclosing push, whose analysis found no conflict, and the theory unchanged since, also by
         # the fresh() propagators sharing it: analysing again would ask the same queries and get the same answers.
@@ -135,7 +154,8 @@ class SmpmcPropagator(z3.UserPropagateBase):
                 del self.partial_model[key]
 
     def _final(self) -> None:
-        self._analyse()
+        if not self._interrupt_if_time_is_up():
+            self._analyse()
 
     def _analyse(self) -> bool:
         """Check every currently-fixed viable(...) literal against the theory; on the first refutation, push a learned conflict clause back into Z3 and stop (Z3
@@ -191,7 +211,14 @@ class SmpmcPropagator(z3.UserPropagateBase):
             if not is_full_assignment and fixed and not self.theory.first_full_assignment_checked:
                 continue
 
-            result = self.theory.check(fixed, value)
+            try:
+                result = self.theory.check(fixed, value)
+            except Exception as error:
+                # z3py only prints what a callback raises and goes on as if the theory had found nothing wrong -- accepting an assignment that was never
+                # checked. Keep the error, stop the search, and let the synthesizer raise it.
+                self.theory.failure = error
+                z3.Z3_interrupt(self.ctx_ref())
+                return False
             if is_full_assignment:
                 self.theory.first_full_assignment_checked = True
             if result is None:

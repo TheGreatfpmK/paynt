@@ -8,6 +8,7 @@ import paynt.dt.factory
 import paynt.dt._utils
 import paynt.dt.decision_tree
 import paynt.synthesizer.statistic
+import paynt.utils.error_handling
 import paynt.utils.timer
 import paynt.model.model
 
@@ -84,8 +85,7 @@ class DtSynthesizer:
         initial_depth: int | None = None,
         method: str = "ar",
     ):
-        if method not in DT_INNER_METHODS:
-            raise ValueError(f"decision-tree synthesis supports method {DT_INNER_METHODS}, got {method!r}")
+        paynt.utils.error_handling.require_supported_method(method, DT_INNER_METHODS, "decision-tree synthesis")
         self.colored_mdp_factory = colored_mdp_factory
         self.task = task
         self.method = method
@@ -94,8 +94,8 @@ class DtSynthesizer:
         # run()/synthesize_tree_sequence read DT-specific fields constantly.
         assert colored_mdp_factory.build_task is not None
         self.build_task: paynt.dt.task.DtTask = colored_mdp_factory.build_task
-        if method != "ar" and (self.build_task.scheduler_path is not None or self.build_task.has_scheduler_to_map):
-            raise ValueError(f"mapping a scheduler to a tree does not support method {method!r}: it maps through ColoringSmt, use method 'ar'")
+        if self.build_task.scheduler_path is not None or self.build_task.has_scheduler_to_map:
+            paynt.utils.error_handling.require_method_ar(method, "mapping a scheduler to a tree")
         # the factory never builds automatically -- request the initial tree explicitly. Defaults to
         # build_task's own depth; callers only needing cheap, depth-invariant inspection (e.g. DtNest's
         # subtree recursion) pass initial_depth=0 to avoid building at a larger, more expensive depth than

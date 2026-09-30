@@ -8,7 +8,7 @@ import paynt.parameter_space.parameter_space
 import paynt.task
 import paynt.specification.property
 import paynt.model.model
-import paynt.utils.coloring
+import paynt.utils.error_handling
 import paynt.utils.scoring
 import paynt.mdp_family._utils
 import paynt.mdp_family.result
@@ -39,7 +39,7 @@ class PolicyTreeSynthesizer(paynt.synthesizer.synthesizer.Synthesizer):
     policy_tree: PolicyTree
 
     def __init__(self, colored_mdp: paynt.colored_mdp.ColoredMdp, task: paynt.task.SynthesisTask):
-        paynt.utils.coloring.require_pair_list_coloring(colored_mdp.coloring, "the policy tree")
+        paynt.utils.error_handling.require_pair_list_coloring(colored_mdp.coloring, "the policy tree")
         super().__init__(colored_mdp, task)
 
     @property

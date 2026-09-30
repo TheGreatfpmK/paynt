@@ -9,6 +9,7 @@ import paynt.result
 import paynt.parameter_space.parameter_space
 import paynt.synthesizer.statistic
 import paynt.synthesizer.search_node
+import paynt.utils.error_handling
 import paynt.utils.timer
 
 import logging
@@ -41,11 +42,8 @@ class Synthesizer:
         import paynt.synthesizer.synthesizer_hybrid
         import paynt.synthesizer.smpmc
 
-        if colored_mdp.has_general_coloring and method in ("ar", "hybrid"):
-            raise ValueError(
-                f"method {method!r} does not support a colored MDP with a general coloring: its scheduler selection and splitting need the coloring's "
-                "(parameter, option) pairs. Use one of: onebyone, cegis, smpmc"
-            )
+        if method in ("ar", "hybrid"):
+            paynt.utils.error_handling.require_pair_list_coloring(colored_mdp.coloring, f"method {method!r}", "use --method onebyone, cegis or smpmc")
 
         if method == "onebyone":
             return paynt.synthesizer.synthesizer_onebyone.SynthesizerOneByOne(colored_mdp, task)
@@ -221,5 +219,8 @@ class Synthesizer:
     def run(self, optimum_threshold: Any = None) -> paynt.result.Result:
         assignment = self.synthesize(optimum_threshold=optimum_threshold, keep_optimum=True)
         value = self.best_assignment_value
+        selected_choices = None
+        if assignment is not None and assignment.size == 1:
+            selected_choices = self.colored_mdp.selected_choices(assignment, self.task.specification)
         self._reset_best_assignment()
-        return paynt.result.Result(success=assignment is not None, value=value, assignment=assignment)
+        return paynt.result.Result(success=assignment is not None, value=value, assignment=assignment, selected_choices=selected_choices)

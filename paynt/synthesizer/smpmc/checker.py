@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from collections.abc import Callable
 from typing import Any
 
 import payntbind.synthesis
@@ -31,6 +32,7 @@ import paynt.specification.property
 import paynt.specification.property_result
 import paynt.synthesizer.smpmc.cache
 import paynt.synthesizer.statistic
+import paynt.utils.error_handling
 
 import logging
 
@@ -112,6 +114,11 @@ class ColoredMdpTheory:
         # PartialModelCache's docstring
         self.epoch = 0
         self.mc_calls = 0
+        # an error the theory raised inside a Z3 callback, which the propagator cannot raise itself: the synthesizer raises it once check() returns
+        self.failure: Exception | None = None
+        # whether the time limit is reached, set by the synthesizer: the propagator asks at every callback and interrupts the search once it is (never anywhere
+        # else, see SynthesizerSMPMC._limit_solver_time)
+        self.time_is_up: Callable[[], bool] = lambda: False
 
         # Robust search: Z3 only reports a policy once every environment has been covered by refuted `not viable` literals, each of which comes with its
         # model-checked worst case over its region -- so the worst of those, per policy, bounds the policy's worst case over all environments, and beats the
@@ -203,11 +210,13 @@ class ColoredMdpTheory:
             # system, not a convergence failure -- policy iteration is exact either way). That tiny
             # disagreement is enough to make a non-improving witness look viable to the theory when it
             # shouldn't. build_assignment() sidesteps this by computing the exact value directly (and is
-            # cheaper besides). Only "family"/"pomdp_family" ColoredMdps keep genuine nondeterminism even
-            # once every declared parameter is fixed (the agent's policy isn't itself a declared
-            # parameter there) -- build_assignment() already knows this and returns an MDP for those, so
-            # this shortcut is correct unconditionally, not just for the common case.
+            # cheaper besides). It keeps an MDP where the assignment leaves genuine nondeterminism -- an
+            # incomplete coloring, or a "family"/"pomdp_family" ColoredMdp (the agent's policy isn't itself a
+            # declared parameter there) -- so this shortcut is correct unconditionally, not just for the
+            # common case: the value is then that of the best resolution of the choices left, which is what
+            # `viable` asks for.
             sub_mdp = self.colored_mdp.build_assignment(eta)
+            paynt.utils.error_handling.require_markov_chain_for_robust_search(sub_mdp, self.policy_parameters)
         else:
             # deliberately no parent_selected_choices reuse hint here: that optimization assumes
             # monotonically-nested parameter spaces (true for AR's splitting), which does not hold for
