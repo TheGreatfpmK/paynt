@@ -79,11 +79,12 @@ class Sketch:
         filetype = None
         if filetype is None:
             try:
+                logger.info("assuming sketch in UMB format...")
                 explicit_model = stormpy.build_from_umb(sketch_path)
                 specification = PrismParser.parse_specification(properties_path, relative_error, use_exact=use_exact)
                 filetype = "umb"
             except Exception as e:
-                pass
+                logger.debug(f"not a UMB file: {e}")
         if filetype is None:
             try:
                 logger.info("assuming sketch in PRISM format...")
@@ -91,8 +92,8 @@ class Sketch:
                     sketch_path, properties_path, relative_error, use_exact
                 )
                 filetype = "prism"
-            except SyntaxError:
-                pass
+            except SyntaxError as e:
+                logger.debug(f"not a PRISM file: {e}")
         if filetype is None:
             try:
                 logger.info("assuming sketch in DRN format...")
@@ -112,7 +113,7 @@ class Sketch:
                     logger.info(f"found state valuations in {valuations_path}, adding to the model...")
                     explicit_model = payntbind.synthesis.addStateValuations(explicit_model, state_valuations)
             except Exception as e:
-                pass
+                logger.debug(f"not a DRN file: {e}")
         if filetype is None:
             try:
                 logger.info("assuming sketch in Cassandra format...")
@@ -143,8 +144,8 @@ class Sketch:
                     optimality.discount_factor_correction = decpomdp_manager.discount_factor
                     specification = paynt.specification.property.Specification([optimality])
                 filetype = "cassandra"
-            except SyntaxError:
-                pass
+            except SyntaxError as e:
+                logger.debug(f"not a Cassandra file: {e}")
 
         assert filetype is not None, "unknown format of input file"
         assert specification is not None
