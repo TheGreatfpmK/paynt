@@ -309,8 +309,7 @@ class DtSynthesizer:
                     logger.info(
                         f"the synthesized tree has relative value: {self.compute_normalized_value(self.best_tree_value, opt_result_value, random_result_value)}"
                     )
-            logger.info("printing the synthesized tree below:")
-            logger.info(f"\n{self.best_tree.to_string()}")
+            logger.info(f"printing the synthesized tree below:\n{self.best_tree.to_string()}")
 
             if self.task.export_synthesis_filename_base is not None:
                 self.export_decision_tree(self.best_tree, self.task.export_synthesis_filename_base)

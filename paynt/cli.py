@@ -51,21 +51,20 @@ def print_version(ctx: click.Context, param: click.Parameter, value: bool) -> No
 def setup_logger(log_path: str | None = None) -> list[logging.Handler]:
     """Setup routine for logging."""
     root = logging.getLogger()
-    root.setLevel(logging.DEBUG)
-    # root.setLevel(logging.INFO)
+    # root.setLevel(logging.DEBUG)
+    root.setLevel(logging.INFO)
 
-    # formatter = logging.Formatter('%(asctime)s %(threadName)s - %(name)s - %(levelname)s - %(message)s')
     formatter = logging.Formatter("%(asctime)s - %(filename)s:%(lineno)d - %(message)s")
 
     handlers: list[logging.Handler] = []
     if log_path is not None:
         fh = logging.FileHandler(log_path)
-        fh.setLevel(logging.DEBUG)
+        fh.setLevel(logging.INFO)
         fh.setFormatter(formatter)
         handlers.append(fh)
     sh = logging.StreamHandler(sys.stdout)
     handlers.append(sh)
-    sh.setLevel(logging.DEBUG)
+    sh.setLevel(logging.INFO)
     sh.setFormatter(formatter)
     for h in handlers:
         root.addHandler(h)
