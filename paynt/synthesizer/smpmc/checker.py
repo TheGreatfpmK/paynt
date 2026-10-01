@@ -280,10 +280,12 @@ class ColoredMdpTheory:
             # so the sub-MDP -- and with it the refutation -- is unchanged (ColoringGeneral.relevantParameters).
             return set(self.colored_mdp.coloring.relevantParameters(eta.native, list(states)))
         assert self.state_to_parameters is not None
-        relevant: set[int] = set()
+        # The union is a chain of BitVector ORs, done in C++: unioning Python sets instead iterates every BitVector from Python, which takes most of the time of a
+        # check on a large sub-MDP
+        relevant = stormpy.BitVector(self.colored_mdp.parameter_space.num_parameters, False)
         for state in states:
-            relevant.update(self.state_to_parameters[state])
-        return relevant
+            relevant |= self.state_to_parameters[state]
+        return set(relevant)
 
     def _record_worst_case(self, fixed: dict[int, int], value: Any, exact: bool) -> None:
         """Account a refuted `not viable` literal, whose region's worst case is (bounded by) value, to its policy -- if the policy is fully fixed."""

@@ -108,6 +108,51 @@ class TestColoredMdpTheoryOutOfRangeValues:
         assert theory.check({0: 9999}, False) is None
 
 
+class TestColoredMdpTheoryRelevantParameters:
+    """relevant_parameters(eta, sub_mdp) is the union of the static per-state supports (coloring.getStateToHoles()) over the states of the sub-MDP C[eta]; it is
+    computed with BitVector ORs and has to agree with the union of plain sets."""
+
+    @staticmethod
+    def union_of_sets(colored_mdp, sub_mdp):
+        supports = colored_mdp.coloring.getStateToHoles()
+        union = set()
+        for state in sub_mdp.underlying_mdp_state_map:
+            union.update(supports[state])
+        return union
+
+    @pytest.mark.parametrize("project", ["tests/smpmc-tiny", "tests/generic-maze", "tests/mdp-family-avoid-8-2-easy"])
+    def test_agrees_with_the_union_of_the_per_state_supports(self, project):
+        sketch_path, props_path = get_sketch_paths(project)
+        factory, task = paynt.parser.sketch.Sketch.load_sketch(sketch_path, props_path)
+        colored_mdp = factory.build()
+        specification = task.specification
+        prop = specification.optimality if specification.optimality is not None else specification.constraints[0]
+        theory = paynt.synthesizer.smpmc.checker.ColoredMdpTheory(colored_mdp, prop)
+        space = colored_mdp.parameter_space
+
+        step = max(1, space.num_parameters // 6)
+        for num_fixed in range(0, space.num_parameters, step):
+            eta = space.copy()
+            for parameter in range(num_fixed):
+                eta.parameter_set_options(parameter, [space.parameter_options(parameter)[0]])
+            sub_mdp, _choices = colored_mdp.build(eta)
+            relevant = theory.relevant_parameters(eta, sub_mdp)
+            assert isinstance(relevant, set)
+            assert relevant == self.union_of_sets(colored_mdp, sub_mdp), f"{num_fixed} parameters fixed"
+
+    def test_the_sub_mdp_of_a_smaller_space_depends_on_no_more_parameters(self, smpmc_tiny_colored_mdp, smpmc_tiny_task):
+        prop = smpmc_tiny_task.specification.constraints[0]
+        theory = paynt.synthesizer.smpmc.checker.ColoredMdpTheory(smpmc_tiny_colored_mdp, prop)
+        space = smpmc_tiny_colored_mdp.parameter_space
+        eta = space.copy()
+        sub_mdp, _choices = smpmc_tiny_colored_mdp.build(eta)
+        whole = theory.relevant_parameters(eta, sub_mdp)
+        assert whole <= set(range(space.num_parameters))
+        eta.parameter_set_options(0, [space.parameter_options(0)[0]])
+        sub_mdp, _choices = smpmc_tiny_colored_mdp.build(eta)
+        assert theory.relevant_parameters(eta, sub_mdp) <= whole
+
+
 class TestColoredMdpTheoryRewardConvergence:
     """Regression coverage for _model_check's value-iteration-to-policy-iteration escalation.
 
