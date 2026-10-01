@@ -1,10 +1,12 @@
-"""The errors for what a coloring, a specification or a synthesis method cannot do, kept out of the classes that come across them so that those stay short: a
-state that a coloring leaves without a choice, what an incomplete coloring does not support (a full parameter assignment that leaves several choices enabled,
-see paynt.colored_mdp), a general coloring where the (parameter, option) pairs are needed, and a method that a feature does not run."""
+"""The errors for what a coloring, a specification, a sketch or a synthesis method cannot do, kept out of the classes that come across them so that those stay
+short: a state that a coloring leaves without a choice, what an incomplete coloring does not support (a full parameter assignment that leaves several choices
+enabled, see paynt.colored_mdp), a general coloring where the (parameter, option) pairs are needed, a hole where a sketch cannot have one (the reward of a
+state, a label), and a method that a feature does not run."""
 
 from __future__ import annotations
 
 import contextlib
+import json
 from collections.abc import Generator, Sequence
 from typing import TYPE_CHECKING, Any
 
@@ -111,3 +113,70 @@ def require_method_ar(method: str, what: str) -> None:
     """Raise ValueError unless method is "ar", for what (a noun phrase, e.g. "--dtnest") that always searches with AR over ColoringSmt."""
     if method != "ar":
         raise ValueError(f"{what} does not support method {method!r}: it always uses AR over ColoringSmt, use method 'ar'")
+
+
+def _identifiers(expression: Any) -> set[str]:
+    """The identifiers in an expression of the JSON form of a JANI model: the strings of the expression other than the operators and the comments, which include
+    the names of the functions that it calls."""
+    found: set[str] = set()
+    stack = [expression]
+    while stack:
+        item = stack.pop()
+        if isinstance(item, str):
+            found.add(item)
+        elif isinstance(item, dict):
+            stack.extend(value for key, value in item.items() if key not in ("op", "comment"))
+        elif isinstance(item, list):
+            stack.extend(item)
+    return found
+
+
+def _holes_of(model: dict[str, Any], holes: Sequence[str]) -> dict[str, set[str]]:
+    """For every hole, constant and function of the JANI model (in JSON form) that depends on a hole, the holes that it depends on: a hole on itself, a constant
+    or a function (a PRISM formula) on the holes of its definition."""
+    depends_on: dict[str, set[str]] = {hole: {hole} for hole in holes}
+    definitions = [(constant["name"], constant["value"]) for constant in model.get("constants", []) if "value" in constant]
+    definitions += [(function["name"], function["body"]) for function in model.get("functions", [])]
+    changed = True
+    while changed:
+        changed = False
+        for name, definition in definitions:
+            reached = set().union(*(depends_on.get(identifier, set()) for identifier in _identifiers(definition)))
+            known = depends_on.get(name, set())
+            if not reached <= known:
+                depends_on[name] = known | reached
+                changed = True
+    return depends_on
+
+
+def require_no_holes_in_state_values(jani: Any, holes: Sequence[str]) -> None:
+    """Raise ValueError if the reward of a state, or a label, depends on a hole of the sketch.
+
+    The unfolder substitutes the options of the holes into the edges of the JANI model, but the reward of a state and a label are transient values of its
+    location, which it does not touch: the hole would stay in them, undefined, and the reward or the label would come out wrong without any error.
+
+    :param jani: the JANI model of the sketch, with the holes as undefined constants
+    :param holes: the names of the holes
+    """
+    model = json.loads(str(jani))
+    depends_on = _holes_of(model, holes)
+    kinds = {
+        variable["name"]: "label" if variable.get("type") == "bool" else "state reward" for variable in model.get("variables", []) if variable.get("transient")
+    }
+    for automaton in model.get("automata", []):
+        for location in automaton.get("locations", []):
+            for transient_value in location.get("transient-values", []):
+                used = sorted(set().union(*(depends_on.get(identifier, set()) for identifier in _identifiers(transient_value["value"]))))
+                if used:
+                    name = transient_value["ref"]
+                    kind = kinds.get(name, "state reward")
+                    instead = (
+                        "Use the hole in the reward of a transition ([action] guard : value;) instead."
+                        if kind == "state reward"
+                        else "Put the condition into the property, or into the guards of the commands, instead."
+                    )
+                    raise ValueError(
+                        f"the {kind} {name!r} depends on the hole{'s' if len(used) > 1 else ''} {', '.join(used)}, which is not supported: PAYNT substitutes "
+                        f"the options of a hole into the transitions of the model, which the reward of a state and a label are not on, so the hole would stay "
+                        f"in it unresolved. {instead}"
+                    )

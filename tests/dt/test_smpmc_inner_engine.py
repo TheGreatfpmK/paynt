@@ -15,10 +15,16 @@ import pytest
 import paynt.api
 import paynt.model.model
 import paynt.parser.sketch
+import paynt.dt._utils
 import paynt.dt.api
+import paynt.dt.dtnest
+import paynt.dt.result
 import paynt.dt.synthesizer
+import paynt.dt.synthesizer_ar_dt
 import paynt.dt.task
+import paynt.synthesizer.smpmc
 import paynt.synthesizer.smpmc.checker
+import paynt.utils.timer
 from helpers.helper import get_sketch_paths
 
 PROJECTS = ["tests/dt-orchard", "tests/dt-maze"]
@@ -67,6 +73,11 @@ class TestApiRouting:
         factory, task = paynt.parser.sketch.Sketch.load_sketch(sketch_path, props_path)
         with pytest.raises(ValueError, match="dtnest"):
             paynt.api.get_synthesizer(factory, task, method="smpmc", dtnest=True)
+
+    def test_dtnest_with_the_default_method_routes_to_dtnest(self):
+        sketch_path, props_path = get_sketch_paths("tests/dt-orchard")
+        factory, task = paynt.parser.sketch.Sketch.load_sketch(sketch_path, props_path, task_kwargs={"tree_depth": 0})
+        assert isinstance(paynt.api.get_synthesizer(factory, task, dtnest=True), paynt.dt.dtnest.DtNest)
 
     def test_mapping_a_scheduler_rejects_method_smpmc(self):
         """What --tree-map-scheduler sets: a scheduler file to map.
@@ -119,6 +130,115 @@ class TestSmpmcOnDeeperTrees:
         synthesizer.synthesize_tree(depth, timeout=120)
         assert synthesizer.best_tree is not None
         assert synthesizer.best_tree_value == pytest.approx(optimum, rel=1e-9)
+
+
+class TestTreeSequenceOnDeeperTrees:
+    """synthesize_tree_sequence tries every depth up to max_depth - 1, each seeded with the best tree of the depths before: the search runs on the subspace
+    that hint describes first and on the whole space after, which depth 0 never does."""
+
+    def test_the_depth_2_optimum_of_the_maze_is_reached_through_the_shallower_depths(self):
+        sketch_path, props_path = get_sketch_paths("tests/dt-maze")
+        factory, task = paynt.parser.sketch.Sketch.load_sketch(sketch_path, props_path)
+        smpmc_synth = paynt.dt.synthesizer.DtSynthesizer(factory, task, method="smpmc")
+        smpmc_synth.synthesize_tree_sequence(opt_result_value=0.0, overall_timeout=600, max_depth=3)
+        assert smpmc_synth.best_tree is not None
+        assert smpmc_synth.best_tree.get_depth() == 2
+        assert smpmc_synth.best_tree_value == pytest.approx(20.948148711838865, rel=1e-9)
+
+        factory_ar, task_ar = paynt.parser.sketch.Sketch.load_sketch(sketch_path, props_path)
+        ar_synth = paynt.dt.synthesizer.DtSynthesizer(factory_ar, task_ar, method="ar")
+        ar_synth.synthesize_tree_sequence(opt_result_value=0.0, overall_timeout=600, max_depth=3)
+        assert smpmc_synth.best_tree_value == pytest.approx(ar_synth.best_tree_value, abs=1e-6)
+
+    def test_a_tree_that_is_good_enough_ends_the_sequence_early(self):
+        """opt_result_value is what the unrestricted optimum is; a tree within 0.1 % of it needs no deeper one."""
+        sketch_path, props_path = get_sketch_paths("tests/dt-orchard")
+        factory, task = paynt.parser.sketch.Sketch.load_sketch(sketch_path, props_path)
+        synthesizer = paynt.dt.synthesizer.DtSynthesizer(factory, task, method="smpmc")
+        synthesizer.synthesize_tree_sequence(opt_result_value=0.4845, overall_timeout=300, max_depth=3)
+        assert synthesizer.best_tree.get_depth() == 0
+        assert synthesizer.best_tree_value == pytest.approx(0.48450450140758644, rel=1e-9)
+
+
+class TestConstraintProperty:
+    """A threshold instead of an optimum: a tree exists exactly when the threshold is within what its depth can reach.
+
+    The orchard's optima, pinned above, are 0.4845... at depth 0 and 0.4882... at depth 1.
+    """
+
+    @staticmethod
+    def synthesize(tmp_path, threshold, depth):
+        props_path = tmp_path / "threshold.props"
+        props_path.write_text(f"P>={threshold} [F goal]\n")
+        sketch_path, _ = get_sketch_paths("tests/dt-orchard")
+        factory, task = paynt.parser.sketch.Sketch.load_sketch(sketch_path, str(props_path))
+        synthesizer = paynt.dt.synthesizer.DtSynthesizer(factory, task, method="smpmc")
+        synthesizer.synthesize_tree(depth, timeout=600)
+        return synthesizer, task
+
+    @pytest.mark.parametrize(("threshold", "depth", "satisfiable"), [(0.48, 0, True), (0.488, 0, False), (0.49, 0, False), (0.488, 1, True)])
+    def test_a_tree_is_found_exactly_when_the_threshold_is_reachable(self, tmp_path, threshold, depth, satisfiable):
+        synthesizer, task = self.synthesize(tmp_path, threshold, depth)
+        assert (synthesizer.best_tree is not None) is satisfiable
+        # a constraint has no value to report, as for every other engine
+        assert synthesizer.best_tree_value is None
+
+    def test_the_tree_found_satisfies_the_constraint(self, tmp_path):
+        synthesizer, task = self.synthesize(tmp_path, 0.488, 1)
+        inner = paynt.dt._utils.make_inner_synthesizer("smpmc", synthesizer.colored_mdp, task)
+        inner.synthesize(keep_optimum=True)
+        assert inner.best_assignment is not None
+        dtmc = synthesizer.colored_mdp.build_assignment(inner.best_assignment)
+        result = dtmc.check_specification(task.specification)
+        assert result.constraints_result.sat
+        assert result.constraints_result.results[0].value >= 0.488
+
+
+class TestDtSynthesizerRun:
+    """The whole driver, as the command line runs it: the unrestricted optimum, the tree, its simplification and the result."""
+
+    @pytest.fixture(autouse=True)
+    def global_timer(self, monkeypatch):
+        monkeypatch.setattr(paynt.utils.timer.GlobalTimer, "global_timer", None)
+        paynt.utils.timer.GlobalTimer.start(None)
+
+    @pytest.mark.parametrize("method", ["ar", "smpmc"])
+    def test_the_result_carries_the_tree_and_its_value(self, method):
+        sketch_path, props_path = get_sketch_paths("tests/dt-orchard")
+        # the depth is a task option: the command line defaults it to 0, a library call to the (much deeper) default of the task
+        factory, task = paynt.parser.sketch.Sketch.load_sketch(sketch_path, props_path, task_kwargs={"tree_depth": 0})
+        result = paynt.dt.synthesizer.DtSynthesizer(factory, task, method=method).run()
+        assert isinstance(result, paynt.dt.result.DtResult)
+        assert result.success
+        assert result.value == pytest.approx(0.48450450140758644, rel=1e-9)
+        assert result.tree is not None and result.tree.get_depth() == 0
+
+    def test_the_search_is_named_after_its_inner_engine(self):
+        sketch_path, props_path = get_sketch_paths("tests/dt-orchard")
+        factory, task = paynt.parser.sketch.Sketch.load_sketch(sketch_path, props_path, task_kwargs={"tree_depth": 0})
+        assert paynt.dt.synthesizer.DtSynthesizer(factory, task, method="ar").method_name == "AR (decision tree)"
+        assert paynt.dt.synthesizer.DtSynthesizer(factory, task, method="smpmc").method_name == "smpmc (decision tree)"
+
+
+class TestInnerEngineFactory:
+    def test_every_supported_method_builds_its_engine_over_its_own_coloring(self):
+        sketch_path, props_path = get_sketch_paths("tests/dt-orchard")
+        factory, task = paynt.parser.sketch.Sketch.load_sketch(sketch_path, props_path)
+        assert paynt.dt._utils.DT_INNER_METHODS == ("ar", "smpmc")
+        ar = paynt.dt._utils.make_inner_synthesizer("ar", factory.reset_tree(0), task)
+        assert isinstance(ar, paynt.dt.synthesizer_ar_dt.SynthesizerARDt)
+        assert type(ar.colored_mdp.coloring).__name__ == "ColoringSmt"
+        smpmc = paynt.dt._utils.make_inner_synthesizer("smpmc", factory.reset_tree(0, general=True), task)
+        assert isinstance(smpmc, paynt.synthesizer.smpmc.SynthesizerSMPMC)
+        assert type(smpmc.colored_mdp.coloring).__name__ == "ColoringGeneral"
+
+    def test_a_method_listed_but_not_built_is_a_bug_and_says_so(self, monkeypatch):
+        """DT_INNER_METHODS and make_inner_synthesizer have to be extended together."""
+        sketch_path, props_path = get_sketch_paths("tests/dt-orchard")
+        factory, task = paynt.parser.sketch.Sketch.load_sketch(sketch_path, props_path)
+        monkeypatch.setattr(paynt.dt._utils, "DT_INNER_METHODS", (*paynt.dt._utils.DT_INNER_METHODS, "cegis"))
+        with pytest.raises(AssertionError, match="DT_INNER_METHODS has a method that make_inner_synthesizer does not build: 'cegis'"):
+            paynt.dt._utils.make_inner_synthesizer("cegis", factory.reset_tree(0), task)
 
 
 class TestConflictsOnTrees:

@@ -78,3 +78,50 @@ class TestSynthesizerSmpmcCli:
         assert result.returncode == 0, result.stderr
         assert "robust assignment, worst case 0.45" in result.stdout
         assert "robustness verified by AR: True" in result.stdout
+
+    def test_decision_tree_synthesis_with_the_smpmc_engine(self):
+        """--method smpmc on a decision-tree sketch runs SMPMC as the inner engine of the tree search, on the tree's general coloring."""
+        project = os.path.dirname(get_sketch_paths("tests/dt-orchard")[0])
+        result = subprocess.run(
+            [sys.executable, "-m", "paynt", project, "--method", "smpmc", "--tree-depth", "0"],
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+        assert result.returncode == 0, result.stderr
+        assert "method: SMPMC" in result.stdout
+        assert "the synthesized tree has value 0.4845045" in result.stdout
+
+    def test_dtnest_has_no_smpmc_engine(self):
+        project = os.path.dirname(get_sketch_paths("tests/dt-orchard")[0])
+        result = subprocess.run(
+            [sys.executable, "-m", "paynt", project, "--method", "smpmc", "--dtnest"],
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+        assert result.returncode != 0
+        assert "--dtnest does not support method 'smpmc'" in result.stderr
+
+    def test_costs_constraint_from_the_command_line(self):
+        """--constraint costs reads sketch.costs of the project; 25 is exactly the cost of the cheapest satisfying assignment (see test_costs.py)."""
+        project = os.path.dirname(get_sketch_paths("tests/smpmc-tiny")[0])
+        result = subprocess.run(
+            [sys.executable, "-m", "paynt", project, "--method", "smpmc", "--constraint", "costs", "--costs-threshold", "25"],
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+        assert result.returncode == 0, result.stderr
+        assert "x1=1, x2=4, x3=8" in result.stdout
+
+    def test_costs_constraint_below_the_cheapest_assignment_is_infeasible(self):
+        project = os.path.dirname(get_sketch_paths("tests/smpmc-tiny")[0])
+        result = subprocess.run(
+            [sys.executable, "-m", "paynt", project, "--method", "smpmc", "--constraint", "costs", "--costs-threshold", "24"],
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+        assert result.returncode == 0, result.stderr
+        assert "feasible: no" in result.stdout

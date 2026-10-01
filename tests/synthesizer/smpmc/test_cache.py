@@ -1,12 +1,16 @@
-"""Pure unit tests for PartialModelCache's mercury-settrie-backed subset/superset subsumption -- no Storm, no ColoredMdp, just the cache's own {parameter:
-option} dict contract.
+"""Pure unit tests for PartialModelCache's set-trie-backed subset/superset subsumption -- no Storm, no ColoredMdp, just the cache's own {parameter: option} dict
+contract.
 
 See cache.py's module docstring for the subsumption rules these tests exercise.
 """
 
 from __future__ import annotations
 
-import paynt.synthesizer.smpmc.cache as cache_module
+import subprocess
+import sys
+
+import payntbind.synthesis
+
 from paynt.synthesizer.smpmc.cache import MISS, PartialModelCache, Refutation
 
 
@@ -180,15 +184,65 @@ class TestCrossPolaritySubsumption:
 
 
 class TestSetTrieBackedStructure:
-    """Confirms the cache is actually backed by mercury-settrie, not a reimplementation -- the whole point of this port was fidelity to molehill's own caching
-    mechanism."""
+    """The cache keeps its sets in payntbind's own set tries, not in the mercury-settrie of the reference implementation."""
 
-    def test_refuted_tries_are_mercury_settrie_instances(self):
+    def test_the_tries_are_payntbind_set_tries(self):
         cache = PartialModelCache()
-        import settrie
+        assert all(isinstance(trie, payntbind.synthesis.SetTrie) for trie in (*cache._refuted, *cache._inconclusive))
 
-        assert all(isinstance(trie, settrie.SetTrie) for trie in cache._refuted)
-        assert all(isinstance(trie, settrie.SetTrie) for trie in cache._inconclusive)
+    def test_the_smpmc_package_does_not_need_mercury_settrie(self):
+        """That package only comes as a source distribution that has to be compiled with setuptools, which PAYNT's build does without: nothing imports it."""
+        script = "import sys; sys.modules['settrie'] = None; import paynt.api, paynt.synthesizer.smpmc, paynt.synthesizer.smpmc.cache"
+        result = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, timeout=120)
+        assert result.returncode == 0, result.stderr
 
-    def test_module_imports_settrie_directly(self):
-        assert hasattr(cache_module, "settrie")
+    def test_a_parameter_and_an_option_are_not_confused_with_each_other(self):
+        """A pair is one integer of the trie: (parameter << 32) | option."""
+        cache = PartialModelCache()
+        cache.insert_refuted({1: 0}, True, conflict_parameters=[1], epoch=0)
+        assert cache.lookup({0: 1}, True, epoch=0) is MISS
+        assert _conflicts(cache.lookup({1: 0, 0: 1}, True, epoch=0)) == [[1]]
+
+    def test_parameters_and_options_beyond_sixteen_bits_are_kept_apart(self):
+        cache = PartialModelCache()
+        cache.insert_refuted({70_000: 70_001, 3: 5}, True, conflict_parameters=[70_000, 3], epoch=0)
+        assert cache.lookup({70_000: 70_002, 3: 5}, True, epoch=0) is MISS
+        assert cache.lookup({70_001: 70_001, 3: 5}, True, epoch=0) is MISS
+        assert _conflicts(cache.lookup({70_000: 70_001, 3: 5, 4: 9}, True, epoch=0)) == [[3, 70_000]]
+
+
+class TestTheFirstEntryOfATrie:
+    """The first set stored in a trie has the payload 0, which is falsy: it has to be found like any other, which a lookup that tested the payloads it gets back
+    for truth would not do."""
+
+    def test_the_first_inconclusive_verdict_is_used(self):
+        cache = PartialModelCache()
+        cache.insert_inconclusive({0: 1, 1: 2}, True, epoch=0)
+        assert cache.lookup({0: 1}, True, epoch=0) is None
+
+    def test_the_first_refutation_of_the_opposite_polarity_is_used(self):
+        cache = PartialModelCache()
+        cache.insert_refuted({0: 1}, False, conflict_parameters=[0], epoch=0)
+        assert cache.lookup({0: 1, 1: 2}, True, epoch=0) is None
+        assert cache.lookup({}, True, epoch=0) is None
+
+    def test_the_first_refutation_is_used(self):
+        cache = PartialModelCache()
+        cache.insert_refuted({0: 1}, True, conflict_parameters=[0], epoch=0)
+        assert _conflicts(cache.lookup({0: 1, 1: 2}, True, epoch=0)) == [[0]]
+
+    def test_a_refutation_that_depends_on_no_parameter_refutes_everything(self):
+        """Its key is the empty set, a subset of every query."""
+        cache = PartialModelCache()
+        cache.insert_refuted({0: 1, 1: 2}, True, conflict_parameters=[], epoch=0)
+        assert _conflicts(cache.lookup({5: 5}, True, epoch=0)) == [[]]
+        assert _conflicts(cache.lookup({}, True, epoch=0)) == [[]]
+
+    def test_the_empty_conflict_retires_every_other_refutation_of_its_polarity(self):
+        cache = PartialModelCache()
+        cache.insert_refuted({0: 1}, True, conflict_parameters=[0], epoch=0)
+        cache.insert_refuted({1: 2}, True, conflict_parameters=[1], epoch=0)
+        cache.insert_refuted({1: 2}, False, conflict_parameters=[1], epoch=0)
+        cache.insert_refuted({0: 1, 1: 2}, True, conflict_parameters=[], epoch=0)
+        assert len(cache._refuted[1]) == 1 and len(cache._refuted[0]) == 1
+        assert _conflicts(cache.lookup({0: 1, 1: 2}, True, epoch=0)) == [[]]

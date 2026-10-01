@@ -75,6 +75,45 @@ class TestAddPolicyParameters:
         with pytest.raises(ValueError, match="several choices of action 'go'"):
             paynt.synthesizer.smpmc._augment.add_policy_parameters(factory.build())
 
+    def test_rejects_an_environment_enabling_two_identically_colored_choices_of_one_action(self, tmp_path):
+        """The same environment turns on both: neither the policy nor the environment would pick among them."""
+        (tmp_path / "sketch.templ").write_text(
+            "mdp\n"
+            "hole int h in {0..1};\n"
+            "module m\n"
+            "  s : [0..2] init 0;\n"
+            "  [go] s=0 & h=0 -> (s'=1);\n"
+            "  [go] s=0 & h=0 -> (s'=2);\n"
+            "  [stay] s=0 -> true;\n"
+            "  [done] s>0 -> true;\n"
+            "endmodule\n"
+            'label "goal" = s=1;\n'
+        )
+        (tmp_path / "sketch.props").write_text('P>=0.5 [F "goal"]\n')
+        factory, _task = paynt.parser.sketch.Sketch.load_sketch(str(tmp_path / "sketch.templ"), str(tmp_path / "sketch.props"))
+        with pytest.raises(ValueError, match="several choices of action 'go'"):
+            paynt.synthesizer.smpmc._augment.add_policy_parameters(factory.build())
+
+    def test_two_choices_of_one_action_for_different_values_of_one_parameter_are_fine(self, tmp_path):
+        """What a family is for: the environment picks which choice the action stands for."""
+        (tmp_path / "sketch.templ").write_text(
+            "mdp\n"
+            "hole int h in {0..1};\n"
+            "module m\n"
+            "  s : [0..2] init 0;\n"
+            "  [go] s=0 & h=0 -> (s'=1);\n"
+            "  [go] s=0 & h=1 -> (s'=2);\n"
+            "  [stay] s=0 -> true;\n"
+            "  [done] s>0 -> true;\n"
+            "endmodule\n"
+            'label "goal" = s=1;\n'
+        )
+        (tmp_path / "sketch.props").write_text('P>=0.5 [F "goal"]\n')
+        factory, _task = paynt.parser.sketch.Sketch.load_sketch(str(tmp_path / "sketch.templ"), str(tmp_path / "sketch.props"))
+        augmented, environment_parameters = paynt.synthesizer.smpmc._augment.add_policy_parameters(factory.build())
+        assert environment_parameters == [0]
+        assert augmented.parameter_space.num_parameters == 2  # the policy of state 0, choosing between go and stay
+
     def test_rejects_an_action_enabled_in_some_environments_only(self, tmp_path):
         """A policy picking a in state 0 would deadlock for h=0."""
         (tmp_path / "sketch.templ").write_text(
@@ -96,3 +135,23 @@ class TestAddPolicyParameters:
     def test_only_a_family_can_be_augmented(self, smpmc_tiny_colored_mdp):
         with pytest.raises(AssertionError):
             paynt.synthesizer.smpmc._augment.add_policy_parameters(smpmc_tiny_colored_mdp)
+
+
+class TestStateNames:
+    """The names of the policy parameters: a state's valuation, or its index for a model without any (a DRN file, say)."""
+
+    def test_a_model_without_state_valuations_names_its_states_by_index(self):
+        class WithoutValuations:
+            nr_states = 3
+
+            @staticmethod
+            def has_state_valuations():
+                return False
+
+        assert paynt.synthesizer.smpmc._augment._state_names(WithoutValuations()) == ["s0", "s1", "s2"]
+
+    def test_a_model_with_valuations_names_them_without_the_location_variables(self, rocks_colored_mdp):
+        names = paynt.synthesizer.smpmc._augment._state_names(rocks_colored_mdp.underlying_mdp)
+        assert len(names) == rocks_colored_mdp.underlying_mdp.nr_states
+        assert "clk=0&visit1=0&visit2=0&x=1&y=1" in names
+        assert not any("_loc_prism2jani" in name for name in names)

@@ -100,6 +100,183 @@ class TestGenericFormulaShapes:
             assert selection[1] == (pv > 1)
 
 
+class TestTermAndComparisonShapes:
+    """Every term and comparison the walker accepts, against Python's own arithmetic on every full assignment.
+
+    The truth table above covers addition, `<=`, `==` and `If` as a formula; these are the rest: subtraction, negation, multiplication, `If` as a term and the
+    strict and inclusive orders.
+    """
+
+    P_OPTIONS = (0, 1, 2)
+    Q_OPTIONS = (0, 1, 2)
+    COLUMN = 2
+
+    CASES = {
+        "subtraction": (lambda p, q, c: p - q >= 1, lambda p, q, c: p - q >= 1),
+        "negation": (lambda p, q, c: -p < -q, lambda p, q, c: -p < -q),
+        "product": (lambda p, q, c: p * q == 2, lambda p, q, c: p * q == 2),
+        "product with a column": (lambda p, q, c: p * c > q, lambda p, q, c: p * c > q),
+        "integer if": (lambda p, q, c: z3.If(p == 0, q, c) > 1, lambda p, q, c: (q if p == 0 else c) > 1),
+        "nested integer if": (
+            lambda p, q, c: z3.If(p < q, z3.If(q == 2, c, p), q - 1) >= 1,
+            lambda p, q, c: (c if q == 2 else p) >= 1 if p < q else q - 1 >= 1,
+        ),
+        "greater or equal": (lambda p, q, c: p >= q, lambda p, q, c: p >= q),
+        "greater": (lambda p, q, c: p > q, lambda p, q, c: p > q),
+        "less or equal": (lambda p, q, c: p <= q, lambda p, q, c: p <= q),
+        "less": (lambda p, q, c: p < q, lambda p, q, c: p < q),
+        "an or of equalities over two parameters": (lambda p, q, c: z3.Or(p == 0, q == 1), lambda p, q, c: p == 0 or q == 1),
+        "an or of an equality and something else": (lambda p, q, c: z3.Or(p == 0, p + 1 == 2), lambda p, q, c: p == 0 or p + 1 == 2),
+    }
+
+    @pytest.mark.parametrize("case", CASES)
+    def test_the_selection_on_a_full_assignment_is_the_formula_evaluated(self, case):
+        formula, python = self.CASES[case]
+        parameter_space = make_parameter_space([list(self.P_OPTIONS), list(self.Q_OPTIONS)])
+        # one state: the colored choice, and an uncolored one so that the state keeps a choice whatever the formula says
+        builder = paynt.utils.coloring_builder.ColoringBuilder([0, 2], parameter_space.num_parameters)
+        p, q = builder.parameters
+        column = builder.state_column([self.COLUMN])
+        builder.color(0, builder.template(formula(p, q, column)))
+        coloring = builder.build()
+        for pv, qv in itertools.product(self.P_OPTIONS, self.Q_OPTIONS):
+            assignment = parameter_space.copy()
+            assignment.parameter_set_options(0, [pv])
+            assignment.parameter_set_options(1, [qv])
+            assert coloring.selectCompatibleChoices(assignment.native)[0] == python(pv, qv, self.COLUMN), (pv, qv)
+
+    def test_equal_formulas_share_one_node(self):
+        """The option set of an Or of equalities is a set, so the order (and the repetition) of the options does not matter."""
+        builder = paynt.utils.coloring_builder.ColoringBuilder([0, 3], 2)
+        p, q = builder.parameters
+        template = builder.template(z3.Or(p == 0, p == 2))
+        assert builder.template(z3.Or(p == 2, p == 0)).node == template.node
+        assert builder.template(z3.Or(p == 2, p == 0, p == 2)).node == template.node
+        assert builder.template(z3.Or(q == 0, q == 2)).node != template.node
+
+
+class TestFormulaErrors:
+    @staticmethod
+    def builder():
+        return paynt.utils.coloring_builder.ColoringBuilder([0, 2, 4], 2)
+
+    def test_a_quantifier_is_not_a_formula_of_the_language(self):
+        builder = self.builder()
+        x = z3.Int("x")
+        with pytest.raises(ValueError, match="unsupported formula in a general coloring template"):
+            builder.template(z3.ForAll([x], x > 0))
+
+    def test_an_unsupported_comparison_is_named(self):
+        builder = self.builder()
+        p, q = builder.parameters
+        with pytest.raises(ValueError, match="unsupported term in a general coloring template"):
+            builder.template(p / q > 0)
+
+    def test_a_connective_outside_the_language_is_refused(self):
+        builder = self.builder()
+        p, q = builder.parameters
+        with pytest.raises(ValueError, match="unsupported formula in a general coloring template"):
+            builder.template(z3.Xor(p == 0, q == 0))
+
+    def test_in_bits_needs_a_bare_parameter(self):
+        builder = self.builder()
+        p, _q = builder.parameters
+        mask = builder.state_column([1, 1])
+        with pytest.raises(ValueError, match="in_bits' first argument must be a bare parameter reference"):
+            builder.template(builder.in_bits(p + 1, mask))
+
+    def test_distinct_of_more_than_two_terms_is_refused(self):
+        builder = self.builder()
+        p, q = builder.parameters
+        with pytest.raises(ValueError, match="Distinct is only supported with exactly 2 arguments"):
+            builder.template(z3.Distinct(p, q, builder.state_column([0, 0])))
+
+    def test_a_column_has_to_have_a_value_for_every_state_and_every_choice(self):
+        builder = self.builder()
+        with pytest.raises(ValueError, match="state_column expects 2 values, got 3"):
+            builder.state_column([0, 1, 2])
+        with pytest.raises(ValueError, match="choice_column expects 4 values, got 1"):
+            builder.choice_column([0])
+
+    def test_a_refused_formula_leaves_the_builder_usable(self):
+        builder = self.builder()
+        p, q = builder.parameters
+        with pytest.raises(ValueError):
+            builder.template(p / q > 0)
+        builder.color(0, builder.template(p == 1))
+        assert kind_of(builder.build(make_parameter_space([[0, 1], [0, 1]]))) == "Coloring"
+
+
+class TestWhyAColorIsNotStandard:
+    """Why build(general=False) refuses: what the standard coloring cannot represent, in a color that is otherwise fine for the general one."""
+
+    @staticmethod
+    def builder_with(formula):
+        parameter_space = make_parameter_space([[0, 1, 2]])
+        builder = paynt.utils.coloring_builder.ColoringBuilder([0, 2], 1)
+        flag = builder.state_column([1])
+        builder.color(0, builder.template(formula(builder.parameters[0], flag)))
+        return builder, parameter_space
+
+    def test_a_comparison_of_two_things_that_are_not_a_parameter(self):
+        builder, parameter_space = self.builder_with(lambda p, flag: flag == 1)
+        with pytest.raises(ValueError, match="compares two things that are not a parameter"):
+            builder.build(parameter_space, general=False)
+        assert kind_of(builder.build(parameter_space)) == "ColoringGeneral"
+
+    def test_an_option_set_of_several_options(self):
+        builder, parameter_space = self.builder_with(lambda p, flag: z3.Or(p == 0, p == 1))
+        with pytest.raises(ValueError, match="allows 2 options of a parameter, not exactly one"):
+            builder.build(parameter_space, general=False)
+
+    def test_a_comparison_with_something_the_state_and_choice_do_not_fix(self):
+        builder, parameter_space = self.builder_with(lambda p, flag: p == z3.If(flag == 1, 2, 0))
+        with pytest.raises(ValueError, match="not fixed by the state and the choice"):
+            builder.build(parameter_space, general=False)
+
+    def test_an_option_set_of_one_option_is_a_pair_like_any_other(self):
+        """Z3 keeps the repeated option in an Or, so this is the one-option set the walker builds; as a pair it is the standard coloring's."""
+        builder, parameter_space = self.builder_with(lambda p, flag: z3.Or(p == 1, p == 1))
+        assert kind_of(builder.build(parameter_space)) == "Coloring"
+        assert builder.build(parameter_space).getChoiceToAssignment()[0] == [(0, 1)]
+
+
+class TestCheckDefinitionOnASample:
+    """A coloring that violates Definition 2 at a single assignment of nine: only a sample that happens to draw it notices."""
+
+    @staticmethod
+    def broken_at_one_assignment():
+        parameter_space = make_parameter_space([[0, 1, 2], [0, 1, 2]])
+        builder = paynt.utils.coloring_builder.ColoringBuilder([0, 2], 2)
+        p, q = builder.parameters
+        # choice 0 is uncolored (always enabled), so choice 1 must never be: it is, at p == q == 2
+        builder.color(1, builder.template(z3.And(p == 2, q == 2)))
+        return builder, parameter_space
+
+    @staticmethod
+    def noticed(builder, parameter_space, **kwargs):
+        try:
+            builder.check_definition(parameter_space, **kwargs)
+        except AssertionError as error:
+            assert "Definition 2 violated at assignment (2, 2)" in str(error)
+            return True
+        return False
+
+    def test_the_whole_space_notices_it(self):
+        builder, parameter_space = self.broken_at_one_assignment()
+        assert self.noticed(builder, parameter_space)
+        assert self.noticed(builder, parameter_space, samples=9)
+        assert self.noticed(builder, parameter_space, samples=100)  # more than the space has: all of it
+
+    def test_a_smaller_sample_may_miss_it_and_a_seed_always_draws_the_same_one(self):
+        builder, parameter_space = self.broken_at_one_assignment()
+        outcomes = [self.noticed(builder, parameter_space, samples=3, seed=seed) for seed in range(20)]
+        assert outcomes == [self.noticed(builder, parameter_space, samples=3, seed=seed) for seed in range(20)]
+        # 3 of the 9 assignments are drawn: the bad one is among them for a third of the seeds, so over twenty both outcomes occur
+        assert True in outcomes
+        assert False in outcomes
+
+
 class TestInBits:
     def test_in_bits_matches_a_hand_computed_bitmask(self):
         # 1 state, 2 choices; parameter p in {0,1,2,3}; the state's data column is a bitmask with bits 0 and 2 set

@@ -1,5 +1,8 @@
-"""ParameterBitVecEncoding: the BitVec variables and domain (tau_V) formula for a parameter space, used by SynthesizerSMPMC.synthesize_one for every synthesis
-run."""
+"""ParameterBitVecEncoding: the BitVec variables of a parameter space, and the clauses and models that SynthesizerSMPMC.synthesize_one exchanges with Z3 through
+them.
+
+The domain (tau_V) clause of the parameters is ConstraintContext.in_range.
+"""
 
 from __future__ import annotations
 
@@ -23,20 +26,6 @@ class ParameterBitVecEncoding:
 
     def value(self, option: int) -> Any:
         return z3.BitVecVal(option, self.width)
-
-    def in_range(self, parameter_space: paynt.parameter_space.parameter_space.ParameterSpace | None = None) -> Any:
-        """tau_V's domain conjunct: every parameter constrained to one of its currently-allowed options.
-
-        Defaults to self.parameter_space, but accepts a narrower one (e.g. a split-off child subspace).
-        """
-        if parameter_space is None:
-            parameter_space = self.parameter_space
-        clauses = []
-        for parameter in range(parameter_space.num_parameters):
-            var = self.variables[parameter]
-            option_clauses = [var == self.value(option) for option in parameter_space.parameter_options(parameter)]
-            clauses.append(option_clauses[0] if len(option_clauses) == 1 else z3.Or(option_clauses))
-        return clauses[0] if len(clauses) == 1 else z3.And(clauses)
 
     def exclude(self, assignment: paynt.parameter_space.parameter_space.ParameterSpace, parameters: Iterable[int] | None = None) -> Any:
         """A clause ruling out assignment's options of parameters (by default all of them, a single concrete assignment) -- used by the optimality loop to force

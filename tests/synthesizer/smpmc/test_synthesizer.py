@@ -10,6 +10,7 @@ import logging
 import time
 
 import pytest
+import z3
 
 import paynt.parser.sketch
 import paynt.synthesizer.smpmc
@@ -168,6 +169,58 @@ class TestTimeIsUp:
         monkeypatch.setattr(paynt.synthesizer.smpmc.checker, "ColoredMdpTheory", Recording)
         synthesizer.synthesize()
         assert created and created[0].time_is_up == synthesizer._time_is_up
+
+
+class TestSolverGivesUp:
+    """Z3 answers `unknown` when it was stopped (by the timeout or an interrupt) and when it cannot decide the formula at all: the first is the time limit
+    working as intended, the second a warning, and neither is an answer to report."""
+
+    @staticmethod
+    def give_up_with(monkeypatch, reason):
+        class GivesUp(z3.Solver):
+            def check(self, *assumptions):
+                return z3.unknown
+
+            def reason_unknown(self):
+                return reason
+
+        monkeypatch.setattr(z3, "Solver", GivesUp)
+
+    @pytest.mark.parametrize("reason", ["timeout", "canceled", "interrupted"])
+    def test_a_stopped_search_is_the_time_limit_and_not_a_warning(self, monkeypatch, caplog, smpmc_tiny_colored_mdp, smpmc_tiny_task, reason):
+        self.give_up_with(monkeypatch, reason)
+        with caplog.at_level(logging.INFO):
+            result = paynt.synthesizer.smpmc.SynthesizerSMPMC(smpmc_tiny_colored_mdp, smpmc_tiny_task).run()
+        assert result.success is False
+        assert any("time limit reached" in record.message for record in caplog.records)
+        assert not any("returned unknown" in record.message for record in caplog.records)
+
+    def test_any_other_reason_is_a_warning_naming_it(self, monkeypatch, caplog, smpmc_tiny_colored_mdp, smpmc_tiny_task):
+        self.give_up_with(monkeypatch, "incomplete quantifiers")
+        with caplog.at_level(logging.INFO):
+            result = paynt.synthesizer.smpmc.SynthesizerSMPMC(smpmc_tiny_colored_mdp, smpmc_tiny_task).run()
+        assert result.success is False
+        assert [record.message for record in caplog.records if "returned unknown" in record.message] == ["SMPMC returned unknown: incomplete quantifiers"]
+        assert not any("time limit reached" in record.message for record in caplog.records)
+
+    def test_the_best_assignment_found_so_far_stands(self, monkeypatch, smpmc_tiny_optimality_colored_mdp, smpmc_tiny_optimality_task):
+        """An optimality search that finds an assignment, and then gets nothing but unknown, reports that assignment."""
+        real_check = z3.Solver.check
+        calls = []
+
+        class GivesUpAfterTheFirstAnswer(z3.Solver):
+            def check(self, *assumptions):
+                calls.append(1)
+                return real_check(self, *assumptions) if len(calls) == 1 else z3.unknown
+
+            def reason_unknown(self):
+                return "incomplete quantifiers" if len(calls) > 1 else super().reason_unknown()
+
+        monkeypatch.setattr(z3, "Solver", GivesUpAfterTheFirstAnswer)
+        result = paynt.synthesizer.smpmc.SynthesizerSMPMC(smpmc_tiny_optimality_colored_mdp, smpmc_tiny_optimality_task).run()
+        assert len(calls) >= 2
+        assert result.success is True
+        assert result.value is not None
 
 
 class TestSmpmcTimeLimit:

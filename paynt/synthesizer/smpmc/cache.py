@@ -1,9 +1,9 @@
 """Memo for ColoredMdpTheory.check() results -- Algorithm 1's per-literal conflict cache
 (arXiv:2511.08078). Ported from molehill's Mole.all_violated_models/inconclusive_models
-(https://github.com/linusheck/molehill, GPL-3.0), using the same mercury-settrie subset/superset
-subsumption the reference implementation uses, rather than the exact-match memo this module started with
-(see git history) -- one SetTrie per (refuted/inconclusive, polarity) combination, four total, matching
-molehill's own [SetTrie(), SetTrie()] x2 structure.
+(https://github.com/linusheck/molehill, GPL-3.0), using the same subset/superset subsumption over set tries as the
+reference implementation does, rather than the exact-match memo this module started with (see git history) -- one
+trie per (refuted/inconclusive, polarity) combination, four total, matching molehill's own [SetTrie(), SetTrie()] x2
+structure.
 
 Subsumption rules (derived directly from MDP choice-removal monotonicity -- fixing more parameters can
 only narrow the induced sub-MDP's choices, which can only lower Vmax and raise Vmin):
@@ -31,16 +31,11 @@ than per-entry filtering, and correct because every entry computed under an old 
 once. (Refuted `not viable` literals only arise under a quantifier, so plain existential optimality never
 had any to drop.)
 
-Two other deliberate deviations from a byte-for-byte port: mercury-settrie's `id` must be a string, so a
-refutation's payload (its Refutation) lives in a dict under a unique integer id, instead of being the id
-itself as in molehill -- where two conflicts over the same parameters would share an id, so removing one by
-id could remove the other. And trie elements
-are f"{parameter}={option}" strings, matching molehill's own f"{name}={option}" encoding exactly (adapted
-from a parameter *name* to PAYNT's integer parameter index) rather than plain (parameter, option) tuples --
-confirmed empirically that mercury-settrie's subset/superset comparison does not treat tuple elements
-correctly (silently ignores everything but the first component, so e.g. (1, 0) and (1, 1) collide),
-so this isn't just fidelity to the reference implementation, it's a required workaround: molehill's own
-choice of string-encoded elements over a more natural tuple encoding was very likely for this exact reason.
+Two other deliberate deviations from a byte-for-byte port. The tries are payntbind's own (payntbind.synthesis.SetTrie), not the mercury-settrie that molehill
+uses: that one only comes as a source distribution, whose installation compiles C++ and needs setuptools, a dependency PAYNT's build had got rid of. Its sets
+are lists of integers, so a (parameter, option) pair is the integer `(parameter << 32) | option` (see _element); its payloads are integers too, and a
+refutation's payload (its Refutation) lives in a dict under a unique integer id, instead of being the id itself as in molehill -- where two conflicts over the
+same parameters would share an id, so removing one by id could remove the other.
 """
 
 from __future__ import annotations
@@ -49,7 +44,7 @@ import enum
 from dataclasses import dataclass
 from typing import Any, Final
 
-import settrie
+import payntbind.synthesis
 
 
 class _Miss(enum.Enum):
@@ -73,8 +68,14 @@ class Refutation:
     exact: bool = False
 
 
-def _key(fixed: dict[int, int]) -> set[str]:
-    return {f"{parameter}={option}" for parameter, option in fixed.items()}
+def _element(parameter: int, option: int) -> int:
+    """The element of a set trie that stands for "parameter is fixed to option"."""
+    return (parameter << 32) | option
+
+
+def _key(fixed: dict[int, int]) -> list[int]:
+    """The set of the pairs of the partial assignment fixed, as a list of the elements of a set trie."""
+    return [_element(parameter, option) for parameter, option in fixed.items()]
 
 
 class PartialModelCache:
@@ -88,19 +89,19 @@ class PartialModelCache:
         # index 0 -> polarity False, index 1 -> polarity True, matching molehill's int(invert)/1-int(invert)
         # indexing translated to PAYNT's polarity (no negated-spec "invert" concept here, just direct
         # polarity indexing).
-        self._refuted: list[settrie.SetTrie] = [settrie.SetTrie(), settrie.SetTrie()]
+        self._refuted: list[payntbind.synthesis.SetTrie] = [payntbind.synthesis.SetTrie(), payntbind.synthesis.SetTrie()]
         # per polarity: trie set id -> its refutation
-        self._refutations: list[dict[str, Refutation]] = [{}, {}]
+        self._refutations: list[dict[int, Refutation]] = [{}, {}]
         self._next_id = 0
-        self._inconclusive: list[settrie.SetTrie] = [settrie.SetTrie(), settrie.SetTrie()]
+        self._inconclusive: list[payntbind.synthesis.SetTrie] = [payntbind.synthesis.SetTrie(), payntbind.synthesis.SetTrie()]
         self._epoch = 0
 
     def _sync_epoch(self, epoch: int) -> None:
         if epoch != self._epoch:
             # a tighter threshold: refuted not-viable literals and inconclusive verdicts may no longer hold, see the module docstring
-            self._refuted[0] = settrie.SetTrie()
+            self._refuted[0] = payntbind.synthesis.SetTrie()
             self._refutations[0] = {}
-            self._inconclusive = [settrie.SetTrie(), settrie.SetTrie()]
+            self._inconclusive = [payntbind.synthesis.SetTrie(), payntbind.synthesis.SetTrie()]
             self._epoch = epoch
 
     def lookup(self, fixed: dict[int, int], polarity: bool, epoch: int) -> list[Refutation] | None | _Miss:
@@ -114,14 +115,15 @@ class PartialModelCache:
         if refutations:
             return refutations
 
-        if any(self._inconclusive[p].supersets(key)):
+        # has_superset and not any(supersets(...)): the first set stored in a trie has the payload 0, which is falsy
+        if self._inconclusive[p].has_superset(key):
             return None
 
         # cross-polarity: a subset or superset already proven refuted for the *opposite* polarity means
         # this region is entirely one thing or the other -- either way, that can only make the *current*
         # polarity's literal inconclusive, never refuted (see module docstring).
         other = 1 - p
-        if any(self._refuted[other].subsets(key)) or any(self._refuted[other].supersets(key)):
+        if self._refuted[other].has_subset(key) or self._refuted[other].has_superset(key):
             return None
 
         return MISS
@@ -130,16 +132,16 @@ class PartialModelCache:
         """:param value: the value that refuted the literal, see Refutation
         :param exact: whether value was computed on a full assignment, see Refutation"""
         self._sync_epoch(epoch)
-        key = {f"{parameter}={fixed[parameter]}" for parameter in conflict_parameters}
+        key = [_element(parameter, fixed[parameter]) for parameter in conflict_parameters]
         p = int(polarity)
         # this new (already Theorem-6-minimized) conflict subsumes any existing cached entry that's a
         # superset of it -- anything the old, larger entry could answer, this smaller one answers too, so
         # drop the redundant entry to keep the trie lean (mirrors molehill's own insert-time compaction).
         # The dropped entry's value may have bounded its smaller region more tightly; the new one still bounds it.
-        for stale in list(self._refuted[p].supersets(key)):
+        for stale in self._refuted[p].supersets(key):
             self._refuted[p].remove(stale)
             del self._refutations[p][stale]
-        entry = str(self._next_id)
+        entry = self._next_id
         self._next_id += 1
         self._refuted[p].insert(key, entry)
         self._refutations[p][entry] = Refutation(sorted(conflict_parameters), value, exact)
@@ -148,5 +150,5 @@ class PartialModelCache:
         self._sync_epoch(epoch)
         key = _key(fixed)
         p = int(polarity)
-        if self._inconclusive[p].find(key) == "":
-            self._inconclusive[p].insert(key, str(len(self._inconclusive[p])))
+        if not self._inconclusive[p].contains(key):
+            self._inconclusive[p].insert(key, len(self._inconclusive[p]))

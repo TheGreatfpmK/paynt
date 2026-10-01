@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import logging
+
 import pytest
 
 import paynt.parser.sketch
@@ -217,6 +219,45 @@ class TestColoredMdpTheoryRewardConvergence:
         assert theory._reward_use_policy_iteration == {}
 
 
+class TestColoredMdpTheoryRewardVerificationOnLargeModels:
+    """A policy-iteration call is not affordable on a large sub-MDP (_PI_VERIFICATION_MAX_STATES), so value iteration's result is trusted there, once, with a
+    warning -- and the verification is still done later, on a sub-MDP small enough: the direction is not marked verified."""
+
+    @staticmethod
+    def maze_theory_and_sub_mdp():
+        sketch_path, props_path = get_sketch_paths("tests/generic-maze")
+        factory, task = paynt.parser.sketch.Sketch.load_sketch(sketch_path, props_path)
+        colored_mdp = factory.build()
+        theory = paynt.synthesizer.smpmc.checker.ColoredMdpTheory(colored_mdp, task.specification.optimality)
+        sub_mdp, _selected_choices = colored_mdp.build(colored_mdp.parameter_space)
+        return theory, sub_mdp
+
+    def test_the_verification_is_skipped_with_one_warning_per_direction(self, monkeypatch, caplog):
+        monkeypatch.setattr(paynt.synthesizer.smpmc.checker, "_PI_VERIFICATION_MAX_STATES", 1)
+        theory, sub_mdp = self.maze_theory_and_sub_mdp()
+        with caplog.at_level(logging.WARNING, logger="paynt.synthesizer.smpmc.checker"):
+            first = theory._model_check(sub_mdp, alt=True)
+            second = theory._model_check(sub_mdp, alt=True)
+            theory._model_check(sub_mdp, alt=False)
+        warnings = [record.message for record in caplog.records if "skipping policy-iteration verification" in record.message]
+        assert len(warnings) == 2  # once for each direction
+        assert "the alt direction" in warnings[0] and "the primary direction" in warnings[1]
+        assert f"{sub_mdp.model.nr_states} states" in warnings[0]
+        assert second.value == first.value
+
+    def test_the_direction_is_not_marked_verified_so_a_smaller_sub_mdp_is_still_verified(self, monkeypatch):
+        monkeypatch.setattr(paynt.synthesizer.smpmc.checker, "_PI_VERIFICATION_MAX_STATES", 1)
+        theory, sub_mdp = self.maze_theory_and_sub_mdp()
+        theory._model_check(sub_mdp, alt=True)
+        assert theory._reward_convergence_verified == {}
+        assert theory._reward_use_policy_iteration == {}
+
+        monkeypatch.setattr(paynt.synthesizer.smpmc.checker, "_PI_VERIFICATION_MAX_STATES", 10**6)
+        result = theory._model_check(sub_mdp, alt=True)
+        assert theory._reward_convergence_verified == {True: True}
+        assert result.value == pytest.approx(903940953.7112827, rel=1e-6)
+
+
 class TestColoredMdpTheoryCache:
     def test_repeated_query_is_served_from_cache_without_a_second_model_check(self, smpmc_tiny_colored_mdp, smpmc_tiny_task):
         prop = smpmc_tiny_task.specification.constraints[0]
@@ -329,6 +370,41 @@ class TestWorstCaseBounds:
         theory = self._theory(smpmc_tiny_colored_mdp, smpmc_tiny_task)
         theory.check({0: 0, 1: 0, 2: 0}, True)
         assert theory.worst_case_bound({0: 0, 2: 0}) is None
+
+    def test_a_cached_refutation_of_unknown_value_leaves_the_policy_unbounded(self, smpmc_tiny_colored_mdp, smpmc_tiny_task):
+        """The environments of a policy are covered by refutations, and the worst of their values bounds the policy's worst case: one without a value (so, no
+        bound on its region) means no bound at all for the policy."""
+        theory = self._theory(smpmc_tiny_colored_mdp, smpmc_tiny_task)
+        theory.cache.insert_refuted({**self.policy, 1: 1}, False, [0, 1, 2], theory.epoch)
+        calls = theory.mc_calls
+        assert theory.check({**self.policy, 1: 1}, False) is not None
+        assert theory.mc_calls == calls, "the query should have been answered by the cached refutation"
+        assert theory.worst_case_bound(self.policy) is None
+
+    def test_a_refutation_with_a_value_bounds_the_query_even_next_to_one_without(self, smpmc_tiny_colored_mdp, smpmc_tiny_task):
+        """The refutation of x2 == 0 does not depend on x2 (the policy never reaches the state that reads it), so it refutes x2 == 1 as well, with its value."""
+        theory = self._theory(smpmc_tiny_colored_mdp, smpmc_tiny_task)
+        assert theory.check({**self.policy, 1: 0}, False) is not None
+        theory.cache.insert_refuted({**self.policy, 1: 1}, False, [0, 1, 2], theory.epoch)
+        assert theory.check({**self.policy, 1: 1}, False) is not None
+        bound = theory.worst_case_bound(self.policy)
+        assert bound is not None and bound.value == pytest.approx(1.0)
+
+    def test_a_policy_without_a_bound_is_not_bounded_by_later_refutations_either(self, smpmc_tiny_colored_mdp, smpmc_tiny_task):
+        theory = self._theory(smpmc_tiny_colored_mdp, smpmc_tiny_task)
+        theory.cache.insert_refuted({**self.policy, 1: 1}, False, [0, 1, 2], theory.epoch)
+        theory.check({**self.policy, 1: 1}, False)
+        theory.check({**self.policy, 1: 0}, False)
+        assert theory.worst_case_bound(self.policy) is None
+
+    def test_the_unknown_is_dropped_with_the_epoch_too(self, smpmc_tiny_colored_mdp, smpmc_tiny_task):
+        theory = self._theory(smpmc_tiny_colored_mdp, smpmc_tiny_task)
+        theory.cache.insert_refuted({**self.policy, 1: 1}, False, [0, 1, 2], theory.epoch)
+        theory.check({**self.policy, 1: 1}, False)
+        theory.epoch += 1
+        theory.check({**self.policy, 1: 0}, False)
+        bound = theory.worst_case_bound(self.policy)
+        assert bound is not None and bound.value == pytest.approx(1.0)
 
     def test_bounds_are_dropped_with_the_epoch(self, smpmc_tiny_colored_mdp, smpmc_tiny_task):
         """They cover the environments only under the threshold they were refuted against."""
