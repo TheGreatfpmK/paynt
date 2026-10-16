@@ -1,0 +1,50 @@
+pomdp
+
+// A counter-example to the escape rule "enumerate one step, keep the suffix, re-derive the prefix".
+//
+// Three decision steps (horizon 3), one observation class per step, two actions each, so a color
+// consistent policy is a triple (a0,a1,a2) in {a,b}^3.
+//
+//   step 0   s=0                             obs "start"
+//   step 1   s=1 (u), s=2 (v)                obs "mid"   -- u and v look the same
+//   step 2   s=3..6 (Pu0,Pu1,Pv0,Pv1)        obs "pay"   -- all four look the same
+//   step 3   s=7 goal, s=8 sink
+//
+// u is the rare "jackpot" branch (reached with probability 0.1), v the common one. Pu1 pays well
+// under both step-2 actions, Pv0 only under b. The optimum is (b,a,b) = 0.1; the backward passes
+// stop at (a,b,a) = 0.098, and no single step can be changed to escape it.
+
+observable "start" = s=0;
+observable "mid"   = s=1 | s=2;
+observable "pay"   = s>=3 & s<=6;
+observable "goal"  = s=7;
+
+module m
+    s : [0..8] init 0;
+
+    // step 0: split onto the jackpot branch, or put everything on the common branch
+    [a] s=0 -> 0.1 : (s'=1) + 0.9 : (s'=2);
+    [b] s=0 -> 1   : (s'=2);
+
+    // step 1: u and v share the observation, so they must take the same action
+    [a] s=1 -> 1 : (s'=3);      // u -> Pu0
+    [b] s=1 -> 1 : (s'=4);      // u -> Pu1
+    [a] s=2 -> 1 : (s'=5);      // v -> Pv0
+    [b] s=2 -> 1 : (s'=6);      // v -> Pv1
+
+    // step 2: all four pay-states share the observation
+    [a] s=3 -> 1 : (s'=8);
+    [b] s=3 -> 1 : (s'=8);
+    [a] s=4 -> 0.98 : (s'=7) + 0.02 : (s'=8);
+    [b] s=4 -> 0.95 : (s'=7) + 0.05 : (s'=8);
+    [a] s=5 -> 1 : (s'=8);
+    [b] s=5 -> 0.1 : (s'=7) + 0.9 : (s'=8);
+    [a] s=6 -> 1 : (s'=8);
+    [b] s=6 -> 1 : (s'=8);
+
+    // absorbing
+    [a] s=7 -> 1 : (s'=7);
+    [a] s=8 -> 1 : (s'=8);
+endmodule
+
+label "goal" = s=7;

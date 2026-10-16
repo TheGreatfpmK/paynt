@@ -27,6 +27,8 @@ void define_synthesis(py::module& m) {
     bindings_mdp_family(m);
 
     bindings_coloring(m);
+    // needs to follow bindings_coloring: it exposes a coloring built on top of the Coloring and Family classes
+    bindings_finite_horizon(m);
 
     #ifndef DISABLE_SMG
     bindings_smg(m);
