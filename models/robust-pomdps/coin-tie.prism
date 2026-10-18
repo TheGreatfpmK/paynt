@@ -1,0 +1,26 @@
+// Smallest interval POMDP where tying the memory copies of an interval moves nature's optimum inside it.
+// Both FSCs flip the coin and, on heads, flip it again from memory node 1, so the two memory copies of
+// the flip share p in [0.2,0.8] when tied:
+//   coin-tie.fsc.json      wins only on heads-then-tails: P(won) = p(1-p), tied max 1/4 at p = 1/2
+//   coin-tie-min.fsc.json  loses only on heads-then-tails: P(won) = 1-p(1-p), tied min 3/4 at p = 1/2
+// Every edge (p = 0.2 or p = 0.8) gives 0.16 and 0.84 respectively.
+pomdp
+
+observables
+	s
+endobservables
+
+module coin
+	// 0 flip, 1 heads, 2 tails, 3 won, 4 lost
+	s : [0..4] init 0;
+
+	[flip]  s=0 -> [0.2,0.8] : (s'=1) + [0.2,0.8] : (s'=2);
+	[again] s=1 -> (s'=0);
+	[stop]  s=1 -> (s'=4);
+	[claim] s=1 -> (s'=3);
+	[claim] s=2 -> (s'=3);
+	[stop]  s=2 -> (s'=4);
+	[done]  s>=3 -> true;
+endmodule
+
+label "won" = s=3;

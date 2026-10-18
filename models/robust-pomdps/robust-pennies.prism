@@ -1,0 +1,27 @@
+// Robust matching pennies: nature sends the agent left or right with probability p in [0.1,0.9], the agent
+// cannot tell which and wins by playing a on the left or b on the right. A memoryless policy playing a with
+// probability q wins with p*q + (1-p)*(1-q). The robust optimum is q = 1/2 with value 1/2. Nature's best
+// response is always an edge (p = 0.1 against q > 1/2, p = 0.9 against q < 1/2), and the agent's best
+// response to an edge is deterministic, so alternating best responses jumps between q = 0 and q = 1, whose
+// robust value is only 0.1.
+pomdp
+
+observables
+	o
+endobservables
+
+module pennies
+	// 0 start, 1 left, 2 right, 3 won, 4 lost
+	s : [0..4] init 0;
+	// 0 start, 1 left or right, 2 finished
+	o : [0..2] init 0;
+
+	[go]   s=0 -> [0.1,0.9] : (s'=1) & (o'=1) + [0.1,0.9] : (s'=2) & (o'=1);
+	[a]    s=1 -> (s'=3) & (o'=2);
+	[b]    s=1 -> (s'=4) & (o'=2);
+	[a]    s=2 -> (s'=4) & (o'=2);
+	[b]    s=2 -> (s'=3) & (o'=2);
+	[done] s>=3 -> true;
+endmodule
+
+label "won" = s=3;

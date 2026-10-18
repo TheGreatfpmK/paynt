@@ -1,0 +1,90 @@
+// %%%%%%%
+// %<    %
+// % % % %
+// %  G  %
+// % % % %
+// %     %
+// %%%%%%%
+
+pomdp
+
+// can observe the walls and target
+observables 
+	h_obs, h_obs_y
+endobservables 
+
+const int MAXh = 5;
+const int MINh = -5;
+
+const int MAXhdot = 2;
+const int MINhdot = -2;
+const int MAXhdotdot = 1;
+const int MINhdotdot = -1;
+const int obsval=2;
+const int h_obsmax=5; // ENSURE THIS IS (MAXh-MINh)/obsval
+const int xinit=MAXh-1;
+const int yinit=MINh+1;
+formula crash = (h<=2 & h>=-2) & (h_y <=2 & h_y>=-2);
+formula hobsval = (h_obs=50 & h_obs_y=50);
+const int obsint=2;
+
+module aircraft
+	//vertical altitude
+	//c : [0..3] init 0;
+	h : [MINh..MAXh] init xinit;
+	h_y : [MINh..MAXh] init yinit;
+	//vertical rate
+	hdot : [MINhdot..MAXhdot] init 0;
+	hdot_y : [MINhdot..MAXhdot] init 0;
+	//vertical acceleration
+	//observed altitude
+	h_obs: [-30..50] init 50;
+	h_obs_y: [-30..50] init 50;
+	//observed rate
+	c : [0..6] init 0;
+	// update the altitude according to current rate
+	[h_update]  hobsval & c=0  -> 1:(h'=max(MINh,min(MAXh,h+hdot))) & (h_y'=max(MINh,min(MAXh,h_y+hdot_y)))  &(c'=1);
+
+	// update the rate according to current acceleration
+
+	// adversary randomly chooses acceleration
+	[h_update]  hobsval & c=1 -> [0.2,0.4]:(hdot'=max(MINhdot,min(MAXhdot,hdot+1))) & (c'=4)
+				+ [0.6,0.8]:(hdot'=max(MINhdot,min(MAXhdot,hdot-1)))& (c'=4);
+	[h_update] hobsval  & c=4 -> [0.2,0.4]:(hdot_y'=max(MINhdot,min(MAXhdot,hdot_y+1)))& (c'=5)
+				+ [0.6,0.8]: (hdot_y'=max(MINhdot,min(MAXhdot,hdot_y-1)))& (c'=5);
+	[h_update]  hobsval & c=5   -> 1:(h_obs'=floor(h/obsint))  & (h_obs_y'=floor(h_y/obsint))   &(c'=6);
+	[h_update1] !hobsval  & c=6 ->[0.6,0.8]:(hdot'=max(MINhdot,min(MAXhdot,hdot+2))) & (hdot_y'=max(MINhdot,min(MAXhdot,hdot_y+2)))&(h_obs'=50)  & (h_obs_y'=50)   & (c'=0)+
+			[0.2,0.4]:(hdot'=max(MINhdot,min(MAXhdot,hdot))) & (hdot_y'=max(MINhdot,min(MAXhdot,hdot_y)))& (h_obs'=50)  & (h_obs_y'=50)   &(c'=0);
+	[h_update12] !hobsval  & c=6 ->[0.6,0.8]:(hdot'=max(MINhdot,min(MAXhdot,hdot-2))) & (hdot_y'=max(MINhdot,min(MAXhdot,hdot_y+2)))& (h_obs'=50)  & (h_obs_y'=50)   &(c'=0)+
+			[0.2,0.4]:(hdot'=max(MINhdot,min(MAXhdot,hdot))) & (hdot_y'=max(MINhdot,min(MAXhdot,hdot_y)))& (h_obs'=50)  & (h_obs_y'=50)   &(c'=0);
+	[h_update13] !hobsval  & c=6 ->[0.6,0.8]:(hdot'=max(MINhdot,min(MAXhdot,hdot+2))) & (hdot_y'=max(MINhdot,min(MAXhdot,hdot_y-2)))&(h_obs'=50)  & (h_obs_y'=50)   & (c'=0)+
+			[0.2,0.4]:(hdot'=max(MINhdot,min(MAXhdot,hdot))) & (hdot_y'=max(MINhdot,min(MAXhdot,hdot_y)))&(h_obs'=50)  & (h_obs_y'=50)   & (c'=0);
+	[h_update14] !hobsval  & c=6 ->[0.6,0.8]:(hdot'=max(MINhdot,min(MAXhdot,hdot-2))) & (hdot_y'=max(MINhdot,min(MAXhdot,hdot_y-2)))&(h_obs'=50)  & (h_obs_y'=50)   & (c'=0)+
+			[0.2,0.4]:(hdot'=max(MINhdot,min(MAXhdot,hdot))) & (hdot_y'=max(MINhdot,min(MAXhdot,hdot_y)))& (h_obs'=50)  & (h_obs_y'=50)   & (c'=0);
+	[h_update15] !hobsval  & c=6 ->[0.6,0.8]:(hdot'=max(MINhdot,min(MAXhdot,hdot))) & (hdot_y'=max(MINhdot,min(MAXhdot,hdot_y)))&(h_obs'=50)  & (h_obs_y'=50)   & (c'=0)+
+			[0.2,0.4]:(hdot'=max(MINhdot,min(MAXhdot,hdot))) & (hdot_y'=max(MINhdot,min(MAXhdot,hdot_y)))& (h_obs'=50)  & (h_obs_y'=50)   & (c'=0);
+
+endmodule
+
+rewards
+	crash  : 101;
+	!crash : 1;
+endrewards
+
+// reward structure to calculate steps
+//rewards
+//	[h_update]   !crash : 1;
+//	[h_update1]  !crash : 1;
+//	[h_update12] !crash : 1;
+//	[h_update13] !crash : 1;
+//	[h_update14] !crash : 1;
+//	[h_update15] !crash : 1;
+//	[h_update]    crash : 100;
+//	[h_update1]   crash : 100;
+//	[h_update12]  crash : 100;
+//	[h_update13]  crash : 100;
+//	[h_update14]  crash : 100;
+//	[h_update15]  crash : 100;
+//endrewards
+// target observation or state
+label "goal" = h=MINh & h_y=MAXh;

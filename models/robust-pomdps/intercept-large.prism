@@ -1,0 +1,91 @@
+pomdp
+
+observables
+    dx, dy, turn
+endobservables
+
+const int RADIUS=1;
+
+const int N=7;
+const int xMAX = N-1;
+const int yMAX = N-1;
+const int axMAX = xMAX;
+const int ayMAX = yMAX;
+const int axMIN = 0;
+const int ayMIN = 0;
+const int dxMAX = xMAX;
+const int dyMAX = yMAX;
+const int dxMIN = 0;
+const int dyMIN = 0;
+const bool DIAGONAL = false;
+const int CAMERAXMIN = 0;
+const int CAMERAYMIN = floor((ayMIN + ayMAX)/2);
+const int CAMERAXMAX = xMAX;
+const int CAMERAYMAX = CAMERAYMIN + 1;
+
+
+
+formula northenabled = dx != dxMIN;
+formula southenabled = dx != dxMAX;
+formula westenabled = dy != dyMIN;
+formula eastenabled = dy != dyMAX;
+formula done = (dx = ax & dy = ay);
+observable "amdone" = done;
+formula left =  (ax = axMIN & ay = ayMAX-1) | (ax = axMIN + 1 & ay = ayMIN)  ;
+observable "hasleft" = left;
+formula laserdet = ax >= CAMERAXMIN & ax <= CAMERAXMAX & ay >= CAMERAYMIN & ay <= CAMERAYMAX;
+formula seedrone = ax-dx < RADIUS + 1 & dx-ax < RADIUS +1 & ay-dy < RADIUS+1 & dy -ay < RADIUS+1;
+observable "seedx" = (laserdet | seedrone) ? ax : -1;
+observable "seedy" = (laserdet | seedrone) ? ay : -1;
+
+
+module master
+    turn : bool init false;
+
+    [north] !done & turn -> (turn'=!turn);
+    [south] !done & turn -> (turn'=!turn);
+    [east]  !done & turn -> (turn'=!turn);
+    [west]  !done & turn -> (turn'=!turn);
+    [adv]  !done & !turn -> (turn'=!turn);
+    [finished] done -> (turn'=turn);
+endmodule
+
+
+module drone
+    dx : [dxMIN..dxMAX] init dxMIN;
+    dy : [dyMIN..dyMAX] init dyMIN;
+
+    [west] true | westenabled -> [0.6,0.9]: (dx'=max(dx-1,dxMIN)) + [0.1,0.4]: (dx'=max(dx,dxMIN));
+    [east] true | eastenabled -> [0.6,0.9]: (dx'=min(dx+1,dxMAX)) + [0.1,0.4]: (dx'=min(dx,dxMAX));
+    [south] true | southenabled -> [0.6,0.9]: (dy'=min(dy+1,dyMAX)) + [0.1,0.4]: (dy'=min(dy,dyMAX));
+    [north] true | northenabled -> [0.6,0.9]: (dy'=max(dy-1,dyMIN)) + [0.1,0.4]: (dy'=max(dy,dyMIN));
+endmodule
+
+
+
+module agent
+    ax : [axMIN..axMAX] init axMAX-1;
+    ay : [ayMIN..ayMAX] init ayMAX;
+
+    [adv] !DIAGONAL -> 1/4 : (ax'=max(ax-1,axMIN)) +  1/4 : (ax'=min(ax+1,axMAX)) + 1/4 : (ay'=max(ay-1,ayMIN)) + 1/4 : (ay'=min(ay+1,ayMAX));
+    [adv] DIAGONAL -> 1/8 : (ax'=max(ax-1,axMIN)) +  1/8: (ax'=min(ax+1,axMAX))
+                + 1/8 : (ay'=max(ay-1,ayMIN)) + 1/8 : (ay'=min(ay+1,ayMAX))
+                + 1/8 : (ax'=max(ax-1,axMIN)) & (ay'=max(ay-1,ayMIN)) +  1/8: (ax'=min(ax+1,axMAX)) & (ay'=max(ay-1,ayMIN))
+                + 1/8 : (ax'=max(ax-1,axMIN)) & (ay'=min(ay+1,ayMAX)) +  1/8: (ax'=min(ax+1,axMAX)) & (ay'=min(ay+1,ayMAX));
+endmodule
+
+
+label "goal" = done;
+//label "notbad" =  !left;
+//label "exits" = left;
+
+rewards
+    [north] !left : 1;
+    [south] !left : 1;
+    [west] !left  : 1;
+    [east] !left  : 1;
+    [north] left  : 101;
+    [south] left  : 101;
+    [west] left   : 101;
+    [east] left   : 101;
+endrewards

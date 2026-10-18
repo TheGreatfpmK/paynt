@@ -1,0 +1,11 @@
+{
+    "__comment": "node 0: flip; on heads flip again in node 1, on tails claim the win. node 1: flip; on heads claim the win, on tails stop.",
+    "action": [
+        {"[s=0]": "flip", "[s=1]": "again", "[s=2]": "claim", "[s=3]": "done", "[s=4]": "done"},
+        {"[s=0]": "flip", "[s=1]": "claim", "[s=2]": "stop", "[s=3]": "done", "[s=4]": "done"}
+    ],
+    "update": [
+        {"[s=0]": 0, "[s=1]": 1, "[s=2]": 0, "[s=3]": 0, "[s=4]": 0},
+        {"[s=0]": 1, "[s=1]": 1, "[s=2]": 1, "[s=3]": 1, "[s=4]": 1}
+    ]
+}
