@@ -1,7 +1,7 @@
-"""ProbGoalConstraint: constrain the probability of reaching the specification's target to be either
-strictly positive ("prob0" -- some way of resolving any leftover nondeterminism reaches it) or almost-sure
-("prob1" -- every way of resolving leftover nondeterminism reaches it), encoded directly as Z3 assertions
-over per-state reachability/min-step variables rather than via a Storm model-check call.
+"""ProbGoalConstraint: the specification's target must be reached from the initial state with positive probability under some way of resolving leftover
+nondeterminism ("prob0"), or with probability 1 under every way ("prob1").
+
+Encoded as Z3 assertions over per-state variables, without calling Storm.
 """
 
 from __future__ import annotations
@@ -42,43 +42,35 @@ class ProbGoalConstraint(Constraint):
         target_states = paynt.model.model.ModelIndex.identify_target_states(model, prop)
 
         num_states = transition_matrix.nr_columns
+        # reach[s]: the target is reached from s with positive probability under some (prob0) / every (prob1) resolution of the nondeterminism;
+        # rank[s] decreases along the path that witnesses it, so that a cycle cannot witness itself
         reach = [z3.Bool(f"__prob_goal_reach_{state}") for state in range(num_states)]
-        min_step = [z3.Int(f"__prob_goal_min_step_{state}") for state in range(num_states)]
+        rank = [z3.Int(f"__prob_goal_rank_{state}") for state in range(num_states)]
+        # visited[s] (prob1): s can be visited before the target is reached
+        visited = [z3.Bool(f"__prob_goal_visited_{state}") for state in range(num_states)]
 
-        combine = z3.And if self.prob == 1 else z3.Or
-
-        assertions: list[Any] = [step_var >= 0 for step_var in min_step]
+        assertions: list[Any] = [state_rank >= 0 for state_rank in rank]
         for state in range(num_states):
             if target_states.get(state):
                 assertions.append(reach[state])
-                assertions.append(min_step[state] == 0)
                 continue
 
             per_choice_progress = []
             for choice in transition_matrix.get_rows_for_group(state):
-                choice_assignment = z3.And([ctx.eq(parameter, option) for parameter, option in choice_to_assignment[choice]])
+                enabled = z3.And([ctx.eq(parameter, option) for parameter, option in choice_to_assignment[choice]])
+                successors = [entry.column for entry in transition_matrix.get_row(choice) if entry.value() != 0 and entry.column != state]
+                progress = z3.Or([z3.And(reach[successor], rank[successor] < rank[state]) for successor in successors])
+                if self.prob == 0:
+                    per_choice_progress.append(z3.And(enabled, progress))
+                else:
+                    per_choice_progress.append(z3.Implies(enabled, progress))
+                    assertions.append(z3.Implies(z3.And(visited[state], enabled), z3.And([visited[successor] for successor in successors])))
+            if self.prob == 0:
+                assertions.append(z3.Implies(reach[state], z3.Or(per_choice_progress)))
+            else:
+                assertions.append(z3.Implies(reach[state], z3.And(per_choice_progress)))
+                # probability 1: no state from which the target may be missed can be visited
+                assertions.append(z3.Implies(visited[state], reach[state]))
 
-                successor_reach = []
-                successor_min_step = []
-                for entry in transition_matrix.get_row(choice):
-                    if entry.value() == 0 or entry.column == state:
-                        continue
-                    successor_reach.append(reach[entry.column])
-                    successor_min_step.append(min_step[entry.column])
-
-                per_choice_progress.append(z3.Implies(choice_assignment, z3.Or(successor_reach)))
-                # if this choice is selected and state is claimed reachable, min_step[state] must equal
-                # exactly one more than the smallest reachable successor's min_step
-                assertions.append(
-                    z3.Implies(
-                        z3.And(reach[state], choice_assignment),
-                        z3.And(
-                            z3.Or([min_step[state] == successor + 1 for successor in successor_min_step]),
-                            z3.And([min_step[state] <= successor + 1 for successor in successor_min_step]),
-                        ),
-                    )
-                )
-            assertions.append(z3.Implies(reach[state], combine(per_choice_progress)))
-
-        assertions.append(reach[initial_state])
+        assertions.append(reach[initial_state] if self.prob == 0 else visited[initial_state])
         return ctx.base_clauses() + assertions

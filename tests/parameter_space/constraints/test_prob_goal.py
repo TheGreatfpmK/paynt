@@ -1,45 +1,81 @@
-"""Integration tests for ProbGoalConstraint against models/tests/smpmc-tiny, whose 8 combinations happen to give reachability probability of exactly 0.0 or 1.0
--- never anything in between -- for reaching "done" (verified directly against Storm: only (x1=1,x2=4), (x1=4,x2=3) and (x1=4,x2=4), all with x3=8, give 1.0;
-every other combination gives 0.0).
+"""ProbGoalConstraint (--constraint prob0/prob1) on the sketches of models/tests/prob-goal, whose comments give the reachability probability of every
+assignment.
 
-That makes it an unambiguous fixture for prob0/prob1: since every parameter is fully determined for a "generic" sketch (no residual nondeterminism, see
-checker.py's singleton-eta shortcut), "possible" (prob0) and "almost-sure" (prob1) coincide here on exactly the same 3-combination set -- the constraint should
-accept only those and refute everything else.
+Their property, P>=0, holds everywhere, so the engines are restricted by the constraint alone.
 """
 
 from __future__ import annotations
 
-import paynt.synthesizer.smpmc
+import pytest
+import z3
+
+import paynt.parameter_space.bitvec
+import paynt.parameter_space.constraints
+import paynt.parser.sketch
 import paynt.synthesizer.synthesizer
+from paynt.parameter_space.constraints.constraint import ConstraintContext
 
-_GOOD_ASSIGNMENTS = {"x1=1, x2=4, x3=8", "x1=4, x2=3, x3=8", "x1=4, x2=4, x3=8"}
-
-
-class TestProbGoalConstraintOnSmpmc:
-    def test_prob1_finds_an_almost_surely_reaching_assignment(self, smpmc_tiny_colored_mdp, smpmc_tiny_task):
-        smpmc_tiny_task.constraint_name = "prob1"
-        result = paynt.synthesizer.smpmc.SynthesizerSMPMC(smpmc_tiny_colored_mdp, smpmc_tiny_task).run()
-        assert result.success
-        assert str(result.assignment) in _GOOD_ASSIGNMENTS
-
-    def test_prob0_finds_a_possibly_reaching_assignment(self, smpmc_tiny_colored_mdp, smpmc_tiny_task):
-        smpmc_tiny_task.constraint_name = "prob0"
-        result = paynt.synthesizer.smpmc.SynthesizerSMPMC(smpmc_tiny_colored_mdp, smpmc_tiny_task).run()
-        assert result.success
-        assert str(result.assignment) in _GOOD_ASSIGNMENTS
-
-    def test_prob1_is_unsat_when_every_almost_surely_reaching_option_is_excluded(self, smpmc_tiny_colored_mdp, smpmc_tiny_task):
-        # x1's options are indexed [0,1,2,3] for labels [1,2,3,4]; every reaching assignment needs
-        # x1 in {1,4} (indices 0 or 3), so narrowing x1 to {2,3} (indices 1,2) excludes all of them
-        smpmc_tiny_colored_mdp.parameter_space.parameter_set_options(0, [1, 2])
-        smpmc_tiny_task.constraint_name = "prob1"
-        result = paynt.synthesizer.smpmc.SynthesizerSMPMC(smpmc_tiny_colored_mdp, smpmc_tiny_task).run()
-        assert not result.success
+from helpers.helper import get_sketch_paths
 
 
-class TestProbGoalConstraintOnCegis:
-    def test_agrees_with_smpmc_on_prob1(self, smpmc_tiny_colored_mdp_factory, smpmc_tiny_task):
-        smpmc_tiny_task.constraint_name = "prob1"
-        result = paynt.synthesizer.synthesizer.Synthesizer.for_method(smpmc_tiny_colored_mdp_factory.build(), smpmc_tiny_task, "cegis").run()
-        assert result.success
-        assert str(result.assignment) in _GOOD_ASSIGNMENTS
+def load_prob_goal(sketch_name):
+    sketch_path, props_path = get_sketch_paths("tests/prob-goal", sketch_name=sketch_name)
+    factory, task = paynt.parser.sketch.Sketch.load_sketch(sketch_path, props_path)
+    return factory.build(), task
+
+
+def accepted_assignments(colored_mdp, task, constraint_name):
+    """The full assignments that the constraint's clauses admit."""
+    space = colored_mdp.parameter_space
+    variables, width, _ = paynt.parameter_space.bitvec.parameter_bitvec_variables(space)
+    ctx = ConstraintContext(colored_mdp=colored_mdp, parameter_space=space, task=task, variables=variables, width=width)
+    solver = z3.Solver()
+    solver.add(*paynt.parameter_space.constraints.build_constraint(constraint_name).build(ctx))
+    return {
+        str(space.construct_assignment(options))
+        for options in space.all_combinations()
+        if solver.check(*[variable == z3.BitVecVal(option, width) for variable, option in zip(variables, options, strict=True)]) == z3.sat
+    }
+
+
+class TestClauses:
+    @pytest.mark.parametrize(
+        "sketch_name, constraint_name, expected",
+        [
+            ("sketch.templ", "prob0", {"a=2"}),
+            ("sketch.templ", "prob1", set()),
+            # the agent's choice: some resolution reaches the goal (prob0), every resolution reaches it almost surely (prob1)
+            ("family.templ", "prob0", {"a=0", "a=1"}),
+            ("family.templ", "prob1", {"a=0"}),
+        ],
+    )
+    def test_admit_exactly_the_assignments_reaching_the_goal(self, sketch_name, constraint_name, expected):
+        colored_mdp, task = load_prob_goal(sketch_name)
+        assert accepted_assignments(colored_mdp, task, constraint_name) == expected
+
+    @pytest.mark.parametrize("constraint_name", ["prob0", "prob1"])
+    def test_admit_exactly_the_assignments_reaching_the_goal_on_smpmc_tiny(self, smpmc_tiny_colored_mdp, smpmc_tiny_task, constraint_name):
+        # every assignment reaches "done" with probability 0 or 1
+        expected = {"x1=1, x2=4, x3=8", "x1=4, x2=3, x3=8", "x1=4, x2=4, x3=8"}
+        assert accepted_assignments(smpmc_tiny_colored_mdp, smpmc_tiny_task, constraint_name) == expected
+
+
+@pytest.mark.parametrize("method", ["smpmc", "cegis"])
+class TestEngines:
+    @pytest.mark.parametrize(
+        "sketch_name, constraint_name, expected",
+        [
+            ("sketch.templ", "prob0", "a=2"),
+            ("sketch.templ", "prob1", None),
+            ("family.templ", "prob1", "a=0"),
+        ],
+    )
+    def test_find_the_only_admitted_assignment(self, method, sketch_name, constraint_name, expected):
+        colored_mdp, task = load_prob_goal(sketch_name)
+        task.constraint_name = constraint_name
+        result = paynt.synthesizer.synthesizer.Synthesizer.for_method(colored_mdp, task, method).run()
+        if expected is None:
+            assert not result.success
+        else:
+            assert result.success
+            assert str(result.assignment) == expected

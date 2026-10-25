@@ -270,6 +270,8 @@ class TestSmpmcTimeLimit:
         self.maze_synthesizer().synthesize(optimum_threshold=20.9, timeout=0.3)
         result = paynt.synthesizer.smpmc.SynthesizerSMPMC(smpmc_tiny_colored_mdp, smpmc_tiny_task).run()
         assert result.success is True
+        prop = smpmc_tiny_task.specification.constraints[0]
+        assert smpmc_tiny_colored_mdp.build_assignment(result.assignment).model_check_property(prop).sat
 
     def test_the_best_assignment_found_before_the_limit_stands(self):
         synthesizer = self.maze_synthesizer()
