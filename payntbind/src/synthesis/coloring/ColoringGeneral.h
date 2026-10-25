@@ -24,7 +24,9 @@ using BitVector = storm::storage::BitVector;
  *
  * Representation. The colors are a node table built in Python by paynt/utils/coloring_builder.py; the constructor lists
  * the operands of each NodeOp. Colors are written in z3py, which links a potentially different Z3 than this library, 
- * so they arrive as plain data. Data columns (a row per state and per choice) let one formula color many choices. 
+ * so they arrive as plain data. Data columns (a row per state and per choice) let one formula color many choices:
+ * a choice stores only the root of its color (choice_root) and its data row, so choices whose colors differ only in
+ * data share all their nodes.
  * Invariants: children have smaller ids than their parents; parameter values are option indices; 
  * choice_root[c] == -1 means that c is uncolored, i.e. always enabled.
  *
@@ -44,9 +46,10 @@ using BitVector = storm::storage::BitVector;
  * only enlarges the sub-MDP, meaning it is still a safe abstraction. 
  * Deciding this exactly is NP-complete in general! Exact mode does it with Z3, much more slowly.
  *
- * A node is evaluated once per query, per state or per choice, depending on whether it reads no data, state data or
- * choice data; epoch counters invalidate these caches. The caches and the query context are members: one query at a
- * time, not thread-safe.
+ * A data column node reads its column in the row of the state or choice being evaluated, so a node is evaluated once
+ * per query, per state or per choice, depending on whether it reads (itself or through its children) no data, state
+ * data or choice data; epoch counters invalidate these caches. The caches and the query context are members: one query
+ * at a time, not thread-safe.
  */
 class ColoringGeneral {
 public:
