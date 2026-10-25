@@ -1,0 +1,18 @@
+// The hole a decides which actions state 0 has; the agent resolves the remaining choice.
+//   a=0: only go, which reaches the goal almost surely: Pmin = Pmax = 1
+//   a=1: go or wait, and waiting forever never reaches it: Pmin = 0, Pmax = 1
+//   a=2: only fail, to the sink: Pmin = Pmax = 0
+mdp
+
+hole int a in {0..2};
+
+module m
+	s : [0..2] init 0;
+
+	[go] s=0 & a<2 -> 0.5 : (s'=1) + 0.5 : (s'=0);
+	[wait] s=0 & a=1 -> 1 : (s'=0);
+	[fail] s=0 & a=2 -> 1 : (s'=2);
+	[done] s>0 -> 1 : (s'=s);
+endmodule
+
+label "goal" = s=1;

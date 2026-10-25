@@ -1,0 +1,17 @@
+// State 1 moves on with probability 0.5 each to the hole a and to the sink 3; state 2 is the goal.
+//   a=0: states 0 and 1 form a cycle whose only exit is the sink: P(F "goal") = 0
+//   a=2: P(F "goal") = 0.5
+dtmc
+
+hole int a in {0,2};
+
+module m
+	s : [0..3] init 0;
+
+	[] s=0 -> 1 : (s'=1);
+	[] s=1 -> 0.5 : (s'=a) + 0.5 : (s'=3);
+	[] s=2 -> 1 : (s'=2);
+	[] s=3 -> 1 : (s'=3);
+endmodule
+
+label "goal" = s=2;
