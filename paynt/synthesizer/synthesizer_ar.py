@@ -20,8 +20,8 @@ def scheduler_scores(
     colored_mdp: paynt.colored_mdp.ColoredMdp, task: paynt.task.SynthesisTask, mdp: Any, prop: Any, result: Any, selection: list[list[int]]
 ) -> dict[int, float] | None:
     inconsistent_assignments = {parameter: options for parameter, options in enumerate(selection) if len(options) > 1}
-    choice_values = paynt.model.model.ModelIndex.choice_values(mdp.model, prop, result.get_values())
-    choices = result.scheduler.compute_action_support(mdp.model.nondeterministic_choice_indices)
+    choice_values = paynt.model.model.ModelIndex.choice_values(mdp.model, prop, result.get_value_vector())
+    choices = result.get_scheduler().compute_action_support(mdp.model.nondeterministic_choice_indices)
     expected_visits = paynt.model.model.ModelIndex.compute_expected_visits(mdp.model, prop, choices, disable_expected_visits=task.disable_expected_visits)
     # POMDP has a specialized, hand-optimized scorer for the common posterior-unaware case; every other
     # colored-MDP variant (and posterior-aware POMDPs) uses the generic implementation. Dispatched by

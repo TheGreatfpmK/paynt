@@ -4,7 +4,7 @@ import paynt.specification.property
 
 
 def _reachability_properties():
-    return stormpy.parse_properties_without_context('Pmax=? [F "goal"]')
+    return stormpy.parse_properties('Pmax=? [F "goal"]')
 
 
 class TestConstructSpecification:
@@ -18,18 +18,17 @@ class TestSoundMode:
     """--sound: Property.initialize must not cap minmax iterations, since a capped solve that doesn't converge
     returns an unconverged value that pruning would then trust."""
 
-    def _capped_iterations(self, monkeypatch, sound):
-        calls = []
-        monkeypatch.setattr(paynt.specification.property.payntbind.synthesis, "set_max_iterations_minmax", lambda env, value: calls.append(value))
+    def _minmax_iterations(self, monkeypatch, sound):
         monkeypatch.setattr(paynt.specification.property.Property, "sound", sound)
         paynt.specification.property.Property.initialize()
-        return calls
+        return paynt.specification.property.Property.environment.solver().min_max().maximal_number_of_iterations
 
     def test_default_caps_minmax_iterations(self, monkeypatch):
-        assert self._capped_iterations(monkeypatch, sound=False) == [paynt.specification.property.Property.max_minmax_iterations]
+        assert self._minmax_iterations(monkeypatch, sound=False) == paynt.specification.property.Property.max_minmax_iterations
 
     def test_sound_applies_no_cap(self, monkeypatch):
-        assert self._capped_iterations(monkeypatch, sound=True) == []
+        uncapped = stormpy.Environment().solver().min_max().maximal_number_of_iterations
+        assert self._minmax_iterations(monkeypatch, sound=True) == uncapped
 
     def test_load_sketch_sets_sound(self, monkeypatch):
         import paynt.parser.sketch

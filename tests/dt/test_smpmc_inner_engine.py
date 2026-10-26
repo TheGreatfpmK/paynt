@@ -291,7 +291,7 @@ def load(project):
 def map_optimal_scheduler(project, max_depth, method="ar"):
     """Map Storm's optimal scheduler of the project's MDP to a tree of at most max_depth, through the library entry point."""
     factory, task = load(project)
-    scheduler = paynt.model.model.Mdp(factory.underlying_mdp).model_check_property(task.get_property()).result.scheduler
+    scheduler = paynt.model.model.Mdp(factory.underlying_mdp).model_check_property(task.get_property()).result.get_scheduler()
     build_task = paynt.dt.task.DtTask(tree_depth=max_depth)
     build_task.set_scheduler_to_map(scheduler)
     return paynt.dt.api.synthesize(factory, task, build_task, method=method)

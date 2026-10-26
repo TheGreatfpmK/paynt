@@ -62,7 +62,7 @@ class ColoredMdp:
 
         # internal plumbing needed by build()/scheduler_selection() below, not part of the public contract
         self.subsystem_builder_options = paynt.model.model.SubmodelBuilder.default_builder_options()
-        self.choice_destinations = paynt.model.model.ModelIndex.compute_choice_destinations(underlying_mdp, use_exact)
+        self.choice_destinations = paynt.model.model.ModelIndex.compute_choice_destinations(underlying_mdp)
 
     @property
     def has_general_coloring(self) -> bool:
@@ -106,7 +106,7 @@ class ColoredMdp:
             model, state_map, choice_map = paynt.model.model.SubmodelBuilder.restrict(self.underlying_mdp, choices, self.subsystem_builder_options)
         if self.feature_kind in ("family", "pomdp_family") or model.nr_choices != model.nr_states:
             return paynt.model.model.SubMdp(model, state_map, choice_map)
-        assert choices.number_of_set_bits() > 0
+        assert choices.get_number_of_set_bits() > 0
         dtmc = paynt.model.model.SubmodelBuilder.mdp_to_dtmc(model)
         return paynt.model.model.SubMdp(dtmc, state_map, choice_map)
 
@@ -121,12 +121,12 @@ class ColoredMdp:
         """
         model = self.build_assignment(assignment)
         if model.is_deterministic:
-            choices = stormpy.BitVector(self.underlying_mdp.nr_choices, False)
+            choices = stormpy.datastructures.BitVector(self.underlying_mdp.nr_choices, False)
             for choice in model.underlying_mdp_choice_map:
                 choices.set(choice, True)
             return choices
         prop = specification.optimality if specification.optimality is not None else specification.constraints[0]
-        scheduler = model.model_check_property(prop).result.scheduler
+        scheduler = model.model_check_property(prop).result.get_scheduler()
         state_to_choice = paynt.model.model.ModelIndex.scheduler_to_state_to_choice(self.underlying_mdp, self.choice_destinations, model, scheduler)
         return paynt.model.model.ModelIndex.state_to_choice_to_choices(self.underlying_mdp, state_to_choice)
 
@@ -188,7 +188,7 @@ class ColoredMdp:
 
         if self.feature_kind == "dt":
             # "dt" uses ColoringSmt's own consistency check instead of the generic scheduler_selection below
-            scheduler = result.scheduler
+            scheduler = result.get_scheduler()
             assert scheduler.memoryless and scheduler.deterministic
             state_to_choice = paynt.model.model.ModelIndex.scheduler_to_state_to_choice(self.underlying_mdp, self.choice_destinations, mdp, scheduler)
             choices = paynt.model.model.ModelIndex.state_to_choice_to_choices(self.underlying_mdp, state_to_choice)
@@ -198,7 +198,7 @@ class ColoredMdp:
             return parameter_selection, consistent
 
         # get qualitative scheduler selection, filter inconsistent assignments
-        selection = self.scheduler_selection(mdp, result.scheduler)
+        selection = self.scheduler_selection(mdp, result.get_scheduler())
         inconsistent_assignments = {parameter: options for parameter, options in enumerate(selection) if len(options) > 1}
         scheduler_is_consistent = len(inconsistent_assignments) == 0
         for parameter, options in enumerate(selection):

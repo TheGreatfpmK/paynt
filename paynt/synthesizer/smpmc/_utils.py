@@ -40,15 +40,15 @@ def verify_robust(
 
 def _threshold_specification(optimality: paynt.specification.property.OptimalityProperty, value: Any) -> paynt.specification.property.Specification:
     """The objective as a threshold: at least as good as value, relaxed by the model checking precision (value itself is only that precise)."""
-    formula = optimality.property.raw_formula.clone()
+    formula = optimality.property.get_raw_formula().clone()
     bound = value
     if not optimality.use_exact:
         tolerance = paynt.specification.property.Property.model_checking_precision * max(1, abs(value))
         bound = value + tolerance if optimality.minimizing else value - tolerance
-    comparison = stormpy.ComparisonType.LEQ if optimality.minimizing else stormpy.ComparisonType.GEQ
-    formula.set_bound(comparison, stormpy.ExpressionManager().create_rational(stormpy.Rational(bound)))
+    comparison = stormpy.logic.ComparisonType.LEQ if optimality.minimizing else stormpy.logic.ComparisonType.GEQ
+    formula.set_bound(comparison, stormpy.expressions.ExpressionManager().rational(stormpy.Rational(bound)))
     formula.remove_optimality_type()
-    prop = paynt.specification.property.Property(stormpy.Property("", formula), optimality.use_exact)
+    prop = paynt.specification.property.Property(stormpy.logic.Property("", formula, set()), optimality.use_exact)
     prop.discount_factor_correction = optimality.discount_factor_correction
     return paynt.specification.property.Specification([prop])
 

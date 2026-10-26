@@ -5,11 +5,11 @@ import paynt.task
 
 
 def _reachability_properties():
-    return stormpy.parse_properties_without_context('Pmax=? [F "goal"]')
+    return stormpy.parse_properties('Pmax=? [F "goal"]')
 
 
 def _reward_properties():
-    return stormpy.parse_properties_without_context('R{"steps"}min=? [F "goal"]')
+    return stormpy.parse_properties('R{"steps"}min=? [F "goal"]')
 
 
 class TestSynthesisTask:

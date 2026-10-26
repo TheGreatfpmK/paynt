@@ -23,7 +23,7 @@ class ConflictGeneratorAuto(paynt.synthesizer.conflict_generator.dtmc.ConflictGe
     def construct_conflicts(
         self, node: paynt.synthesizer.search_node.SearchNode, assignment: Any, dtmc: Any, conflict_requests: list[tuple[int, Any, Any]]
     ) -> list[Any]:
-        if isinstance(dtmc.model, (stormpy.storage.SparseDtmc, stormpy.storage.SparseExactDtmc)):
+        if stormpy.models.SparseDtmc.is_instantiation(dtmc.model):
             return super().construct_conflicts(node, assignment, dtmc, conflict_requests)
         if self.mdp_generator is None:
             self.mdp_generator = paynt.synthesizer.conflict_generator.mdp.ConflictGeneratorMdp(self.colored_mdp, self.task)

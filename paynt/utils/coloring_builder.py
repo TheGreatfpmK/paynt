@@ -493,12 +493,12 @@ class ColoringBuilder:
         return payntbind.synthesis.Coloring(parameter_space.native, self.row_groups, pairs)
 
     def _build_general(self) -> Any:
-        import stormpy.storage
+        import stormpy
 
         choice_root = [-1 if root is None else root for root in self._choice_root]
         state_is_relevant = self._state_is_relevant
         if state_is_relevant is None:
-            state_is_relevant = stormpy.storage.BitVector(0)
+            state_is_relevant = stormpy.datastructures.BitVector(0)
         return payntbind.synthesis.ColoringGeneral(
             self.row_groups,
             self.num_parameters,
@@ -516,7 +516,7 @@ class ColoringBuilder:
     def _not_standard_because_of_relevance(self) -> str | None:
         """The standard coloring has no irrelevant states (ColoringGeneral picks their first choice itself), so any makes it impossible."""
         relevant = self._state_is_relevant
-        if relevant is not None and relevant.size() > 0 and relevant.number_of_set_bits() < relevant.size():
+        if relevant is not None and relevant.size() > 0 and relevant.get_number_of_set_bits() < relevant.size():
             return "some states are irrelevant, which only a general coloring can express"
         return None
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, TYPE_CHECKING
 
-import stormpy.storage
+import stormpy
 
 import paynt.utils.timer
 import paynt.model.model
@@ -94,9 +94,9 @@ class Statistic:
         """Identify the type of the model and count corresponding iteration."""
         if isinstance(model, paynt.model.model.Mdp):
             model = model.model
-        if type(model) in [stormpy.storage.SparseDtmc, stormpy.storage.SparseExactDtmc]:
+        if stormpy.models.SparseDtmc.is_instantiation(model):
             self.iteration_dtmc(model.nr_states)
-        elif type(model) in [stormpy.storage.SparseMdp, stormpy.storage.SparseExactMdp]:
+        elif stormpy.models.SparseMdp.is_instantiation(model):
             self.iteration_mdp(model.nr_states)
         else:
             logger.debug(f"unknown model type {type(model)}")

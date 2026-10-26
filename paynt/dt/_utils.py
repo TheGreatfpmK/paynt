@@ -56,7 +56,7 @@ def get_state_valuations(model: Any) -> tuple[list[str], list[list[Any]]]:
     variable_names: list[str] | None = None
     state_valuations = []
     for state in range(model.nr_states):
-        valuation = json.loads(str(sv.get_json(state)))
+        valuation = json.loads(str(sv.to_json(state)))
         if variable_names is None:
             variable_names = list(valuation.keys())
         state_valuations.append([valuation[var_name] for var_name in variable_names])

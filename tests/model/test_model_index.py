@@ -35,7 +35,7 @@ class TestModelIndexScoring:
         can't catch a bug both sides share.
         """
         colored_mdp, node, prop, result = colored_mdp_parameter_space_prop_result
-        state_values = result.result.get_values()
+        state_values = result.result.get_value_vector()
         choice_values = paynt.model.model.ModelIndex.choice_values(node.mdp.model, prop, state_values)
 
         mdp = node.mdp.model
@@ -48,14 +48,14 @@ class TestModelIndexScoring:
                 successor_value = state_values[entry.column]
                 if successor_value == math.inf:
                     continue  # infinite successors are averaged in by make_vector_defined, not summed directly
-                expected += entry.value() * successor_value
+                expected += entry.value * successor_value
             assert choice_values[choice] == pytest.approx(expected, abs=1e-6)
 
     def test_compute_expected_visits_is_nonnegative_and_visits_the_initial_state(self, colored_mdp_parameter_space_prop_result):
         colored_mdp, node, prop, result = colored_mdp_parameter_space_prop_result
         # choices must be local to node.mdp.model's own indexing, as scheduler_scores derives
-        # them via result.scheduler.compute_action_support(...) -- not the underlying-model-global selected_choices
-        local_choices = result.result.scheduler.compute_action_support(node.mdp.model.nondeterministic_choice_indices)
+        # them via result.get_scheduler().compute_action_support(...) -- not the underlying-model-global selected_choices
+        local_choices = result.result.get_scheduler().compute_action_support(node.mdp.model.nondeterministic_choice_indices)
         visits = paynt.model.model.ModelIndex.compute_expected_visits(node.mdp.model, prop, local_choices)
         assert len(visits) == node.mdp.model.nr_states
         assert all(v >= 0 for v in visits)
@@ -71,7 +71,7 @@ class TestModelIndexScoring:
         the same process can't leak this setting into each other -- see paynt.task.SynthesisTask.
         """
         _, node, prop, result = colored_mdp_parameter_space_prop_result
-        local_choices = result.result.scheduler.compute_action_support(node.mdp.model.nondeterministic_choice_indices)
+        local_choices = result.result.get_scheduler().compute_action_support(node.mdp.model.nondeterministic_choice_indices)
         visits = paynt.model.model.ModelIndex.compute_expected_visits(node.mdp.model, prop, local_choices, disable_expected_visits=True)
         assert visits == [1] * node.mdp.model.nr_states
 

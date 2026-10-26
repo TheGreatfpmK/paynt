@@ -82,7 +82,7 @@ class Sketch:
         if filetype is None:
             try:
                 logger.info("assuming sketch in UMB format...")
-                explicit_model = stormpy.build_from_umb(sketch_path)
+                explicit_model = stormpy.build_model_from_umb(sketch_path)
                 specification = PrismParser.parse_specification(properties_path, relative_error, use_exact=use_exact)
                 filetype = "umb"
             except Exception as e:
@@ -154,10 +154,7 @@ class Sketch:
         logger.info("sketch parsing OK")
 
         paynt.specification.property.Property.initialize(use_exact)
-        if explicit_model.is_exact:
-            updated = payntbind.synthesis.addMissingChoiceLabelsExact(explicit_model)
-        else:
-            updated = payntbind.synthesis.addMissingChoiceLabels(explicit_model)
+        updated = payntbind.synthesis.addMissingChoiceLabels(explicit_model)
         if updated is not None:
             explicit_model = updated
         if not payntbind.synthesis.assertChoiceLabelingIsCanonic(explicit_model.nondeterministic_choice_indices, explicit_model.choice_labeling, False):
@@ -183,13 +180,13 @@ class Sketch:
         build_task: Any
         if jani_unfolder is not None:
             assert parameter_space is not None
-            if prism.model_type == stormpy.storage.PrismModelType.DTMC:
+            if prism.model_type == stormpy.io.PrismModelType.DTMC:
                 colored_mdp = paynt.colored_mdp.ColoredMdp(explicit_model, parameter_space, coloring, use_exact=use_exact)
                 colored_mdp_factory = paynt.colored_mdp.IdentityColoredMdpFactory(colored_mdp, task)
-            elif prism.model_type == stormpy.storage.PrismModelType.MDP:
+            elif prism.model_type == stormpy.io.PrismModelType.MDP:
                 build_task = paynt.mdp_family.task.MdpFamilyTask(**_dataclass_task_kwargs(paynt.mdp_family.task.MdpFamilyTask, task_kwargs))
                 colored_mdp_factory = paynt.mdp_family.MdpFamilyColoredMdpFactory(explicit_model, parameter_space, coloring, build_task, use_exact=use_exact)
-            elif prism.model_type == stormpy.storage.PrismModelType.POMDP:
+            elif prism.model_type == stormpy.io.PrismModelType.POMDP:
                 build_task = paynt.mdp_family.task.MdpFamilyTask(**_dataclass_task_kwargs(paynt.mdp_family.task.MdpFamilyTask, task_kwargs))
                 colored_mdp_factory = paynt.mdp_family.PomdpFamilyColoredMdpFactory(
                     explicit_model, parameter_space, coloring, build_task, obs_evaluator, use_exact=use_exact
@@ -199,7 +196,7 @@ class Sketch:
             if decpomdp_manager is not None and decpomdp_manager.num_agents > 1:
                 build_task = paynt.pomdp.task.PomdpTask(**_dataclass_task_kwargs(paynt.pomdp.task.PomdpTask, task_kwargs))
                 colored_mdp_factory = paynt.pomdp.decpomdp.DecPomdpColoredMdpFactory(decpomdp_manager, build_task, use_exact=use_exact)
-            elif isinstance(explicit_model, payntbind.synthesis.Posmg):
+            elif payntbind.synthesis.Posmg.is_instantiation(explicit_model):
                 build_task = paynt.pomdp.posmg.task.PosmgTask(**_dataclass_task_kwargs(paynt.pomdp.posmg.task.PosmgTask, task_kwargs))
                 colored_mdp_factory = paynt.pomdp.posmg.PosmgColoredMdpFactory(explicit_model, build_task, specification, use_exact=use_exact)
             elif not explicit_model.is_partially_observable:
@@ -221,7 +218,7 @@ class Sketch:
             jani_unfolder.write_jani(output_path)
         if export == "drn":
             output_path = substitute_suffix(sketch_path, ".", "drn")
-            stormpy.export_to_drn(explicit_model, output_path)
+            stormpy.io.export_to_drn(explicit_model, output_path)
         if export == "pomdp":
             assert explicit_model.is_nondeterministic_model and explicit_model.is_partially_observable, "cannot '--export pomdp' with non-POMDP sketches"
             output_path = substitute_suffix(sketch_path, ".", "pomdp")

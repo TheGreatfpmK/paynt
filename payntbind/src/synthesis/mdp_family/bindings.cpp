@@ -1,12 +1,13 @@
 #include "src/synthesis/synthesis.h"
+#include "src/template_binding.h"
 
 #include "MemoryUnfolder.h"
 #include <storm/adapters/RationalNumberAdapter.h>
 
 template<typename ValueType>
-void bindings_mdp_family_vt(py::module& m, std::string const& vtSuffix) {
+void bindings_mdp_family_vt(py::module& m) {
 
-    py::classh<synthesis::MemoryUnfolder<ValueType>>(m, (vtSuffix + "MemoryUnfolder").c_str(), "Memory Unfolder class")
+    synthesis::bindTemplateClass<ValueType, synthesis::MemoryUnfolder<ValueType>>(m, "MemoryUnfolder", "Memory Unfolder class")
         .def(py::init<storm::models::sparse::Mdp<ValueType> const&>(), "Constructor.", py::arg("mdp"))
         .def("construct_unfolded_model", &synthesis::MemoryUnfolder<ValueType>::constructUnfoldedModel,
             "Construct an unfolded MDP from a given MDP and memory size.",
@@ -21,6 +22,6 @@ void bindings_mdp_family_vt(py::module& m, std::string const& vtSuffix) {
 
 
 void bindings_mdp_family(py::module& m) {
-    bindings_mdp_family_vt<double>(m, "");
-    bindings_mdp_family_vt<storm::RationalNumber>(m, "Exact");
+    bindings_mdp_family_vt<double>(m);
+    bindings_mdp_family_vt<storm::RationalNumber>(m);
 }

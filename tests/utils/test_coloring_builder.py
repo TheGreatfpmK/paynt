@@ -14,7 +14,7 @@ import itertools
 import random
 
 import pytest
-import stormpy.storage
+import stormpy
 import z3
 
 import paynt.utils.coloring_builder
@@ -461,7 +461,7 @@ class TestStandardColoring:
 
     def test_irrelevant_states_need_the_general_coloring(self):
         parameter_space = make_parameter_space([[0, 1]])
-        relevant = stormpy.storage.BitVector(2, True)
+        relevant = stormpy.datastructures.BitVector(2, True)
         relevant.set(1, False)
         builder = paynt.utils.coloring_builder.ColoringBuilder([0, 1, 2], 1, state_is_relevant=relevant)
         builder.color(0, builder.template(builder.parameters[0] == 0))

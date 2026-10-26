@@ -63,7 +63,7 @@ class SynthesizerOneByOne(paynt.synthesizer.synthesizer.Synthesizer):
                 if result.sat:
                     from paynt.mdp_family import _utils as mdp_family_utils
 
-                    policy = mdp_family_utils.scheduler_to_policy(self.colored_mdp, result.result.scheduler, model)
+                    policy = mdp_family_utils.scheduler_to_policy(self.colored_mdp, result.result.get_scheduler(), model)
                 evaluation = paynt.synthesizer.synthesizer.ParameterSpaceEvaluation(assignment, result.value, result.sat, policy)
             evaluations.append(evaluation)
             self.explore(assignment)

@@ -11,7 +11,7 @@ from __future__ import annotations
 import random
 
 import pytest
-import stormpy.storage
+import stormpy
 import z3
 
 import paynt.parameter_space.parameter_space
@@ -179,7 +179,7 @@ class TestSmallColorings:
         assert sorted(coloring.relevantParameters(parameter_space.native, [0])) == []
 
     def test_irrelevant_states_are_skipped(self):
-        relevant = stormpy.storage.BitVector(2, True)
+        relevant = stormpy.datastructures.BitVector(2, True)
         relevant.set(1, False)
         parameter_space, coloring = two_parameter_coloring(state_is_relevant=relevant, num_states=2)
         family = parameter_space.copy()

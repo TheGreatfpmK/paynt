@@ -35,7 +35,7 @@ def reduce_constraint_to_optimality(
     assert specification.optimality is None
     assert len(specification.constraints) == 1
     constraint = specification.constraints[0]
-    raw_property = stormpy.Property("", constraint.formula.clone())
+    raw_property = stormpy.logic.Property("", constraint.formula.clone(), set())
     optimality_property = paynt.specification.property.construct_property(raw_property, relative_error=0, use_exact=constraint.use_exact)
     new_specification = paynt.specification.property.Specification([optimality_property])
     return new_specification, constraint
@@ -82,7 +82,7 @@ def classify_constraint_threshold(
 def dt_to_state_to_actions(decision_tree: DecisionTree, colored_mdp: Any, reachable_states: Any = None) -> list[int]:
     info = colored_mdp.feature_info
     if reachable_states is None:
-        reachable_states = stormpy.BitVector(colored_mdp.underlying_mdp.nr_states, True)
+        reachable_states = stormpy.datastructures.BitVector(colored_mdp.underlying_mdp.nr_states, True)
     state_to_action = []
     nci = colored_mdp.underlying_mdp.nondeterministic_choice_indices.copy()
     for state in range(colored_mdp.underlying_mdp.nr_states):
@@ -144,7 +144,7 @@ def get_state_space_for_tree_helper_node(dt_colored_mdp_factory: Any, node_id: i
     assert info.tree_helper_tree is not None
     node = info.tree_helper_tree.collect_nodes(lambda node: node.identifier == node_id)[0]
     current_node = node
-    states = stormpy.storage.BitVector(dt_colored_mdp_factory.underlying_mdp.nr_states, True)
+    states = stormpy.datastructures.BitVector(dt_colored_mdp_factory.underlying_mdp.nr_states, True)
     while current_node.parent is not None:
         parent_node = current_node.parent
         if parent_node.child_true.identifier == current_node.identifier:
@@ -173,7 +173,7 @@ def get_selected_choices_from_tree_helper(dt_colored_mdp_factory: Any, state_to_
     info = dt_colored_mdp_factory.feature_info
     if tree is None:
         tree = info.tree_helper_tree
-    selected_choices = stormpy.storage.BitVector(dt_colored_mdp_factory.underlying_mdp.nr_choices, False)
+    selected_choices = stormpy.datastructures.BitVector(dt_colored_mdp_factory.underlying_mdp.nr_choices, False)
     mdp_nci = dt_colored_mdp_factory.underlying_mdp.nondeterministic_choice_indices.copy()
     for state in range(dt_colored_mdp_factory.underlying_mdp.nr_states):
         if state_to_exclude.get(state) or not info.state_is_relevant_bv.get(state):
@@ -210,7 +210,7 @@ def build_tree_helper_tree(info: DtInfo, tree_helper: Any = None) -> DecisionTre
 # unfixed_states is a bitvector of states that should be left unfixed in the submdp
 def get_submdp_from_unfixed_states(dt_colored_mdp_factory: Any, unfixed_states: Any = None) -> Any:
     if unfixed_states is None:
-        unfixed_states = stormpy.storage.BitVector(dt_colored_mdp_factory.underlying_mdp.nr_states, False)
+        unfixed_states = stormpy.datastructures.BitVector(dt_colored_mdp_factory.underlying_mdp.nr_states, False)
     selected_choices = get_selected_choices_from_tree_helper(dt_colored_mdp_factory, unfixed_states)
     return dt_colored_mdp_factory.build_from_choice_mask(selected_choices)
 

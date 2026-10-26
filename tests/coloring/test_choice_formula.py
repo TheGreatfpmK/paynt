@@ -14,7 +14,7 @@ import random
 import sys
 
 import pytest
-import stormpy.storage
+import stormpy
 import z3
 import z3.z3util
 
@@ -62,7 +62,7 @@ def enabled(coloring, parameter_space, values):
 
 
 def choice_mask(num_choices, choices):
-    mask = stormpy.storage.BitVector(num_choices, False)
+    mask = stormpy.datastructures.BitVector(num_choices, False)
     for choice in choices:
         mask.set(choice, True)
     return mask
@@ -106,7 +106,7 @@ class TestTheAccessors:
         node_a, node_b, node_c = [0, 2, 0, 0], [0, 0, 1, 0], [0, 0, 0, 0]
         option_sets = [[0, 2]]
         coloring = payntbind.synthesis.ColoringGeneral(
-            [0, 3], 1, ops, node_a, node_b, node_c, option_sets, [2, 3, -1], [[]], [[], [], []], stormpy.storage.BitVector(0)
+            [0, 3], 1, ops, node_a, node_b, node_c, option_sets, [2, 3, -1], [[]], [[], [], []], stormpy.datastructures.BitVector(0)
         )
         assert coloring.getNodeTable() == ([int(op) for op in ops], node_a, node_b, node_c, option_sets)
         assert [coloring.getChoiceColor(choice)[0] for choice in range(3)] == [2, 3, -1]
@@ -371,7 +371,7 @@ class TestUncoloredAndIrrelevantStates:
 
     @staticmethod
     def relevance():
-        relevant = stormpy.storage.BitVector(4)
+        relevant = stormpy.datastructures.BitVector(4)
         relevant.set(0, True)
         relevant.set(2, True)
         return relevant

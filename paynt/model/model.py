@@ -21,7 +21,7 @@ class Mdp:
     @classmethod
     def assert_no_overlapping_guards(cls, model: Any) -> None:
         if model.labeling.contains_label("overlap_guards"):
-            assert model.labeling.get_states("overlap_guards").number_of_set_bits() == 0
+            assert model.labeling.get_states("overlap_guards").get_number_of_set_bits() == 0
 
     def __init__(self, model: Any):
         # Mdp.assert_no_overlapping_guards(model)
@@ -44,7 +44,7 @@ class Mdp:
     def model_check_property(self, prop: paynt.specification.property.Property, alt: bool = False) -> paynt.specification.property_result.PropertyResult:
         formula = prop.formula if not alt else prop.formula_alt
         result = paynt.specification.property.Property.model_check(self.model, formula)
-        value = result.at(self.initial_state)
+        value = result.get_value(self.initial_state)
         return paynt.specification.property_result.PropertyResult(prop, result, value)
 
     def check_specification(
@@ -92,7 +92,7 @@ class Smg(Mdp):
             self.model, formula, only_initial_states=False, set_produce_schedulers=True, env=paynt.specification.property.Property.environment
         )
 
-        value = result.at(self.model.initial_states[0])
+        value = result.get_value(self.model.initial_states[0])
         return paynt.specification.property_result.PropertyResult(prop, result, value)
 
 
@@ -105,7 +105,7 @@ class SubmodelBuilder:
 
     @staticmethod
     def default_builder_options() -> Any:
-        builder_options = stormpy.SubsystemBuilderOptions()
+        builder_options = stormpy.transformations.SubsystemBuilderOptions()
         builder_options.build_state_mapping = True
         builder_options.build_action_mapping = True
         return builder_options
@@ -120,11 +120,13 @@ class SubmodelBuilder:
         :return: (3) sub- to full action mapping
         """
         keep_unreachable_states = False  # TODO investigate this
-        all_states = stormpy.BitVector(mdp.nr_states, True)
-        submodel_construction = stormpy.construct_submodel(mdp, all_states, choices, keep_unreachable_states, builder_options)
+        all_states = stormpy.datastructures.BitVector(mdp.nr_states, True)
+        submodel_construction = stormpy.transformations.build_submodel(
+            mdp, all_states, choices, keep_unreachable_states=keep_unreachable_states, options=builder_options
+        )
         model = submodel_construction.model
-        state_map = submodel_construction.new_to_old_state_mapping.copy()
-        choice_map = submodel_construction.new_to_old_action_mapping.copy()
+        state_map = submodel_construction.new_to_old_state_index_mapping.copy()
+        choice_map = submodel_construction.new_to_old_action_index_mapping.copy()
         return model, state_map, choice_map
 
     @staticmethod
@@ -137,11 +139,8 @@ class SubmodelBuilder:
         tm = mdp.transition_matrix
         tm.make_row_grouping_trivial()
         assert tm.nr_columns == tm.nr_rows, "expected transition matrix without non-trivial row groups"
-        if mdp.is_exact:
-            components = stormpy.storage.SparseExactModelComponents(tm, mdp.labeling, mdp.reward_models)
-            return stormpy.storage.SparseExactDtmc(components)
-        components = stormpy.storage.SparseModelComponents(tm, mdp.labeling, mdp.reward_models)
-        return stormpy.storage.SparseDtmc(components)
+        components = stormpy.models.SparseModelComponents(tm, mdp.labeling, mdp.reward_models)
+        return stormpy.models.SparseDtmc(components)
 
 
 class ModelIndex:
@@ -153,9 +152,7 @@ class ModelIndex:
     """
 
     @staticmethod
-    def compute_choice_destinations(model: Any, use_exact: bool = False) -> Any:
-        if use_exact:
-            return payntbind.synthesis.computeChoiceDestinationsExact(model)
+    def compute_choice_destinations(model: Any) -> Any:
         return payntbind.synthesis.computeChoiceDestinations(model)
 
     @staticmethod
@@ -194,10 +191,7 @@ class ModelIndex:
         return: a state-to-choice mapping over the underlying MDP, where each state is mapped to the choice
             selected by the scheduler in the sub-MDP, or None if the state is not reachable under the scheduler
         """
-        if submdp.model.is_exact:
-            state_to_underlying_mdp_choice = payntbind.synthesis.schedulerToStateToGlobalChoiceExact(scheduler, submdp.model, submdp.underlying_mdp_choice_map)
-        else:
-            state_to_underlying_mdp_choice = payntbind.synthesis.schedulerToStateToGlobalChoice(scheduler, submdp.model, submdp.underlying_mdp_choice_map)
+        state_to_underlying_mdp_choice = payntbind.synthesis.schedulerToStateToGlobalChoice(scheduler, submdp.model, submdp.underlying_mdp_choice_map)
         state_to_choice = ModelIndex.empty_scheduler(underlying_mdp)
         for state in range(submdp.model.nr_states):
             underlying_mdp_choice = state_to_underlying_mdp_choice[state]
@@ -210,7 +204,7 @@ class ModelIndex:
     @staticmethod
     def state_to_choice_to_choices(model: Any, state_to_choice: list[int | None]) -> Any:
         num_choices = model.nr_choices
-        choices = stormpy.BitVector(num_choices, False)
+        choices = stormpy.datastructures.BitVector(num_choices, False)
         for choice in state_to_choice:
             if choice is not None and choice < num_choices:
                 choices.set(choice, True)
@@ -243,7 +237,7 @@ class ModelIndex:
     @staticmethod
     def identify_target_states(model: Any, prop: paynt.specification.property.Property) -> Any:
         if prop.is_discounted_reward:
-            return stormpy.BitVector(model.nr_states, False)
+            return stormpy.datastructures.BitVector(model.nr_states, False)
         target_label = prop.get_target_label()
         return model.labeling.get_states(target_label)
 
@@ -264,10 +258,7 @@ class ModelIndex:
         - mc(s') is the model checking result in state s'
         """
         # multiply probability with model checking results
-        if mdp.is_exact:
-            choice_values = payntbind.synthesis.multiply_with_vector_exact(mdp.transition_matrix, state_values)
-        else:
-            choice_values = payntbind.synthesis.multiply_with_vector(mdp.transition_matrix, state_values)
+        choice_values = payntbind.synthesis.multiply_with_vector(mdp.transition_matrix, state_values)
         choice_values = ModelIndex.make_vector_defined(choice_values)
 
         # if the associated reward model has state-action rewards, then these must be added to choice values

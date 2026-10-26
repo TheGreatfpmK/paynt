@@ -58,7 +58,7 @@ class ProbGoalConstraint(Constraint):
             per_choice_progress = []
             for choice in transition_matrix.get_rows_for_group(state):
                 enabled = z3.And([ctx.eq(parameter, option) for parameter, option in choice_to_assignment[choice]])
-                successors = [entry.column for entry in transition_matrix.get_row(choice) if entry.value() != 0 and entry.column != state]
+                successors = [entry.column for entry in transition_matrix.get_row(choice) if entry.value != 0 and entry.column != state]
                 progress = z3.Or([z3.And(reach[successor], rank[successor] < rank[state]) for successor in successors])
                 if self.prob == 0:
                     per_choice_progress.append(z3.And(enabled, progress))

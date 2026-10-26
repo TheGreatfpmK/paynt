@@ -19,7 +19,7 @@ def _state_names(mdp: Any) -> list[str]:
         return [f"s{state}" for state in range(mdp.nr_states)]
     names = []
     for state in range(mdp.nr_states):
-        valuation = json.loads(str(mdp.state_valuations.get_json(state)))
+        valuation = json.loads(str(mdp.state_valuations.to_json(state)))
         # int(): print booleans as 0/1
         names.append("&".join(f"{var}={int(value)}" for var, value in valuation.items() if not var.startswith("_loc_prism2jani")))
     return names

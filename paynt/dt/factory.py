@@ -47,9 +47,9 @@ class DtColoredMdpFactory:
         if DtColoredMdpFactory.filter_deterministic_states:
             state_has_actions = paynt.model.model.ModelIndex.identify_states_with_actions(mdp)
             state_is_relevant = [relevant and state_has_actions[state] for state, relevant in enumerate(state_is_relevant)]
-        state_is_relevant_bv = stormpy.BitVector(mdp.nr_states)
+        state_is_relevant_bv = stormpy.datastructures.BitVector(mdp.nr_states)
         [state_is_relevant_bv.set(state, value) for state, value in enumerate(state_is_relevant)]
-        logger.debug(f"MDP has {state_is_relevant_bv.number_of_set_bits()}/{state_is_relevant_bv.size()} relevant states")
+        logger.debug(f"MDP has {state_is_relevant_bv.get_number_of_set_bits()}/{state_is_relevant_bv.size()} relevant states")
         self.state_is_relevant = state_is_relevant
         self.state_is_relevant_bv = state_is_relevant_bv
 
