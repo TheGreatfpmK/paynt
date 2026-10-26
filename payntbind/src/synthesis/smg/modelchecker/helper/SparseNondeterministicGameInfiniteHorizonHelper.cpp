@@ -5,7 +5,7 @@
 #include "SparseNondeterministicGameInfiniteHorizonHelper.h"
 
 #include <storm/storage/SparseMatrix.h>
-#include <storm/storage/MaximalEndComponentDecomposition.h>
+#include <storm/storage/decomposition/MaximalEndComponentDecomposition.h>
 #include <storm/environment/solver/LongRunAverageSolverEnvironment.h>
 #include <storm/exceptions/InternalException.h>
 

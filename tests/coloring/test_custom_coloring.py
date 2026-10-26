@@ -88,7 +88,7 @@ def corridor(tmp_path, props='R{"time"}min=? [F "goal"]'):
 
 def cells_and_actions(mdp):
     """The cell of every state, and the action (0 = slow, 1 = fast, None = the finish) of every choice."""
-    cells = [json.loads(str(mdp.state_valuations.get_json(state)))["x"] for state in range(mdp.nr_states)]
+    cells = [json.loads(str(mdp.state_valuations.to_json(state)))["x"] for state in range(mdp.nr_states)]
     labels = [next(iter(mdp.choice_labeling.get_labels_of_choice(choice))) for choice in range(mdp.nr_choices)]
     return cells, [ACTIONS.index(label) if label in ACTIONS else None for label in labels]
 

@@ -9,7 +9,7 @@ from __future__ import annotations
 import random
 
 import pytest
-import stormpy.storage
+import stormpy
 
 import paynt.parser.sketch
 import paynt.dt._utils
@@ -166,7 +166,7 @@ class TestAreChoicesConsistentMatchesColoringSmt:
                 if len(candidates) > 1:
                     mask_choices.discard(next(c for c in candidates if c in mask_choices))
                     mask_choices.add(rng.choice(candidates))
-            mask = stormpy.storage.BitVector(underlying_mdp.nr_choices, False)
+            mask = stormpy.datastructures.BitVector(underlying_mdp.nr_choices, False)
             for choice in mask_choices:
                 mask.set(choice, True)
 
@@ -219,7 +219,7 @@ def inconsistent_scheduler(colored_mdp):
         trial[switched] = real[switched][-1]
         chosen = reachable(trial)
         if len({info.choice_to_action[c] for s, c in chosen if info.state_is_relevant[s] and is_real(c)}) > 1:
-            mask = stormpy.storage.BitVector(underlying_mdp.nr_choices, False)
+            mask = stormpy.datastructures.BitVector(underlying_mdp.nr_choices, False)
             for _state, choice in chosen:
                 mask.set(choice, True)
             return mask
@@ -251,7 +251,7 @@ def tree_coloring_inputs(num_actions, dont_care_action=0):
         "action_labels": action_labels,
         "variables": [],
         "relevant_state_valuations": [[]],
-        "state_is_relevant_bv": stormpy.storage.BitVector(1, True),
+        "state_is_relevant_bv": stormpy.datastructures.BitVector(1, True),
         "decision_tree": tree,
     }
 
@@ -272,7 +272,7 @@ class TestManyActions:
         """It exists at relevant states only, so it must not count as unavailable at an irrelevant one: 63 actions and the don't-care action after them are
         fine."""
         num_actions = 64
-        relevant = stormpy.storage.BitVector(2, True)
+        relevant = stormpy.datastructures.BitVector(2, True)
         relevant.set(1, False)
         inputs = tree_coloring_inputs(num_actions, dont_care_action=num_actions - 1)
         inputs.update(row_groups=[0, 3, 4], choice_to_action=[0, 1, num_actions - 1, 0], relevant_state_valuations=[[], []], state_is_relevant_bv=relevant)

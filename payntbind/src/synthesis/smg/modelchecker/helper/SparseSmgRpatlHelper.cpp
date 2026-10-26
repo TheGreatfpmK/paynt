@@ -13,7 +13,7 @@
 #include <storm/environment/solver/MinMaxSolverEnvironment.h>
 #include <storm/utility/vector.h>
 #include <storm/utility/graph.h>
-#include <storm/storage/MaximalEndComponentDecomposition.h>
+#include <storm/storage/decomposition/MaximalEndComponentDecomposition.h>
 #include <storm/exceptions/InvalidPropertyException.h>
 
 #include "internal/GameViHelper.h"

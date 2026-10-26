@@ -82,27 +82,24 @@ class JaniUnfolder:
         # associate each action of the underlying MDP with parameter options
         # reconstruct choice labels from choice origins
         logger.debug("associating choices of the underlying model with parameter assignments...")
-        if use_exact:
-            choice_is_valid, choice_to_parameter_options = payntbind.synthesis.janiMapChoicesToHoleAssignmentsExact(
-                underlying_mdp, parameter_space.native, edge_to_parameter_options
-            )
-        else:
-            choice_is_valid, choice_to_parameter_options = payntbind.synthesis.janiMapChoicesToHoleAssignments(
-                underlying_mdp, parameter_space.native, edge_to_parameter_options
-            )
+        choice_is_valid, choice_to_parameter_options = payntbind.synthesis.janiMapChoicesToHoleAssignments(
+            underlying_mdp, parameter_space.native, edge_to_parameter_options
+        )
 
         # handle conflicting colors
         num_choices_all = underlying_mdp.nr_choices
-        num_choices_valid = choice_is_valid.number_of_set_bits()
+        num_choices_valid = choice_is_valid.get_number_of_set_bits()
         if num_choices_valid < num_choices_all:
             logger.debug(f"keeping {num_choices_valid}/{num_choices_all} choices with non-conflicting parameter assignments...")
             keep_unreachable_states = False
-            subsystem_builder_options = stormpy.SubsystemBuilderOptions()
+            subsystem_builder_options = stormpy.transformations.SubsystemBuilderOptions()
             subsystem_builder_options.build_action_mapping = True
-            all_states = stormpy.storage.BitVector(underlying_mdp.nr_states, True)
-            submodel_construction = stormpy.construct_submodel(underlying_mdp, all_states, choice_is_valid, keep_unreachable_states, subsystem_builder_options)
+            all_states = stormpy.datastructures.BitVector(underlying_mdp.nr_states, True)
+            submodel_construction = stormpy.transformations.build_submodel(
+                underlying_mdp, all_states, choice_is_valid, keep_unreachable_states=keep_unreachable_states, options=subsystem_builder_options
+            )
             underlying_mdp = submodel_construction.model
-            choice_map = list(submodel_construction.new_to_old_action_mapping)
+            choice_map = list(submodel_construction.new_to_old_action_index_mapping)
             choice_to_parameter_options = [choice_to_parameter_options[choice_map[choice]] for choice in range(underlying_mdp.nr_choices)]
 
         self.underlying_mdp = underlying_mdp
@@ -121,7 +118,7 @@ class JaniUnfolder:
             assert parameter_space.parameter_name(parameter) == open_constants[parameter].name
 
         combination_coloring = CombinationColoring()
-        jani_program = stormpy.JaniModel(jani)
+        jani_program = stormpy.io.JaniModel(jani)
         new_automata = {}
         for aut_index, automaton in enumerate(jani_program.automata):
             if not JaniUnfolder.automaton_has_parameters(automaton, parameter_variables):
@@ -133,7 +130,7 @@ class JaniUnfolder:
         for parameter in range(parameter_space.num_parameters):
             jani_program.remove_constant(parameter_space.parameter_name(parameter))
 
-        jani_program.set_model_type(stormpy.JaniModelType.MDP)
+        jani_program.set_model_type(stormpy.io.JaniModelType.MDP)
         jani_program.finalize()
         jani_program.check_valid()
 
@@ -176,7 +173,7 @@ class JaniUnfolder:
     def construct_automaton(
         automaton: Any, parameter_variables: list[Any], parameter_expressions: list[list[Any]], combination_coloring: CombinationColoring
     ) -> Any:
-        new_aut = stormpy.storage.JaniAutomaton(automaton.name, automaton.location_variable)
+        new_aut = stormpy.io.JaniAutomaton(automaton.name, automaton.location_variable)
         [new_aut.add_location(loc) for loc in automaton.locations]
         [new_aut.add_initial_location(idx) for idx in automaton.initial_location_indices]
         [new_aut.variables.add_variable(var) for var in automaton.variables]
@@ -213,23 +210,23 @@ class JaniUnfolder:
 
     @staticmethod
     def construct_edge(edge: Any, substitution: Any = None) -> Any:
-        guard = stormpy.Expression(edge.template_edge.guard)
+        guard = stormpy.expressions.Expression(edge.template_edge.guard)
         assignments = edge.template_edge.assignments.clone()
         if substitution is not None:
             guard = guard.substitute(substitution)
             assignments.substitute(substitution, substitute_transcendental_numbers=True)
-        template_edge = stormpy.storage.JaniTemplateEdge(guard)
+        template_edge = stormpy.io.JaniTemplateEdge(guard)
         payntbind.synthesis.janiTemplateEdgeAddAssignments(template_edge, assignments)
         for dst in edge.template_edge.destinations:
             assignments = dst.assignments.clone()
             if substitution is not None:
                 assignments.substitute(substitution, substitute_transcendental_numbers=True)
-            template_edge.add_destination(stormpy.storage.JaniTemplateEdgeDestination(assignments))
+            template_edge.add_destination(stormpy.io.JaniTemplateEdgeDestination(assignments))
 
         destinations = [(dst.target_location_index, dst.probability) for dst in edge.destinations]
         if substitution is not None:
             destinations = [(target, prob.substitute(substitution)) for target, prob in destinations]
-        return stormpy.storage.JaniEdge(edge.source_location_index, edge.action_index, edge.rate, template_edge, destinations)
+        return stormpy.io.JaniEdge(edge.source_location_index, edge.action_index, edge.rate, template_edge, destinations)
 
     def write_jani(self, output_path: str) -> None:
         logger.debug(f"Writing unfolded program to {output_path}")

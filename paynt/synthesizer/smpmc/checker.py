@@ -8,7 +8,6 @@ from dataclasses import dataclass
 from collections.abc import Callable
 from typing import Any
 
-import payntbind.synthesis
 import stormpy
 
 import paynt.colored_mdp
@@ -184,7 +183,7 @@ class ColoredMdpTheory:
         if self.colored_mdp.has_general_coloring:
             return set(self.colored_mdp.coloring.relevantParameters(eta.native, list(states)))
         assert self.state_to_parameters is not None
-        relevant = stormpy.BitVector(self.colored_mdp.parameter_space.num_parameters, False)
+        relevant = stormpy.datastructures.BitVector(self.colored_mdp.parameter_space.num_parameters, False)
         for state in states:
             relevant |= self.state_to_parameters[state]
         return set(relevant)
@@ -271,14 +270,14 @@ class ColoredMdpTheory:
     def _model_check_with_environment(self, sub_mdp: Any, alt: bool, environment: Any) -> paynt.specification.property_result.PropertyResult:
         formula = self.prop.formula if not alt else self.prop.formula_alt
         result = stormpy.model_checking(sub_mdp.model, formula, extract_scheduler=True, environment=environment)
-        value = result.at(sub_mdp.initial_state)
+        value = result.get_value(sub_mdp.initial_state)
         return paynt.specification.property_result.PropertyResult(self.prop, result, value)
 
     def _pi_environment(self) -> Any:
         if self._reward_pi_environment is None:
             env = stormpy.Environment()
-            env.solver_environment.minmax_solver_environment.method = stormpy.MinMaxMethod.policy_iteration
+            env.solver().min_max().method = stormpy.environments.MinMaxMethod.POLICY_ITERATION
             if not self.prop.sound:
-                payntbind.synthesis.set_max_iterations_minmax(env.solver_environment.minmax_solver_environment, self.prop.max_minmax_iterations)
+                env.solver().min_max().maximal_number_of_iterations = self.prop.max_minmax_iterations
             self._reward_pi_environment = env
         return self._reward_pi_environment

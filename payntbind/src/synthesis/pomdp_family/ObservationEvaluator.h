@@ -1,6 +1,6 @@
 #pragma once
 
-#include <storm/storage/prism/Program.h>
+#include <storm/languages/prism/Program.h>
 #include <storm/models/sparse/Model.h>
 #include <storm/models/sparse/Mdp.h>
 #include <storm/models/sparse/Pomdp.h>

@@ -40,7 +40,7 @@ def create_smg_from_mdp(info: PosmgInfo, mdp: paynt.model.model.SubMdp) -> paynt
 
     transition_matrix = mdp.model.transition_matrix
     state_labeling = mdp.model.labeling
-    components = stormpy.SparseModelComponents(transition_matrix=transition_matrix, state_labeling=state_labeling)
+    components = stormpy.models.SparseModelComponents(transition_matrix=transition_matrix, state_labeling=state_labeling)
 
     if mdp.model.has_choice_labeling():
         components.choice_labeling = mdp.model.choice_labeling
@@ -52,4 +52,4 @@ def create_smg_from_mdp(info: PosmgInfo, mdp: paynt.model.model.SubMdp) -> paynt
         state_player_indications.append(player)
     components.state_player_indications = state_player_indications
 
-    return paynt.model.model.Smg(stormpy.storage.SparseSmg(components))
+    return paynt.model.model.Smg(stormpy.models.SparseSmg(components))

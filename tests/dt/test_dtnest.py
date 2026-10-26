@@ -21,8 +21,8 @@ def _dtnest_task_and_factory(properties_string, error_threshold=0.05, timeout=30
     """Builds the (task, build_task, factory) triple TestDtNestConstraintHandling needs, mirroring what Sketch.load_sketch would produce for this sketch --
     constructed directly here (rather than going through the parser) since these tests want full control over the properties string per case."""
     sketch_path, _ = get_sketch_paths("tests/dt-orchard")
-    prism = stormpy.parse_prism_program(sketch_path, prism_compat=True)
-    properties = stormpy.parse_properties_for_prism_program(properties_string, prism, None)
+    prism = stormpy.parse_prism_program(sketch_path, prism_compatibility=True)
+    properties = stormpy.parse_properties(properties_string, prism)
     explicit_model = paynt.model.model_builder.ModelBuilder.from_prism(prism, None, False)
     task = paynt.task.SynthesisTask(properties, timeout=timeout)
     build_task = paynt.dt.dtnest.DtNestTask(error_threshold=error_threshold)

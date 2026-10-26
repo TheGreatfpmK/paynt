@@ -151,7 +151,7 @@ class DtNest(DtSynthesizer):
         helper_node_stats = sorted(helper_node_stats, key=lambda x: x["nodes"], reverse=True)
         helper_node_stats = sorted(helper_node_stats, key=lambda x: len(x["predicates"]), reverse=True)
         if use_states_for_node_priority:
-            helper_node_stats = sorted(helper_node_stats, key=lambda x: x["states"].number_of_set_bits() / x["nodes"])
+            helper_node_stats = sorted(helper_node_stats, key=lambda x: x["states"].get_number_of_set_bits() / x["nodes"])
 
         return helper_node_stats
 
@@ -279,7 +279,7 @@ class DtNest(DtSynthesizer):
                 self.dtpaynt_calls += 1
 
                 subtree_info = cast(DtInfo, subtree_synthesizer.colored_mdp.feature_info)
-                if subtree_info.state_is_relevant_bv.number_of_set_bits() == 0:
+                if subtree_info.state_is_relevant_bv.get_number_of_set_bits() == 0:
                     random_tree = create_uniform_random_tree(subtree_info)
                     subtree_synthesizer.best_tree = random_tree
                 else:
@@ -309,7 +309,7 @@ class DtNest(DtSynthesizer):
 
                     if self.allow_perturbations:
                         submdp_for_tree = get_submdp_from_unfixed_states(self.colored_mdp, node_states)
-                        reachable_states = stormpy.BitVector(self.colored_mdp.underlying_mdp.nr_states, False)
+                        reachable_states = stormpy.datastructures.BitVector(self.colored_mdp.underlying_mdp.nr_states, False)
                         for state in range(submdp_for_tree.model.nr_states):
                             reachable_states.set(submdp_for_tree.underlying_mdp_state_map[state], True)
 
@@ -328,7 +328,7 @@ class DtNest(DtSynthesizer):
                         if self.recompute_scheduler:
                             submpd_dtlearn_of_subtree = get_submdp_from_unfixed_states(self.colored_mdp, ~node_states)
                             oos_result = submpd_dtlearn_of_subtree.check_specification(self.task.specification)
-                            new_scheduler = oos_result.optimality_result.result.scheduler
+                            new_scheduler = oos_result.optimality_result.result.get_scheduler()
                             state_to_choice = paynt.model.model.ModelIndex.scheduler_to_state_to_choice(
                                 self.colored_mdp.underlying_mdp, self.colored_mdp.choice_destinations, submpd_dtlearn_of_subtree, new_scheduler
                             )
@@ -469,7 +469,7 @@ class DtNest(DtSynthesizer):
             )
 
         mc_result = paynt_mdp.model_check_property(self.task.get_property())
-        opt_scheduler = mc_result.result.scheduler
+        opt_scheduler = mc_result.result.get_scheduler()
 
         state_to_choice = paynt.model.model.ModelIndex.scheduler_to_state_to_choice(
             self.colored_mdp.underlying_mdp, self.colored_mdp.choice_destinations, paynt_mdp, opt_scheduler

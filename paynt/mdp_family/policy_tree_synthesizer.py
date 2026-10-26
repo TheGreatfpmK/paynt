@@ -62,8 +62,8 @@ class PolicyTreeSynthesizer(paynt.synthesizer.synthesizer.Synthesizer):
         self.stat.iteration(node.mdp)
         if not result.sat:
             return False
-        assert result.result.scheduler is not None
-        return paynt.mdp_family._utils.scheduler_to_policy(self.colored_mdp, result.result.scheduler, node.mdp)
+        assert result.result.has_scheduler()
+        return paynt.mdp_family._utils.scheduler_to_policy(self.colored_mdp, result.result.get_scheduler(), node.mdp)
 
         # uncomment below to preemptively double-check the policy
         # paynt.mdp_family.policy_tree.double_check_policy(self.colored_mdp, node, prop, policy)

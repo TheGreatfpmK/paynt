@@ -7,8 +7,8 @@
 #include "ColoringGeneral.h"
 #include "src/synthesis/translation/componentTranslations.h"
 
-#include <storm/storage/expressions/ExpressionManager.h>
-#include <storm/storage/expressions/Variable.h>
+#include <storm/expressions/ExpressionManager.h>
+#include <storm/expressions/Variable.h>
 #include <storm/storage/valuations/Valuations.h>
 #include <storm/storage/valuations/ValuationDescriptionBuilder.h>
 #include <storm/storage/valuations/ValuationsStorage.h>
@@ -20,7 +20,7 @@
 #include <storm/storage/BitVector.h>
 #include <storm/storage/sparse/JaniChoiceOrigins.h>
 
-#include <storm/storage/Scheduler.h>
+#include <storm/storage/scheduler/Scheduler.h>
 
 #include <storm/adapters/RationalNumberAdapter.h>
 
@@ -306,18 +306,18 @@ storm::storage::BitVector policyToChoicesForFamily(
 
 
 template <typename ValueType>
-void bindings_coloring_vt(py::module& m, std::string const& vtSuffix) {
+void bindings_coloring_vt(py::module& m) {
 
-    m.def(("addStateValuations" + vtSuffix).c_str(), &synthesis::addStateValuations<ValueType>);
-    m.def(("janiMapChoicesToHoleAssignments" + vtSuffix).c_str(), &synthesis::janiMapChoicesToHoleAssignments<ValueType>);
-    m.def(("addChoiceLabelsFromJani" + vtSuffix).c_str(), &synthesis::addChoiceLabelsFromJani<ValueType>);
+    m.def("addStateValuations", &synthesis::addStateValuations<ValueType>);
+    m.def("janiMapChoicesToHoleAssignments", &synthesis::janiMapChoicesToHoleAssignments<ValueType>);
+    m.def("addChoiceLabelsFromJani", &synthesis::addChoiceLabelsFromJani<ValueType>);
 
-    m.def(("schedulerToStateToGlobalChoice" + vtSuffix).c_str(), &synthesis::schedulerToStateToGlobalChoice<ValueType>);
+    m.def("schedulerToStateToGlobalChoice", &synthesis::schedulerToStateToGlobalChoice<ValueType>);
 }
 
 void bindings_coloring(py::module& m) {
-    bindings_coloring_vt<double>(m, "");
-    bindings_coloring_vt<storm::RationalNumber>(m, "Exact");
+    bindings_coloring_vt<double>(m);
+    bindings_coloring_vt<storm::RationalNumber>(m);
 
     m.def("computeInconsistentParameterVariance", &synthesis::computeInconsistentParameterVariance);
 

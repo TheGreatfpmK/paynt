@@ -7,7 +7,7 @@ import paynt.dt.dtnest.task
 
 
 def _reward_properties():
-    return stormpy.parse_properties_without_context('R{"steps"}min=? [F "goal"]')
+    return stormpy.parse_properties('R{"steps"}min=? [F "goal"]')
 
 
 class TestDtTask:

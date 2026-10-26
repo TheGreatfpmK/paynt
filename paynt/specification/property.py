@@ -13,19 +13,19 @@ logger = logging.getLogger(__name__)
 
 
 def construct_property(prop: Any, relative_error: float, use_exact: bool = False) -> Property:
-    rf = prop.raw_formula
+    rf = prop.get_raw_formula()
     player_index = None
-    if rf.is_reward_operator and use_exact:
+    if rf.is_reward_operator_formula and use_exact:
         raise ValueError("exact synthesis is not supported for reward properties")
 
-    if not (rf.is_reward_operator or rf.is_probability_operator) and rf.is_game_formula:
+    if not (rf.is_reward_operator_formula or rf.is_probability_operator_formula) and rf.is_game_formula:
         if use_exact:
             raise ValueError("exact synthesis is not supported for game properties")
 
         player_index = extract_player_index(rf)
         game_rf = rf
         rf = rf.subformula
-        prop = stormpy.Property("", rf)
+        prop = stormpy.logic.Property("", rf, set())
     assert rf.has_bound != rf.has_optimality_type, "optimizing formula contains a bound or a comparison formula does not"
     if rf.has_bound:
         prop = Property(prop, use_exact)
@@ -37,7 +37,7 @@ def construct_property(prop: Any, relative_error: float, use_exact: bool = False
         prop.game_formula = game_rf
         alt_formula_str = f"<<{prop.game_optimizing_player}>> " + prop.formula_alt.__str__()
         formulas = stormpy.parse_properties(alt_formula_str)
-        prop.game_formula_alt = formulas[0].raw_formula
+        prop.game_formula_alt = formulas[0].get_raw_formula()
 
     return prop
 
@@ -54,14 +54,14 @@ def extract_player_index(formula: Any) -> int:
 def construct_reward_property(reward_name: str, minimizing: bool, target_label: str) -> OptimalityProperty:
     direction = "min" if minimizing else "max"
     formula_str = 'R{"' + reward_name + '"}' + f'{direction}=? [F "{target_label}"]'
-    formula = stormpy.parse_properties_without_context(formula_str)[0]
+    formula = stormpy.parse_properties(formula_str)[0]
     return OptimalityProperty(formula, 0)
 
 
 def construct_discounted_reward_property(reward_name: str, minimizing: bool, discount_factor: float) -> OptimalityProperty:
     direction = "min" if minimizing else "max"
     formula_str = 'R{"' + reward_name + '"}' + f"{direction}=? [Cdiscount={discount_factor}]"
-    formula = stormpy.parse_properties_without_context(formula_str)[0]
+    formula = stormpy.parse_properties(formula_str)[0]
     return OptimalityProperty(formula, 0)
 
 
@@ -90,35 +90,36 @@ class Property:
     def set_model_checking_precision(cls, precision: float) -> None:
         cls.model_checking_precision = precision
         assert cls.environment is not None, "Property.initialize must be called before setting precision"
-        payntbind.synthesis.set_precision_native(cls.environment.solver_environment.native_solver_environment, precision)
-        payntbind.synthesis.set_precision_minmax(cls.environment.solver_environment.minmax_solver_environment, precision)
+        cls.environment.solver().native().precision = stormpy.Rational(precision)
+        cls.environment.solver().min_max().precision = stormpy.Rational(precision)
 
     @classmethod
     def initialize(cls, use_exact: bool = False) -> None:
         cls.environment = stormpy.Environment()
         cls.set_model_checking_precision(cls.model_checking_precision)
         if not cls.sound:
-            payntbind.synthesis.set_max_iterations_minmax(cls.environment.solver_environment.minmax_solver_environment, cls.max_minmax_iterations)
+            cls.environment.solver().min_max().maximal_number_of_iterations = cls.max_minmax_iterations
 
-        se = cls.environment.solver_environment
-        # se.set_linear_equation_solver_type(stormpy.EquationSolverType.native)
-        # se.set_linear_equation_solver_type(stormpy.EquationSolverType.gmmxx)
-        # se.set_linear_equation_solver_type(stormpy.EquationSolverType.eigen)
-        se.set_linear_equation_solver_type(stormpy.EquationSolverType.topological)
+        se = cls.environment.solver()
+        # se.set_linear_equation_solver_type(stormpy.environments.EquationSolverType.NATIVE)
+        # se.set_linear_equation_solver_type(stormpy.environments.EquationSolverType.GMMXX)
+        # se.set_linear_equation_solver_type(stormpy.environments.EquationSolverType.EIGEN)
+        se.set_linear_equation_solver_type(stormpy.environments.EquationSolverType.TOPOLOGICAL)
 
         if use_exact:
-            se.minmax_solver_environment.method = stormpy.MinMaxMethod.policy_iteration
+            se.min_max().method = stormpy.environments.MinMaxMethod.POLICY_ITERATION
         else:
-            se.minmax_solver_environment.method = stormpy.MinMaxMethod.optimistic_value_iteration
+            se.min_max().method = stormpy.environments.MinMaxMethod.OPTIMISTIC_VALUE_ITERATION
 
     @classmethod
     def model_check(cls, model: Any, formula: Any) -> Any:
-        return stormpy.model_checking(model, formula, extract_scheduler=True, environment=cls.environment)
+        # a POMDP is checked as its underlying MDP (stormpy refuses partially observable models unless asked to)
+        return stormpy.model_checking(model, formula, extract_scheduler=True, force_fully_observable=True, environment=cls.environment)
 
     @classmethod
     def compute_expected_visits(cls, model: Any) -> list[float]:
-        result = stormpy.compute_expected_number_of_visits(cls.environment, model)
-        return list(result.get_values())
+        result = stormpy.analysis.compute_expected_number_of_visits(model, environment=cls.environment)
+        return list(result.get_value_vector())
 
     @staticmethod
     def above_model_checking_precision(a: Any, b: Any) -> bool:
@@ -128,7 +129,7 @@ class Property:
 
     def __init__(self, prop: Any, use_exact: bool = False):
         self.property = prop
-        rf = prop.raw_formula
+        rf = prop.get_raw_formula()
 
         self.game_optimizing_player: int | None = None  # player index for game properties
         self.game_formula: Any = None
@@ -142,12 +143,12 @@ class Property:
 
         # use comparison type to deduce optimizing direction
         comparison_type = rf.comparison_type
-        self.minimizing = comparison_type in [stormpy.ComparisonType.LESS, stormpy.ComparisonType.LEQ]
+        self.minimizing = comparison_type in [stormpy.logic.ComparisonType.LESS, stormpy.logic.ComparisonType.LEQ]
         self.op = {
-            stormpy.ComparisonType.LESS: operator.lt,
-            stormpy.ComparisonType.LEQ: operator.le,
-            stormpy.ComparisonType.GREATER: operator.gt,
-            stormpy.ComparisonType.GEQ: operator.ge,
+            stormpy.logic.ComparisonType.LESS: operator.lt,
+            stormpy.logic.ComparisonType.LEQ: operator.le,
+            stormpy.logic.ComparisonType.GREATER: operator.gt,
+            stormpy.logic.ComparisonType.GEQ: operator.ge,
         }[comparison_type]
 
         # set threshold
@@ -166,9 +167,9 @@ class Property:
         self.formula = rf.clone()
         self.formula.remove_bound()
         if self.minimizing:
-            self.formula.set_optimality_type(stormpy.OptimizationDirection.Minimize)
+            self.formula.set_optimality_type(stormpy.logic.OptimizationDirection.MINIMIZE)
         else:
-            self.formula.set_optimality_type(stormpy.OptimizationDirection.Maximize)
+            self.formula.set_optimality_type(stormpy.logic.OptimizationDirection.MAXIMIZE)
         self.formula_alt = Property.alt_formula(self.formula)
 
     @staticmethod
@@ -176,23 +177,23 @@ class Property:
         """:return: formula with the opposite optimality type."""
         formula_alt = formula.clone()
         optimality_type = formula.optimality_type
-        if optimality_type == stormpy.OptimizationDirection.Minimize:
-            optimality_type = stormpy.OptimizationDirection.Maximize
+        if optimality_type == stormpy.logic.OptimizationDirection.MINIMIZE:
+            optimality_type = stormpy.logic.OptimizationDirection.MAXIMIZE
         else:
-            optimality_type = stormpy.OptimizationDirection.Minimize
+            optimality_type = stormpy.logic.OptimizationDirection.MINIMIZE
         formula_alt.set_optimality_type(optimality_type)
         return formula_alt
 
     def __str__(self) -> str:
-        return str(self.property.raw_formula)
+        return str(self.property.get_raw_formula())
 
     @property
     def reward(self) -> bool:
-        return self.formula.is_reward_operator
+        return self.formula.is_reward_operator_formula
 
     @property
     def is_discounted_reward(self) -> bool:
-        return self.formula.is_reward_operator and self.formula.subformula.is_discounted_total_reward_formula
+        return self.formula.is_reward_operator_formula and self.formula.subformula.is_discounted_total_reward_formula
 
     def extract_discount_factor_from_formula(self) -> float:
         assert self.is_discounted_reward
@@ -226,12 +227,12 @@ class Property:
         if not self.is_until:
             return
         logger.info("converting until formula to eventually...")
-        formula = payntbind.synthesis.transform_until_to_eventually(self.property.raw_formula)
-        prop = stormpy.Property("", formula)
+        formula = payntbind.synthesis.transform_until_to_eventually(self.property.get_raw_formula())
+        prop = stormpy.logic.Property("", formula, set())
         self.__init__(prop, self.use_exact)  # type: ignore[misc]
 
     def property_copy(self) -> Any:
-        return stormpy.Property("", self.property.raw_formula.clone())
+        return stormpy.logic.Property("", self.property.get_raw_formula().clone(), set())
 
     def copy(self) -> Property:
         new_property = Property(self.property_copy())
@@ -252,14 +253,14 @@ class Property:
         return False
 
     def negate(self) -> Property:
-        negated_formula = self.property.raw_formula.clone()
+        negated_formula = self.property.get_raw_formula().clone()
         negated_formula.comparison_type = {
-            stormpy.ComparisonType.LESS: stormpy.ComparisonType.GEQ,
-            stormpy.ComparisonType.LEQ: stormpy.ComparisonType.GREATER,
-            stormpy.ComparisonType.GREATER: stormpy.ComparisonType.LEQ,
-            stormpy.ComparisonType.GEQ: stormpy.ComparisonType.LESS,
+            stormpy.logic.ComparisonType.LESS: stormpy.logic.ComparisonType.GEQ,
+            stormpy.logic.ComparisonType.LEQ: stormpy.logic.ComparisonType.GREATER,
+            stormpy.logic.ComparisonType.GREATER: stormpy.logic.ComparisonType.LEQ,
+            stormpy.logic.ComparisonType.GEQ: stormpy.logic.ComparisonType.LESS,
         }[negated_formula.comparison_type]
-        stormpy_property_negated = stormpy.Property("", negated_formula)
+        stormpy_property_negated = stormpy.logic.Property("", negated_formula, set())
         negated_property = Property(stormpy_property_negated)
         negated_property.discount_factor_correction = self.discount_factor_correction
         return negated_property
@@ -290,7 +291,7 @@ class Property:
                 formula_str = f'P{direction}=? [F "{self.get_target_label()}"]'
             else:
                 formula_str = f"P{direction}=? [F {self.get_target_label()}]"
-        return stormpy.parse_properties_for_prism_program(formula_str, prism)[0]
+        return stormpy.parse_properties(formula_str, prism)[0]
 
 
 class OptimalityProperty(Property):
@@ -298,7 +299,7 @@ class OptimalityProperty(Property):
 
     def __init__(self, prop: Any, epsilon: float = 0, use_exact: bool = False):
         self.property = prop
-        rf = prop.raw_formula
+        rf = prop.get_raw_formula()
 
         self.game_optimizing_player: int | None = None  # player index for game properties
         self.game_formula: Any = None
@@ -311,7 +312,7 @@ class OptimalityProperty(Property):
         self.discount_factor_correction: float | None = None
 
         # use comparison type to deduce optimizing direction
-        if rf.optimality_type == stormpy.OptimizationDirection.Minimize:
+        if rf.optimality_type == stormpy.logic.OptimizationDirection.MINIMIZE:
             self.minimizing = True
             self.op = operator.lt
         else:
@@ -380,8 +381,8 @@ class OptimalityProperty(Property):
         if not self.is_until:
             return
         logger.info("converting until formula to eventually...")
-        formula = payntbind.synthesis.transform_until_to_eventually(self.property.raw_formula)
-        prop = stormpy.Property("", formula)
+        formula = payntbind.synthesis.transform_until_to_eventually(self.property.get_raw_formula())
+        prop = stormpy.logic.Property("", formula, set())
         self.__init__(prop, self.epsilon, self.use_exact)  # type: ignore[misc]
 
     @property
@@ -389,13 +390,13 @@ class OptimalityProperty(Property):
         return not (not self.reward and self.minimizing and self.threshold == 0)
 
     def negate(self) -> OptimalityProperty:
-        negated_formula = self.property.raw_formula.clone()
+        negated_formula = self.property.get_raw_formula().clone()
         negate_optimality_type = {
-            stormpy.OptimizationDirection.Minimize: stormpy.OptimizationDirection.Maximize,
-            stormpy.OptimizationDirection.Maximize: stormpy.OptimizationDirection.Minimize,
+            stormpy.logic.OptimizationDirection.MINIMIZE: stormpy.logic.OptimizationDirection.MAXIMIZE,
+            stormpy.logic.OptimizationDirection.MAXIMIZE: stormpy.logic.OptimizationDirection.MINIMIZE,
         }[negated_formula.optimality_type]
         negated_formula.set_optimality_type(negate_optimality_type)
-        stormpy_property_negated = stormpy.Property("", negated_formula)
+        stormpy_property_negated = stormpy.logic.Property("", negated_formula, set())
         negated_property = OptimalityProperty(stormpy_property_negated, self.epsilon)
         negated_property.discount_factor_correction = self.discount_factor_correction
         return negated_property

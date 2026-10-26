@@ -23,10 +23,10 @@ class TestDtSynthesis:
         suite happens to be single-property.
         """
         sketch_path, _ = get_sketch_paths("tests/dt-orchard")
-        prism = stormpy.parse_prism_program(sketch_path, prism_compat=True)
+        prism = stormpy.parse_prism_program(sketch_path, prism_compatibility=True)
         # a trivially-true constraint alongside the real optimality objective: enough to make
         # is_single_property False without changing what the "right" answer is
-        properties = stormpy.parse_properties_for_prism_program('P>=0 [F "goal"]; Pmax=? [F "goal"]', prism, None)
+        properties = stormpy.parse_properties('P>=0 [F "goal"]; Pmax=? [F "goal"]', prism)
         assert len(properties) == 2
 
         explicit_model = paynt.model.model_builder.ModelBuilder.from_prism(prism, None, False)
@@ -59,8 +59,8 @@ class TestDtSynthesis:
         on this model, confirmed manually, and this test only cares about "does not crash", not convergence.
         """
         sketch_path, _ = get_sketch_paths("tests/dt-orchard")
-        prism = stormpy.parse_prism_program(sketch_path, prism_compat=True)
-        properties = stormpy.parse_properties_for_prism_program('P>=0.55 [F "goal"]; P>=0.5 [F "goal"]', prism, None)
+        prism = stormpy.parse_prism_program(sketch_path, prism_compatibility=True)
+        properties = stormpy.parse_properties('P>=0.55 [F "goal"]; P>=0.5 [F "goal"]', prism)
         assert len(properties) == 2
 
         explicit_model = paynt.model.model_builder.ModelBuilder.from_prism(prism, None, False)

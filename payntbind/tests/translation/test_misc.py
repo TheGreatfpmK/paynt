@@ -7,7 +7,7 @@ class TestMiscellaneous:
 
     def test_get_matrix_rows(self):
 
-        builder_5x5 = stormpy.SparseMatrixBuilder(5, 5, force_dimensions=False)
+        builder_5x5 = stormpy.datastructures.SparseMatrixBuilder(5, 5, force_dimensions=False)
 
         builder_5x5.add_next_value(0, 0, 0)
         builder_5x5.add_next_value(0, 1, 0.1)
@@ -30,8 +30,8 @@ class TestMiscellaneous:
         for entry in rows[1]:
             if entry_one:
                 assert entry.column == 3
-                assert entry.value() == 23.0
+                assert entry.value == 23.0
             else	:
                 assert entry.column == 2
-                assert entry.value() == 22.0
+                assert entry.value == 22.0
                 entry_one = True

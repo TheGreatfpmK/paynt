@@ -95,7 +95,7 @@ class TestFullAssignmentsOfAnIncompleteColoring:
         assignment = colored_mdp.parameter_space.copy()
         assignment.parameter_set_options(0, [1])
         model = colored_mdp.build_assignment(assignment)
-        assert isinstance(model.model, stormpy.storage.SparseMdp)
+        assert stormpy.models.SparseMdp.is_instantiation(model.model)
         assert not model.is_deterministic
 
     def test_a_complete_coloring_still_gives_a_dtmc(self):
@@ -103,7 +103,7 @@ class TestFullAssignmentsOfAnIncompleteColoring:
         assignment = colored_mdp.parameter_space.copy()
         for parameter in range(assignment.num_parameters):
             assignment.parameter_set_options(parameter, [assignment.parameter_options(parameter)[0]])
-        assert isinstance(colored_mdp.build_assignment(assignment).model, stormpy.storage.SparseDtmc)
+        assert stormpy.models.SparseDtmc.is_instantiation(colored_mdp.build_assignment(assignment).model)
 
     def test_it_violates_definition_2_and_the_relaxed_definition_holds(self):
         builder, parameter_space, _mdp, _task, _options = incomplete_maze_builder((0, 1, 3))
@@ -245,7 +245,7 @@ class TestTheResultCarriesTheSelectedChoices:
         result = paynt.synthesizer.synthesizer.Synthesizer.for_method(colored_mdp, task, method).run()
         assert result.success
         chain = colored_mdp.build_assignment(result.assignment)
-        assert result.selected_choices.number_of_set_bits() == chain.model.nr_states
+        assert result.selected_choices.get_number_of_set_bits() == chain.model.nr_states
         assert set(result.selected_choices) == set(chain.underlying_mdp_choice_map)
 
     def test_the_general_coloring_too(self):

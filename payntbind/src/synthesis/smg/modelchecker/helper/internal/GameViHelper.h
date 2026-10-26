@@ -7,7 +7,7 @@
 #include <storm/storage/SparseMatrix.h>
 #include <storm/solver/LinearEquationSolver.h>
 #include <storm/solver/MinMaxLinearEquationSolver.h>
-#include <storm/storage/Scheduler.h>
+#include <storm/storage/scheduler/Scheduler.h>
 
 #include "Multiplier.h"
 
