@@ -9,8 +9,7 @@
 #include <utility>
 
 /**
- * Binding of class templates as generic families, the way stormpy binds its own (stormpy's src/template_binding.h is
- * not installed, so its registration format is replicated here). Each instantiation is bound under a native name such
+ * Binding of class templates as generic families. Each instantiation is bound under a native name such
  * as _PomdpManager_Double and recorded in the module's _template_instantiations table under its template arguments,
  * e.g. (float,); payntbind/synthesis/__init__.py exposes the recorded families via stormpy's _TemplateClass, e.g. as
  * PomdpManager[float], PomdpManager[stormpy.Rational], or PomdpManager(pomdp) with the value type taken from the model.
