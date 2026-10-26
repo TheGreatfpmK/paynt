@@ -11,6 +11,10 @@ on:
   workflow_dispatch:
   pull_request:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 env:
   NR_JOBS: "4"
 
@@ -131,13 +135,6 @@ jobs:
              distro: "macos-26",
              xcode: "latest-stable",
              build_type: "Release",
-             setup_args: "--config-settings=cmake.define.PAYNT_ALLOW_STORM_SYSTEM=OFF",
-             optional_libs: "[test]"
-          }
-          - {name: "MacOS 26, Intel, Debug",
-             distro: "macos-26-intel",
-             xcode: "latest-stable",
-             build_type: "Debug",
              setup_args: "--config-settings=cmake.define.PAYNT_ALLOW_STORM_SYSTEM=OFF",
              optional_libs: "[test]"
           }
