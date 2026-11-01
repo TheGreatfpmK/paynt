@@ -5,7 +5,7 @@
 #include <list>
 #include <numeric>
 
-#include <storm/storage/StronglyConnectedComponentDecomposition.h>
+#include <storm/storage/decomposition/StronglyConnectedComponentDecomposition.h>
 
 #include "GameMaximalEndComponentDecomposition.h"
 

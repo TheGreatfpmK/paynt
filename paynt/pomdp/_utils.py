@@ -52,7 +52,7 @@ def collect_policy(info: PomdpInfo, dtmc: Any, mc_result: Any, specification: pa
     # into a POMDP policy, it doesn't need to live here
     # assuming single optimizing property
     assert specification.num_properties == 1 and specification.has_optimality
-    dtmc_state_value = mc_result.optimality_result.result.get_values()
+    dtmc_state_value = mc_result.optimality_result.result.get_value_vector()
 
     # map states of the DTMC to their POMDP counterparts
     # label states with the value achieved in the state
@@ -141,7 +141,7 @@ def get_parameter_space_pomdp(info: PomdpInfo, mdp: Any) -> Any:
     """
     no_obs = info.pomdp.nr_observations
     tm = mdp.model.transition_matrix
-    components = stormpy.storage.SparseModelComponents(tm, mdp.model.labeling, mdp.model.reward_models)
+    components = stormpy.models.SparseModelComponents(tm, mdp.model.labeling, mdp.model.reward_models)
 
     full_observ_list = []
     for state in range(info.pomdp.nr_states):
@@ -149,7 +149,7 @@ def get_parameter_space_pomdp(info: PomdpInfo, mdp: Any) -> Any:
         for mem in range(info.observation_memory_size[obs]):
             full_observ_list.append(obs + mem * no_obs)
 
-    choice_labeling = stormpy.storage.ChoiceLabeling(mdp.model.nr_choices)
+    choice_labeling = stormpy.models.ChoiceLabeling(mdp.model.nr_choices)
 
     # assign observations to states
     observ_list = []
@@ -171,7 +171,7 @@ def get_parameter_space_pomdp(info: PomdpInfo, mdp: Any) -> Any:
     components.choice_labeling = choice_labeling
     components.observability_classes = observ_list
 
-    pomdp = stormpy.storage.SparsePomdp(components)
+    pomdp = stormpy.models.SparsePomdp(components)
     return stormpy.pomdp.make_canonic(pomdp)
 
 
@@ -260,7 +260,7 @@ def get_induced_dtmc_from_fsc(info: PomdpInfo, fsc: FscFactored) -> Any:
 
     # construct the transition matrix
     num_dtmc_states = len(dtmc_states_map)
-    dtmc_tm_builder = stormpy.SparseMatrixBuilder(num_dtmc_states, num_dtmc_states, force_dimensions=True)
+    dtmc_tm_builder = stormpy.datastructures.SparseMatrixBuilder(num_dtmc_states, num_dtmc_states, force_dimensions=True)
     state_action_rewards: dict[str, list[Any]] = {name: [] for name in info.pomdp.reward_models.keys()}
     for dtmc_state, current_state_memory_pair in dtmc_states_map.items():
         current_obs = info.pomdp.observations[current_state_memory_pair[0]]
@@ -294,7 +294,7 @@ def get_induced_dtmc_from_fsc(info: PomdpInfo, fsc: FscFactored) -> Any:
                     next_state_index_candidates = [index for index, state in dtmc_states_map.items() if state == next_state_memory_pair]
                     assert len(next_state_index_candidates) == 1, "expected unique state for given state memory pair"
                     next_state_index = next_state_index_candidates[0]
-                    next_state_prob_map[next_state_index] += entry.value() * action_prob * update_prob
+                    next_state_prob_map[next_state_index] += entry.value * action_prob * update_prob
 
         for reward_name in info.pomdp.reward_models.keys():
             state_action_rewards[reward_name].append(current_reward[reward_name])
@@ -305,7 +305,7 @@ def get_induced_dtmc_from_fsc(info: PomdpInfo, fsc: FscFactored) -> Any:
     dtmc_tm = dtmc_tm_builder.build()
 
     # construct the labeling
-    dtmc_labeling = stormpy.storage.StateLabeling(num_dtmc_states)
+    dtmc_labeling = stormpy.models.StateLabeling(num_dtmc_states)
     for label in info.pomdp.labeling.get_labels():
         dtmc_labeling.add_label(label)
     for dtmc_state, current_state_memory_pair in dtmc_states_map.items():
@@ -321,10 +321,10 @@ def get_induced_dtmc_from_fsc(info: PomdpInfo, fsc: FscFactored) -> Any:
         # line referenced an unbound name (reward_model) -- fixed to what was clearly intended, but left
         # otherwise untouched since nothing currently exercises this code path to verify against
         assert info.pomdp.reward_models[reward_name].has_state_action_rewards, "currently this implementation expects state action rewards"
-        dtmc_reward_models[reward_name] = stormpy.SparseRewardModel(optional_state_action_reward_vector=state_action_rewards[reward_name])
+        dtmc_reward_models[reward_name] = stormpy.models.SparseRewardModel(optional_state_action_reward_vector=state_action_rewards[reward_name])
 
-    components = stormpy.SparseModelComponents(transition_matrix=dtmc_tm, state_labeling=dtmc_labeling, reward_models=dtmc_reward_models)
-    return stormpy.storage.SparseDtmc(components)
+    components = stormpy.models.SparseModelComponents(transition_matrix=dtmc_tm, state_labeling=dtmc_labeling, reward_models=dtmc_reward_models)
+    return stormpy.models.SparseDtmc(components)
 
 
 def compute_qvalues(
@@ -346,7 +346,7 @@ def compute_qvalues(
     assert specification.num_properties == 1, "expecting a single property"
     prop = specification.all_properties()[0]
     result = submdp.model_check_property(prop)
-    state_submdp_to_value = result.result.get_values()
+    state_submdp_to_value = result.result.get_value_vector()
 
     # map states of a sub-MDP to the states of the underlying MDP to the state-memory pairs of the POMDPxFSC
     state_memory_value: dict[tuple[int, int], Any] = collections.defaultdict(lambda: None)
@@ -387,6 +387,6 @@ def next_belief(info: PomdpInfo, belief: dict[int, float], action_label: str, ne
         for entry in info.pomdp.transition_matrix.get_row(choice):
             next_state = entry.column
             if info.pomdp.observations[next_state] == next_obs:
-                new_belief_acc[next_state] += state_prob * entry.value()
+                new_belief_acc[next_state] += state_prob * entry.value
     prob_sum = sum(new_belief_acc.values())
     return {state: prob / prob_sum for state, prob in new_belief_acc.items()}

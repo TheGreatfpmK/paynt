@@ -1,6 +1,6 @@
 #pragma once
 
-#include <storm/storage/jani/Model.h>
+#include <storm/languages/jani/Model.h>
 #include <storm/logic/Formula.h>
 #include <storm/models/sparse/Mdp.h>
 #include <storm/modelchecker/results/ExplicitQuantitativeCheckResult.h>

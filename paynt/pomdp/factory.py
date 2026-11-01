@@ -40,7 +40,7 @@ class PomdpColoredMdpFactory:
         # extract observation labels
         if self.pomdp.has_observation_valuations():
             ov = self.pomdp.observation_valuations
-            self.observation_labels = [ov.get_string(obs) for obs in range(self.observations)]
+            self.observation_labels = [ov.to_string(obs) for obs in range(self.observations)]
         else:
             if decpomdp_manager is None:
                 self.observation_labels = list(range(self.observations))

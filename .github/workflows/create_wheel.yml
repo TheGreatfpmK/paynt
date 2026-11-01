@@ -43,7 +43,7 @@ jobs:
           echo "STORMPY_ARTIFACT_NAME=stormpy-wheels-linux-intel-Release" >> $GITHUB_ENV
       - name: Download stormpy nightly wheel if NIGHTLY_BUILD
         if: env.NIGHTLY_BUILD == 'true'
-        uses: dawidd6/action-download-artifact@v24
+        uses: dawidd6/action-download-artifact@v27
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           workflow: create_nightly_wheel.yml
@@ -162,7 +162,7 @@ jobs:
           p.write_text(s)
           PY
       - name: Build wheels
-        uses: pypa/cibuildwheel@v4.2.1
+        uses: pypa/cibuildwheel@v4.3.4
         env:
           CIBW_PLATFORM: ${{ matrix.platform }}
           CIBW_ARCHS: ${{ matrix.archs }}
@@ -248,7 +248,8 @@ jobs:
           if command -v apt; then
             apt update && DEBIAN_FRONTEND=noninteractive TZ=Etc/UTC apt install -y python3 python3-pip python3-venv python3-dev
           elif command -v dnf; then
-            dnf install -y python3 python3-pip python3-devel
+            # libatomic is not shipped on fedora
+            dnf install -y python3 python3-pip python3-devel libatomic
           elif command -v pacman; then
             pacman -Syu --noconfirm python python-pip
           fi

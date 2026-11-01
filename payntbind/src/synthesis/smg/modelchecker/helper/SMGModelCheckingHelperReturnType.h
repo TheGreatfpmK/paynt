@@ -5,7 +5,7 @@
  */
 
 #include <vector>
-#include <storm/storage/Scheduler.h>
+#include <storm/storage/scheduler/Scheduler.h>
 
 namespace synthesis {
     template<typename ValueType>

@@ -2,10 +2,13 @@ from __future__ import annotations
 
 from typing import Any, cast
 
+import paynt.colored_mdp
 import paynt.synthesizer.synthesizer
 import paynt.parameter_space.parameter_space
+import paynt.task
 import paynt.specification.property
 import paynt.model.model
+import paynt.utils.error_handling
 import paynt.utils.scoring
 import paynt.mdp_family._utils
 import paynt.mdp_family.result
@@ -35,6 +38,10 @@ class PolicyTreeSynthesizer(paynt.synthesizer.synthesizer.Synthesizer):
     # set by evaluate_all(), read by run()/export_evaluation_result()
     policy_tree: PolicyTree
 
+    def __init__(self, colored_mdp: paynt.colored_mdp.ColoredMdp, task: paynt.task.SynthesisTask):
+        paynt.utils.error_handling.require_pair_list_coloring(colored_mdp.coloring, "the policy tree")
+        super().__init__(colored_mdp, task)
+
     @property
     def method_name(self) -> str:
         return "AR (policy tree)"
@@ -55,8 +62,8 @@ class PolicyTreeSynthesizer(paynt.synthesizer.synthesizer.Synthesizer):
         self.stat.iteration(node.mdp)
         if not result.sat:
             return False
-        assert result.result.scheduler is not None
-        return paynt.mdp_family._utils.scheduler_to_policy(self.colored_mdp, result.result.scheduler, node.mdp)
+        assert result.result.has_scheduler()
+        return paynt.mdp_family._utils.scheduler_to_policy(self.colored_mdp, result.result.get_scheduler(), node.mdp)
 
         # uncomment below to preemptively double-check the policy
         # paynt.mdp_family.policy_tree.double_check_policy(self.colored_mdp, node, prop, policy)

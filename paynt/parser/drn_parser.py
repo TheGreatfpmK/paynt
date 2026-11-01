@@ -96,11 +96,9 @@ class DrnParser:
 
     @classmethod
     def read_drn(cls, sketch_path: str, use_exact: bool = False) -> Any:
-        builder_options = stormpy.DirectEncodingParserOptions()
-        builder_options.build_choice_labels = True
-        if use_exact:
-            return stormpy._build_sparse_exact_model_from_drn(sketch_path, builder_options)
-        return stormpy.build_model_from_drn(sketch_path, builder_options)
+        builder_options = stormpy.io.DirectEncodingParserOptions()
+        builder_options.build_choice_labeling = True
+        return stormpy.build_model_from_drn[stormpy.Rational if use_exact else float](sketch_path, options=builder_options)
 
     @classmethod
     def write_model_in_pomdp_solve_format(cls, pomdp: Any, output_path: str, property_path: str) -> None:
@@ -139,7 +137,7 @@ observations: {num_obs}
             for row_index in range(group_start, group_end):
                 for entry in tm.get_row(row_index):
                     action_index_str = action_index if not trivial_action else "*"
-                    desc += f"T: {action_index_str} : {state} : {entry.column} {entry.value()}\n"
+                    desc += f"T: {action_index_str} : {state} : {entry.column} {entry.value}\n"
                 action_index += 1
 
         # observations

@@ -5,8 +5,8 @@
 #include "LraViHelper.h"
 
 #include <storm/modelchecker/helper/infinitehorizon/internal/ComponentUtility.h>
-#include <storm/storage/MaximalEndComponent.h>
-#include <storm/storage/StronglyConnectedComponent.h>
+#include <storm/storage/decomposition/MaximalEndComponent.h>
+#include <storm/storage/decomposition/StronglyConnectedComponent.h>
 #include <storm/utility/graph.h>
 #include <storm/utility/vector.h>
 #include <storm/utility/macros.h>

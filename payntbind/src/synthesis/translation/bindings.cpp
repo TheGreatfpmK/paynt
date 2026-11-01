@@ -1,4 +1,5 @@
 #include "src/synthesis/synthesis.h"
+#include "src/template_binding.h"
 #include "SubPomdpBuilder.h"
 
 #include <queue>
@@ -498,27 +499,26 @@ std::pair<std::shared_ptr<storm::models::sparse::Dtmc<ValueType>>, std::vector<s
 }  // namespace synthesis
 
 template <typename ValueType>
-void bindings_translation_vt(py::module& m, std::string const& vtSuffix) {
+void bindings_translation_vt(py::module& m) {
 
-    m.def(("computeChoiceDestinations" + vtSuffix).c_str(), &synthesis::computeChoiceDestinations<ValueType>);
-    m.def(("addMissingChoiceLabels" + vtSuffix).c_str(), &synthesis::addMissingChoiceLabelsModel<ValueType>);
-    m.def(("assertChoiceLabelingIsCanonic" + vtSuffix).c_str(), &synthesis::assertChoiceLabelingIsCanonic);
-    m.def(("extractActionLabels" + vtSuffix).c_str(), &synthesis::extractActionLabels<ValueType>);
-    m.def(("enableAllActions" + vtSuffix).c_str(), py::overload_cast<storm::models::sparse::Model<ValueType> const&>(&synthesis::enableAllActions<ValueType>));
-    m.def(("restoreActionsInAbsorbingStates" + vtSuffix).c_str(), &synthesis::restoreActionsInAbsorbingStates<ValueType>);
-    m.def(("addDontCareAction" + vtSuffix).c_str(), &synthesis::addDontCareAction<ValueType>);
-    m.def(("createModelUnion" + vtSuffix).c_str(), &synthesis::createModelUnion<ValueType>);
+    m.def("computeChoiceDestinations", &synthesis::computeChoiceDestinations<ValueType>);
+    m.def("addMissingChoiceLabels", &synthesis::addMissingChoiceLabelsModel<ValueType>);
+    m.def("extractActionLabels", &synthesis::extractActionLabels<ValueType>);
+    m.def("enableAllActions", py::overload_cast<storm::models::sparse::Model<ValueType> const&>(&synthesis::enableAllActions<ValueType>));
+    m.def("restoreActionsInAbsorbingStates", &synthesis::restoreActionsInAbsorbingStates<ValueType>);
+    m.def("addDontCareAction", &synthesis::addDontCareAction<ValueType>);
+    m.def("createModelUnion", &synthesis::createModelUnion<ValueType>);
 
-    m.def(("createMdpFromVectorMatrix" + vtSuffix).c_str(), &synthesis::createMdpFromVectorMatrix<ValueType>);
-    m.def(("getVectorFromMatrix" + vtSuffix).c_str(), &synthesis::getVectorFromMatrix<ValueType>);
-    m.def(("createCombinationOfRows" + vtSuffix).c_str(), &synthesis::createCombinationOfRows<ValueType>);
-    m.def(("createSlidingWindowMemoryMdp" + vtSuffix).c_str(), &synthesis::createSlidingWindowMemoryMdp<ValueType>);
-    m.def(("applyRandomizedScheduler" + vtSuffix).c_str(), &synthesis::applyRandomizedScheduler<ValueType>);
-    m.def(("applyRandomizedSchedulerFromTree" + vtSuffix).c_str(), &synthesis::applyRandomizedSchedulerFromTree<ValueType>);
-    m.def(("createDtmcFromVectorMatrixWithRewards" + vtSuffix).c_str(), &synthesis::createDtmcFromVectorMatrixWithRewards<ValueType>);
-    m.def(("unfoldDtmcWithStepBound" + vtSuffix).c_str(), &synthesis::unfoldDtmcWithStepBound<ValueType>);
+    m.def("createMdpFromVectorMatrix", &synthesis::createMdpFromVectorMatrix<ValueType>);
+    m.def("getVectorFromMatrix", &synthesis::getVectorFromMatrix<ValueType>);
+    m.def("createCombinationOfRows", &synthesis::createCombinationOfRows<ValueType>);
+    m.def("createSlidingWindowMemoryMdp", &synthesis::createSlidingWindowMemoryMdp<ValueType>);
+    m.def("applyRandomizedScheduler", &synthesis::applyRandomizedScheduler<ValueType>);
+    m.def("applyRandomizedSchedulerFromTree", &synthesis::applyRandomizedSchedulerFromTree<ValueType>);
+    m.def("createDtmcFromVectorMatrixWithRewards", &synthesis::createDtmcFromVectorMatrixWithRewards<ValueType>);
+    m.def("unfoldDtmcWithStepBound", &synthesis::unfoldDtmcWithStepBound<ValueType>);
 
-    m.def(("get_matrix_rows" + vtSuffix).c_str(), [](storm::storage::SparseMatrix<ValueType>& matrix, std::vector<typename storm::storage::SparseMatrix<ValueType>::index_type> rows) {
+    m.def("get_matrix_rows", [](storm::storage::SparseMatrix<ValueType>& matrix, std::vector<typename storm::storage::SparseMatrix<ValueType>::index_type> rows) {
         std::vector<typename storm::storage::SparseMatrix<ValueType>::rows> result;
         for (const auto& row : rows) {
             result.push_back(matrix.getRows(row, row+1));
@@ -526,7 +526,7 @@ void bindings_translation_vt(py::module& m, std::string const& vtSuffix) {
         return result;
     }, py::arg("matrix"), py::arg("rows"), "Get multiple rows from a sparse matrix");
 
-    py::classh<synthesis::SubPomdpBuilder<ValueType>>(m, ("SubPomdpBuilder" + vtSuffix).c_str())
+    synthesis::bindTemplateClass<ValueType, synthesis::SubPomdpBuilder<ValueType>>(m, "SubPomdpBuilder", "")
         .def(py::init<storm::models::sparse::Pomdp<ValueType> const&>())
         .def("start_from_belief", &synthesis::SubPomdpBuilder<ValueType>::startFromBelief)
         .def_property_readonly("state_sub_to_full", [](synthesis::SubPomdpBuilder<ValueType>& b) {return b.state_sub_to_full;} )
@@ -534,6 +534,7 @@ void bindings_translation_vt(py::module& m, std::string const& vtSuffix) {
 }
 
 void bindings_translation(py::module& m) {
-    bindings_translation_vt<double>(m, "");
-    bindings_translation_vt<storm::RationalNumber>(m, "Exact");
+    m.def("assertChoiceLabelingIsCanonic", &synthesis::assertChoiceLabelingIsCanonic);
+    bindings_translation_vt<double>(m);
+    bindings_translation_vt<storm::RationalNumber>(m);
 }

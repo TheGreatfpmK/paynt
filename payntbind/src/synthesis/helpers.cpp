@@ -10,12 +10,12 @@
 #include <storm/logic/FormulaContext.h>
 
 #include <storm/utility/initialize.h>
-#include <storm/environment/solver/NativeSolverEnvironment.h>
-#include <storm/environment/solver/MinMaxSolverEnvironment.h>
+#include <storm/environment/solver/GmmxxSolverEnvironment.h>
+#include <storm/environment/solver/SolverEnvironment.h>
 #include <storm/storage/SparseMatrix.h>
 #include <storm/models/sparse/Model.h>
 
-#include <storm/storage/jani/TemplateEdge.h>
+#include <storm/languages/jani/TemplateEdge.h>
 
 namespace synthesis {
 
@@ -58,32 +58,37 @@ void janiTemplateEdgeAddAssignments(storm::jani::TemplateEdge & template_edge, s
 }
 
 
+template<typename ValueType>
+void define_helpers_vt(py::module& m) {
+    m.def("remove_reward_model", &synthesis::removeRewardModel<ValueType>, py::arg("model"), py::arg("reward_name"));
+    m.def("multiply_with_vector", [] (storm::storage::SparseMatrix<ValueType> const& matrix, std::vector<ValueType> const& vector) {
+        std::vector<ValueType> result(matrix.getRowCount());
+        matrix.multiplyWithVector(vector, result);
+        return result;
+    }, py::arg("matrix"), py::arg("vector"));
+}
+
 void define_helpers(py::module& m) {
 
     m.def("set_loglevel_off", []() { storm::utility::setLogLevel(l3pp::LogLevel::OFF); }, "set loglevel for storm to off");
 
-    m.def("set_precision_native", [](storm::NativeSolverEnvironment& nsenv, double value) {
-        nsenv.setPrecision(storm::utility::convertNumber<storm::RationalNumber>(value));
+    // MinMaxSolverEnvironment's own iteration cap bounds the *outer* policy-improvement loop of policy iteration, but
+    // each outer iteration evaluates the current policy via an inner linear equation solve (gmmxx by default), which
+    // has its own iteration cap. On a large model that inner solve can dominate the running time by itself, so it needs
+    // capping too.
+    m.def("set_max_iterations_gmmxx", [](storm::SolverEnvironment& senv, uint64_t value) {
+        senv.gmmxx().setMaximalNumberOfIterations(value);
     });
-    m.def("set_precision_minmax", [](storm::MinMaxSolverEnvironment& nsenv, double value) {
-        nsenv.setPrecision(storm::utility::convertNumber<storm::RationalNumber>(value));
+    // gmmxx's default method (GMRES) also restarts its Krylov subspace every getRestartThreshold() iterations (see
+    // GmmxxLinearEquationSolver.cpp's gmm::gmres call), a limit separate from setMaximalNumberOfIterations, so raising
+    // the iteration cap alone does not stop a solve that ends at the restart threshold.
+    m.def("set_restart_threshold_gmmxx", [](storm::SolverEnvironment& senv, uint64_t value) {
+        senv.gmmxx().setRestartThreshold(value);
     });
 
     m.def("transform_until_to_eventually", &synthesis::transformUntilToEventually<double>, py::arg("formula"));
-    m.def("remove_reward_model", &synthesis::removeRewardModel<double>, py::arg("model"), py::arg("reward_name"));
-    m.def("remove_reward_model_exact", &synthesis::removeRewardModel<storm::RationalNumber>, py::arg("model"), py::arg("reward_name"));
-
-    m.def("multiply_with_vector", [] (storm::storage::SparseMatrix<double> matrix,std::vector<double> vector) {
-        std::vector<double> result(matrix.getRowCount());
-        matrix.multiplyWithVector(vector, result);
-        return result;
-    }, py::arg("matrix"), py::arg("vector"));
-
-    m.def("multiply_with_vector_exact", [] (storm::storage::SparseMatrix<storm::RationalNumber> matrix,std::vector<storm::RationalNumber> vector) {
-        std::vector<storm::RationalNumber> result(matrix.getRowCount());
-        matrix.multiplyWithVector(vector, result);
-        return result;
-    }, py::arg("matrix"), py::arg("vector"));
+    define_helpers_vt<double>(m);
+    define_helpers_vt<storm::RationalNumber>(m);
 
     m.def("janiTemplateEdgeAddAssignments", &synthesis::janiTemplateEdgeAddAssignments, py::arg("template_edge"), py::arg("assignments"));
 }

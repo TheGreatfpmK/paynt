@@ -1,14 +1,14 @@
 #include "src/synthesis/synthesis.h"
+#include "src/template_binding.h"
 
 #include "PomdpManager.h"
 #include "PomdpManagerAposteriori.h"
 #include <storm/adapters/RationalNumberAdapter.h>
-#include <string>
 
 template<typename ValueType>
-void bindings_pomdp_vt(py::module& m, std::string const& vtSuffix) {
+void bindings_pomdp_vt(py::module& m) {
 
-    py::classh<synthesis::PomdpManager<ValueType>>(m, (vtSuffix + "PomdpManager").c_str(), "POMDP manager")
+    synthesis::bindTemplateClass<ValueType, synthesis::PomdpManager<ValueType>>(m, "PomdpManager", "POMDP manager")
         .def(py::init<storm::models::sparse::Pomdp<ValueType> const&>(), "Constructor.", py::arg("pomdp"))
         .def("set_observation_memory_size", &synthesis::PomdpManager<ValueType>::setObservationMemorySize, "Set memory size to a selected observation.", py::arg("observation"), py::arg("memory_size"))
         .def("set_global_memory_size", &synthesis::PomdpManager<ValueType>::setGlobalMemorySize, "Set memory size to all observations.", py::arg("memory_size"))
@@ -30,7 +30,7 @@ void bindings_pomdp_vt(py::module& m, std::string const& vtSuffix) {
         .def_readonly("row_memory_option", &synthesis::PomdpManager<ValueType>::row_memory_option)
         ;
 
-    py::classh<synthesis::PomdpManagerAposteriori<ValueType>>(m, (vtSuffix + "PomdpManagerAposteriori").c_str(), "POMDP manager (a posteriori)")
+    synthesis::bindTemplateClass<ValueType, synthesis::PomdpManagerAposteriori<ValueType>>(m, "PomdpManagerAposteriori", "POMDP manager (a posteriori)")
         .def(py::init<storm::models::sparse::Pomdp<ValueType> const&>(), "Constructor.")
         .def("set_observation_memory_size", &synthesis::PomdpManagerAposteriori<ValueType>::setObservationMemorySize)
         .def("set_global_memory_size", &synthesis::PomdpManagerAposteriori<ValueType>::setGlobalMemorySize)
@@ -46,6 +46,6 @@ void bindings_pomdp_vt(py::module& m, std::string const& vtSuffix) {
 }
 
 void bindings_pomdp(py::module& m) {
-    bindings_pomdp_vt<double>(m, "");
-    bindings_pomdp_vt<storm::RationalNumber>(m, "Exact");
+    bindings_pomdp_vt<double>(m);
+    bindings_pomdp_vt<storm::RationalNumber>(m);
 }

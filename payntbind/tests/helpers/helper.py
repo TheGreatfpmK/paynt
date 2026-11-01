@@ -14,7 +14,7 @@ def get_stormpy_example_path(*paths):
 def get_builder_options():
     builder_options = stormpy.BuilderOptions()
     builder_options.set_build_state_valuations(True)
-    builder_options.set_build_with_choice_origins(True)
+    builder_options.set_build_choice_origins(True)
     builder_options.set_build_all_labels(True)
     builder_options.set_build_choice_labels(True)
     builder_options.set_add_overlapping_guards_label(True)

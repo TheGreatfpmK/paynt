@@ -32,12 +32,12 @@ class TestSchedulerScoring:
         regression check, which all route splitting decisions through this exact function.
         """
         colored_mdp, node, prop, result = colored_mdp_parameter_space_prop_result
-        selection = colored_mdp.scheduler_selection(node.mdp, result.result.scheduler)
+        selection = colored_mdp.scheduler_selection(node.mdp, result.result.get_scheduler())
         inconsistent_assignments = {parameter: options for parameter, options in enumerate(selection) if len(options) > 1}
         assert inconsistent_assignments, "expected at least one inconsistent parameter for this fixture"
 
-        choice_values = paynt.model.model.ModelIndex.choice_values(node.mdp.model, prop, result.result.get_values())
-        local_choices = result.result.scheduler.compute_action_support(node.mdp.model.nondeterministic_choice_indices)
+        choice_values = paynt.model.model.ModelIndex.choice_values(node.mdp.model, prop, result.result.get_value_vector())
+        local_choices = result.result.get_scheduler().compute_action_support(node.mdp.model.nondeterministic_choice_indices)
         expected_visits = paynt.model.model.ModelIndex.compute_expected_visits(node.mdp.model, prop, local_choices)
         underlying_choice_map = list(range(node.mdp.model.nr_choices))
 

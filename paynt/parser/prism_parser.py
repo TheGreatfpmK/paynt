@@ -27,12 +27,12 @@ class PrismParser:
 
         # parse the program
         prism, parameter_definitions = PrismParser.load_sketch_prism(sketch_path)
-        expression_parser = stormpy.storage.ExpressionParser(prism.expression_manager)
+        expression_parser = stormpy.expressions.ExpressionParser(prism.expression_manager)
         expression_parser.set_identifier_mapping({})
         prism_model_type = {
-            stormpy.storage.PrismModelType.DTMC: "DTMC",
-            stormpy.storage.PrismModelType.MDP: "MDP",
-            stormpy.storage.PrismModelType.POMDP: "POMDP",
+            stormpy.io.PrismModelType.DTMC: "DTMC",
+            stormpy.io.PrismModelType.MDP: "MDP",
+            stormpy.io.PrismModelType.POMDP: "POMDP",
         }[prism.model_type]
         logger.debug("PRISM model type: " + prism_model_type)
 
@@ -62,12 +62,9 @@ class PrismParser:
             coloring = payntbind.synthesis.Coloring(
                 parameter_space.native, underlying_mdp.nondeterministic_choice_indices, jani_unfolder.choice_to_parameter_options
             )
-            if prism.model_type == stormpy.storage.PrismModelType.POMDP:
+            if prism.model_type == stormpy.io.PrismModelType.POMDP:
                 obs_evaluator = payntbind.synthesis.ObservationEvaluator(prism, underlying_mdp)
-            if use_exact:
-                underlying_mdp = payntbind.synthesis.addChoiceLabelsFromJaniExact(underlying_mdp)
-            else:
-                underlying_mdp = payntbind.synthesis.addChoiceLabelsFromJani(underlying_mdp)
+            underlying_mdp = payntbind.synthesis.addChoiceLabelsFromJani(underlying_mdp)
         else:
             underlying_mdp = paynt.model.model_builder.ModelBuilder.from_prism(prism, specification, use_exact)
 
@@ -125,7 +122,7 @@ class PrismParser:
 
         # try to parse temporary sketch and then delete it
         try:
-            prism = stormpy.parse_prism_program(tmp_path, prism_compat=True)
+            prism = stormpy.parse_prism_program(tmp_path, prism_compatibility=True)
             os.remove(tmp_path)
         except Exception as e:
             os.remove(tmp_path)
@@ -183,7 +180,7 @@ class PrismParser:
                     options_numerical = [float(o) for o in options]
                 parameter_min.append(min(options_numerical))
                 parameter_max.append(max(options_numerical))
-            expressions = [expression_parser.parse(o) for o in options]
+            expressions = [expression_parser.parse_from_string(o) for o in options]
             parameter_expressions.append(expressions)
 
             option_labels = [str(e) for e in expressions]
@@ -194,10 +191,10 @@ class PrismParser:
         for parameter in range(parameter_space.num_parameters):
             parameter_name = parameter_space.parameter_name(parameter)
             var_min = prism.get_constant(f"{parameter_name}_MIN").expression_variable
-            parameter_range_definitions[var_min] = expression_parser.parse(str(parameter_min[parameter]))
+            parameter_range_definitions[var_min] = expression_parser.parse_from_string(str(parameter_min[parameter]))
             var_max = prism.get_constant(f"{parameter_name}_MAX").expression_variable
-            parameter_range_definitions[var_max] = expression_parser.parse(str(parameter_max[parameter]))
-        prism = prism.define_constants(parameter_range_definitions)
+            parameter_range_definitions[var_max] = expression_parser.parse_from_string(str(parameter_max[parameter]))
+        prism = prism.define_undefined_constants(parameter_range_definitions)
 
         # check that all undefined constants are indeed the parameters
         parameter_names = [parameter_space.parameter_name(parameter) for parameter in range(parameter_space.num_parameters)]
@@ -214,9 +211,9 @@ class PrismParser:
         @return the property or None if no property was detected
         """
         if prism is not None:
-            props = stormpy.parse_properties_for_prism_program(line, prism)
+            props = stormpy.parse_properties(line, prism)
         else:
-            props = stormpy.parse_properties_without_context(line)
+            props = stormpy.parse_properties(line)
         if len(props) == 0:
             return None
         if len(props) > 1:

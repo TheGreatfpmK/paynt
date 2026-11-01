@@ -72,7 +72,7 @@ def policy_to_state_valuation_actions(
             continue
 
         # get state valuation
-        valuation_jani = json.loads(str(sv.get_json(state)))
+        valuation_jani = json.loads(str(sv.to_json(state)))
         valuation = {}
         for variable, value in valuation_jani.items():
             if "_loc_prism2jani_" in variable:
@@ -156,7 +156,7 @@ def assert_mdp_is_deterministic(
         if len(choices) > 1:
             underlying_mdp_state = mdp.underlying_mdp_state_map[state]
             underlying_mdp_choices = [mdp.underlying_mdp_choice_map[choice] for choice in choices]
-            state_str = colored_mdp.underlying_mdp.state_valuations.get_string(underlying_mdp_state)
+            state_str = colored_mdp.underlying_mdp.state_valuations.to_string(underlying_mdp_state)
             state_str = state_str.replace(" ", "")
             state_str = state_str.replace("\t", "")
             actions_str = [info.action_labels[info.choice_to_action[choice]] for choice in underlying_mdp_choices]

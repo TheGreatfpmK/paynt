@@ -2,7 +2,7 @@
 #include "src/synthesis/translation/choiceTransformation.h"
 
 #include <storm/models/sparse/Mdp.h>
-#include <storm/storage/jani/Model.h>
+#include <storm/languages/jani/Model.h>
 #include <storm/storage/sparse/JaniChoiceOrigins.h>
 #include <storm/storage/sparse/ModelComponents.h>
 
