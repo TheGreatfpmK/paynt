@@ -2,11 +2,12 @@
 """Memoryless stochastic policies for interval POMDPs: alternating best responses of the agent and nature.
 
 The robust value of a memoryless stochastic policy sigma is r(sigma) = min_theta V(sigma, theta). Nature
-picks every interval row (s,a) independently, so for a fixed sigma the induced model is an interval DTMC and
-nature's best response sits at the interval bounds (robust policy iteration). For a fixed theta, finding
-the best sigma is a parametric Markov chain problem; here it is solved locally by L-BFGS-B with exact
-(adjoint) gradients. Every action keeps probability >= delta, so the graph of the induced chain does not
-depend on sigma and the value is smooth.
+picks the distribution of every choice (s,a) independently (no ties: the policy has no memory), so for a
+fixed sigma the induced model is an interval DTMC and nature's best response sits at extreme points of the
+polytopes {p : l <= p <= u, sum(p) = 1}, computed by find_ipomdp_vertices.py (robust policy iteration over
+the extreme points). For a fixed theta, finding the best sigma is a parametric Markov chain problem; here
+it is solved locally by L-BFGS-B with exact (adjoint) gradients. Every action keeps probability >= delta,
+so the graph of the induced chain does not depend on sigma and the value is smooth.
 
     alternate      sigma_{k+1} = best response to theta_k = BR(sigma_k) (the loop being studied)
     double-oracle  sigma_{k+1} = best response to all of theta_0..theta_k (max of the min over the set);
@@ -14,7 +15,7 @@ depend on sigma and the value is smooth.
                    of the robust value (a global one if the agent's step is solved globally)
     mdp            upper bound: the robust value of the fully observable interval MDP
 
-Reachability only: the agent maximizes P[left U right], nature minimizes it.
+Reachability only: the agent maximizes P[F b] or P[a U b], nature minimizes it.
 
 Examples:
     python robust-memoryless.py models/robust-pomdps/robust-pennies.prism 'P=? [F "won"]'
@@ -35,59 +36,73 @@ import scipy.optimize
 import scipy.sparse as sp
 import scipy.sparse.linalg as spla
 
-_spec = importlib.util.spec_from_file_location("interval_ties", os.path.join(os.path.dirname(os.path.abspath(__file__)), "interval-ties.py"))
-ties = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(ties)
+import find_ipomdp_vertices
+
+# load(), target_and_avoid() and actions_at_observation() are shared with the FSC verification script
+_spec = importlib.util.spec_from_file_location("ipomdp_fsc_paynt", os.path.join(os.path.dirname(os.path.abspath(__file__)), "ipomdp-fsc-paynt.py"))
+shared = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(shared)
 
 logger = logging.getLogger("robust-memoryless")
 
 
 class Problem:
-    """An interval POMDP with (s,a)-rectangular nature and a reachability objective."""
+    """An interval POMDP with (s,a)-rectangular nature over extreme points and a reachability objective."""
 
-    def __init__(self, model, params, objective, delta: float):
+    def __init__(self, table, target, avoid, delta: float):
         self.delta = delta
-        matrix = model.transition_matrix
-        n, C = model.nr_states, matrix.nr_rows
+        n = table.nr_states
+        offsets_of_state = np.asarray(table.state_choice_offsets, dtype=np.int64)
+        C = int(offsets_of_state[-1])
         self.n, self.C = n, C
-        self.init = model.initial_states[0]
-        group_sizes = [matrix.get_row_group_end(s) - matrix.get_row_group_start(s) for s in range(n)]
-        self.choice_state = np.repeat(np.arange(n), group_sizes)
-        self.group_start = np.concatenate([[0], np.cumsum(group_sizes)[:-1]])
+        self.init = int(table.initial_states[0])
+        self.choice_state = np.repeat(np.arange(n), np.diff(offsets_of_state))
+        self.group_start = offsets_of_state[:-1]
 
-        # policy variables: one per (observation, action label)
-        labels = ties.labels_at_observation(model)
-        offsets = np.concatenate([[0], np.cumsum([len(l) for l in labels])])
+        # policy variables: one per (observation, action name)
+        labels = shared.actions_at_observation(table)
+        offsets = np.concatenate([[0], np.cumsum([len(l) for l in labels])]).astype(np.int64)
         self.nv = int(offsets[-1])
         self.var_obs = np.repeat(np.arange(len(labels)), [len(l) for l in labels])
-        self.var_of_choice = np.array([offsets[model.observations[s]] + labels[model.observations[s]].index(ties.choice_label(model, c)) for c, s in enumerate(self.choice_state)])
+        observations = table.observations
+        self.var_of_choice = np.array(
+            [offsets[observations[s]] + labels[observations[s]].index(table.action_names[table.choice_action[c]]) for c, s in enumerate(self.choice_state)]
+        )
         self.labels = labels
         self.offsets = offsets
 
-        # entries: probability alpha + beta * theta_c of choice c; nature has one theta per parametric choice
-        rows = ties.affine_entries(model, params)
-        e_choice, e_col, e_alpha, e_beta = [], [], [], []
-        self.lo, self.hi = np.zeros(C), np.zeros(C)
-        self.parametric = np.zeros(C, dtype=bool)
-        for c, entries in enumerate(rows):
-            for col, alpha, beta, pidx in entries:
-                e_choice.append(c)
-                e_col.append(col)
-                e_alpha.append(alpha)
-                e_beta.append(beta)
-                if beta != 0:
-                    self.parametric[c] = True
-                    self.lo[c], self.hi[c] = params[pidx].lo, params[pidx].hi
-        self.e_choice, self.e_col = np.array(e_choice), np.array(e_col)
-        self.e_alpha, self.e_beta = np.array(e_alpha), np.array(e_beta)
-        assert np.all(self.lo[self.parametric] > 0) and np.all(self.hi[self.parametric] < 1)
+        # entries: probability of successor i under vertex j of choice c; nature picks one vertex per choice
+        e_vrow, e_col, e_prob = [], [], []
+        vrow_choice = []
+        for c in range(C):
+            successors, vertices = table.choice_vertices(c)
+            for vertex in vertices:
+                for t, p in zip(successors, vertex):
+                    e_vrow.append(len(vrow_choice))
+                    e_col.append(int(t))
+                    e_prob.append(float(p))
+                vrow_choice.append(c)
+        self.e_vrow, self.e_col, self.e_prob = np.array(e_vrow), np.array(e_col), np.array(e_prob)
+        self.vrow_choice = np.array(vrow_choice)
+        self.e_choice = self.vrow_choice[self.e_vrow]
+        self.vrow_start = np.searchsorted(self.vrow_choice, np.arange(C))  # first vertex row of every choice
+        self.nr_vertices = np.diff(np.append(self.vrow_start, len(vrow_choice)))
+        self.e_vertex = self.e_vrow - self.vrow_start[self.e_choice]
+        stop = target | avoid
+        assert np.all(self.e_prob[~stop[self.choice_state[self.e_choice]]] > 0), "an extreme point drops a successor; the graph would depend on nature"
 
         # qualitative analysis with every action possible (every action has probability >= delta)
-        self.target = objective.right.copy()
-        stop = objective.right | ~objective.left
-        graph = sp.csr_matrix((np.ones(len(e_col)), (self.choice_state[self.e_choice], self.e_col)), shape=(n, n))
-        can_reach = ties.Chain.backward_reachable(graph, self.target, ~stop | self.target)
-        self.maybe = can_reach & ~stop
+        self.target = target.copy()
+        graph = sp.csr_matrix((np.ones(len(self.e_col)), (self.choice_state[self.e_choice], self.e_col)), shape=(n, n))
+        reached = self.target.copy()
+        frontier = np.flatnonzero(self.target)
+        transposed = graph.T.tocsr()
+        while len(frontier):
+            predecessors = np.unique(transposed[frontier].indices)
+            predecessors = predecessors[~reached[predecessors] & ~stop[predecessors]]
+            reached[predecessors] = True
+            frontier = predecessors
+        self.maybe = reached & ~stop
         self.m_index = np.full(n, -1)
         self.maybe_states = np.flatnonzero(self.maybe)
         self.m_index[self.maybe_states] = np.arange(len(self.maybe_states))
@@ -99,8 +114,8 @@ class Problem:
         self.A_cols = self.m_index[self.e_col[self.A_mask]]
         self.b_rows = self.m_index[self.choice_state[self.e_choice[self.b_mask]]]
         self.choice_in_maybe = self.maybe[self.choice_state]
+        self.relevant = self.choice_in_maybe & (self.nr_vertices > 1)
         self.solves = 0
-
 
     # ----- policies and nature
     def uniform(self):
@@ -125,9 +140,9 @@ class Problem:
 
     # ----- evaluation
     def solve(self, sigma, theta):
-        """Values of all states, the factorization, and the entry probabilities."""
+        """Values of all states, the factorization, and the entry probabilities (theta: vertex of every choice)."""
         self.solves += 1
-        probs = self.e_alpha + self.e_beta * theta[self.e_choice]
+        probs = np.where(self.e_vertex == theta[self.e_choice], self.e_prob, 0.0)
         weighted = sigma[self.var_of_choice[self.e_choice]] * probs
         x = np.zeros(self.n)
         x[self.target] = 1.0
@@ -155,24 +170,30 @@ class Problem:
         weight = np.where(self.choice_in_maybe, y[self.choice_state] * q, 0.0)
         return x[self.init], np.bincount(self.var_of_choice, weights=weight, minlength=self.nv)
 
+    def vertex_scores(self, x):
+        """Expected next value under every extreme point of every choice."""
+        return np.bincount(self.e_vrow, weights=self.e_prob * x[self.e_col], minlength=len(self.vrow_choice))
+
     def nature(self, sigma, theta=None):
-        """Nature's best response to sigma (robust policy iteration over the interval bounds)."""
-        theta = self.lo.copy() if theta is None else theta.copy()
+        """Nature's best response to sigma (robust policy iteration over the extreme points)."""
+        theta = np.zeros(self.C, dtype=np.int64) if theta is None else theta.copy()
         for _ in range(10000):
             x, _, _ = self.solve(sigma, theta)
-            d = np.bincount(self.e_choice, weights=self.e_beta * x[self.e_col], minlength=self.C)
+            scores = self.vertex_scores(x)
+            best = np.minimum.reduceat(scores, self.vrow_start)
+            current = scores[self.vrow_start + theta]
             scale = 1e-13 * max(np.abs(x).max(), 1e-300)
-            want = np.where(d > scale, self.lo, np.where(d < -scale, self.hi, theta))
-            change = self.parametric & self.choice_in_maybe & (np.abs(want - theta) * np.abs(d) > scale)
+            change = self.relevant & (best < current - scale)
             if not change.any():
                 return x[self.init], theta
-            theta = np.where(change, want, theta)
+            # the first extreme point attaining the minimum
+            argmin = np.array([int(np.argmin(scores[a : a + k])) for a, k in zip(self.vrow_start[change], self.nr_vertices[change])])
+            theta[change] = argmin
         raise RuntimeError("nature's policy iteration did not converge")
 
     def nature_key(self, theta):
-        """Nature's choices on the rows that matter, as hashable bits."""
-        relevant = self.parametric & self.choice_in_maybe
-        return np.packbits(theta[relevant] <= self.lo[relevant]).tobytes()
+        """Nature's choices on the rows that matter, hashable."""
+        return theta[self.relevant].astype(np.int16).tobytes()
 
     # ----- the agent's step
     def sigma_of_weights(self, w):
@@ -231,9 +252,7 @@ class Problem:
         x = np.zeros(self.n)
         x[self.target] = 1.0
         for _ in range(iterations):
-            d = np.bincount(self.e_choice, weights=self.e_beta * x[self.e_col], minlength=self.C)
-            theta = np.where(d > 0, self.lo, self.hi)
-            q = np.bincount(self.e_choice, weights=(self.e_alpha + self.e_beta * theta[self.e_choice]) * x[self.e_col], minlength=self.C)
+            q = np.minimum.reduceat(self.vertex_scores(x), self.vrow_start)
             best = np.maximum.reduceat(q, self.group_start)
             new = np.where(self.maybe, best, x)
             if np.abs(new - x).max() < tol:
@@ -311,11 +330,14 @@ def main():
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
-    with open(args.model) as f:
-        text, params = ties.parametrize_prism(ties.override_constants(f.read(), args.set), False)
-    program, model = ties.build_parametric(text, params, args.prop)
-    problem = Problem(model, params, ties.Objective(model, program, args.prop), args.delta)
-    logger.info(f"{os.path.basename(args.model)} {args.set}: {model.nr_states} states, {model.nr_observations} observations, {problem.nv} policy variables, {int(problem.parametric.sum())} interval rows")
+    model, formula = shared.load(args.model, args.prop, args.set)
+    target, avoid = shared.target_and_avoid(model, formula)
+    table = find_ipomdp_vertices.compute_vertex_table(model)
+    problem = Problem(table, target, avoid, args.delta)
+    logger.info(
+        f"{os.path.basename(args.model)} {args.set}: {model.nr_states} states, {model.nr_observations} observations, {problem.nv} policy variables, "
+        f"{int((problem.nr_vertices > 1).sum())} choices with several extreme points"
+    )
     upper = problem.mdp_upper_bound()
     logger.info(f"fully observable robust MDP (upper bound): {upper:.6g}")
 
